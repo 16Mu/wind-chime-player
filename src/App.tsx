@@ -244,12 +244,13 @@ export default function App() {
     }
     try {
       console.log('🎵 开始加载统计数据...');
+      console.log('🎵 当前libraryStats状态:', libraryStats);
       await invoke('library_get_stats');
-      console.log('🎵 统计数据请求已发送');
+      console.log('🎵 统计数据请求已发送，等待后端响应...');
     } catch (error) {
       console.error('加载统计失败:', error);
     }
-  }, []);
+  }, [libraryStats]);
 
   const handleLibrarySearch = useCallback(async (query: string) => {
     if (typeof invoke === 'undefined') return;
@@ -329,7 +330,10 @@ export default function App() {
 
     // 🎵 初始化音乐库数据（只在应用启动时执行一次）
     const initializeLibraryData = async () => {
-      if (typeof invoke === 'undefined' || typeof listen === 'undefined') {
+      // 检测是否在Tauri环境中运行
+      const isInTauriApp = typeof window !== 'undefined' && window.__TAURI__;
+      
+      if (!isInTauriApp || typeof invoke === 'undefined' || typeof listen === 'undefined') {
         console.warn('🎵 Tauri API 不可用，使用模拟数据');
         // 设置模拟数据
         const mockTracks: Track[] = [
@@ -351,10 +355,15 @@ export default function App() {
           },
         ];
         setTracks(mockTracks);
+        
+        // 动态计算统计数据而不是硬编码
+        const uniqueArtists = new Set(mockTracks.map(track => track.artist).filter(artist => artist && artist.trim() !== ''));
+        const uniqueAlbums = new Set(mockTracks.map(track => track.album).filter(album => album && album.trim() !== ''));
+        
         setLibraryStats({
           total_tracks: mockTracks.length,
-          total_artists: 2,
-          total_albums: 2,
+          total_artists: uniqueArtists.size,
+          total_albums: uniqueAlbums.size,
         });
         setIsLibraryLoading(false);
         setHasLibraryInitialized(true);
@@ -426,11 +435,15 @@ export default function App() {
         console.log('🎵 收到统计数据事件:', event.payload);
         console.log('🎵 事件类型:', typeof event.payload);
         console.log('🎵 事件结构:', JSON.stringify(event.payload, null, 2));
+        console.log('🎵 当前状态中的libraryStats:', libraryStats);
+        
         if (event.payload && typeof event.payload === 'object') {
           // 验证统计数据结构
           if ('total_tracks' in event.payload && 'total_artists' in event.payload && 'total_albums' in event.payload) {
-            console.log('🎵 统计数据有效，设置状态:', event.payload);
+            console.log('🎵 统计数据有效，更新状态:', event.payload);
+            console.log('🎵 更新前的状态:', libraryStats);
             setLibraryStats(event.payload);
+            console.log('🎵 setLibraryStats调用完成');
           } else {
             console.warn('🎵 统计数据格式无效:', event.payload);
           }
@@ -751,6 +764,40 @@ export default function App() {
                   {/* 🎵 音乐库管理区域 */}
                   <MusicFolderManager className="mb-6" />
 
+                  {/* 🔍 调试工具区域 */}
+                  <div className="glass-surface p-6 mb-6">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
+                      <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      调试工具
+                    </h3>
+                    <div className="space-y-4">
+                      <button
+                        onClick={async () => {
+                          if (typeof invoke !== 'undefined') {
+                            try {
+                              const result = await invoke('test_library_stats');
+                              console.log('🔍 库统计测试结果:', result);
+                              alert('测试完成，请查看控制台输出');
+                            } catch (error) {
+                              console.error('测试失败:', error);
+                              alert('测试失败: ' + error);
+                            }
+                          } else {
+                            alert('Tauri API 不可用');
+                          }
+                        }}
+                        className="glass-button primary"
+                      >
+                        测试库统计数据
+                      </button>
+                      <p className="text-sm text-slate-600">
+                        点击此按钮可以直接从数据库查询统计数据，结果会显示在控制台中。
+                      </p>
+                    </div>
+                  </div>
+
                   {/* 🎭 交互动画设置区域 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
@@ -1039,7 +1086,7 @@ export default function App() {
                             </svg>
                             <span className="font-medium text-slate-900">最后更新</span>
                           </div>
-                          <p className="text-slate-600 text-sm">2024年9月</p>
+                          <p className="text-slate-600 text-sm">2025年9月13日</p>
                         </div>
                       </div>
                     </div>

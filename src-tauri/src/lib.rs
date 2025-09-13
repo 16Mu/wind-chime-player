@@ -409,6 +409,43 @@ async fn get_album_cover(track_id: i64, state: State<'_, AppState>) -> Result<Op
 }
 
 
+// 测试命令：直接检查库统计数据
+#[tauri::command]
+async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String> {
+    log::info!("🔍 测试库统计数据");
+    
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    
+    let total_tracks = db.get_track_count().map_err(|e| e.to_string())?;
+    let total_artists = db.get_artist_count().map_err(|e| e.to_string())?;
+    let total_albums = db.get_album_count().map_err(|e| e.to_string())?;
+    
+    // 获取实际的曲目数据来验证
+    let tracks = db.get_all_tracks().map_err(|e| e.to_string())?;
+    
+    let mut result = format!("库统计数据测试:\n");
+    result.push_str(&format!("- 总曲目数: {}\n", total_tracks));
+    result.push_str(&format!("- 总艺术家数: {}\n", total_artists));
+    result.push_str(&format!("- 总专辑数: {}\n", total_albums));
+    result.push_str(&format!("\n实际曲目列表 ({} 首):\n", tracks.len()));
+    
+    for (i, track) in tracks.iter().enumerate().take(10) { // 最多显示10首
+        result.push_str(&format!("{}. {} - {} ({})\n", 
+            i + 1,
+            track.title.as_deref().unwrap_or("未知标题"),
+            track.artist.as_deref().unwrap_or("未知艺术家"),
+            track.album.as_deref().unwrap_or("未知专辑")
+        ));
+    }
+    
+    if tracks.len() > 10 {
+        result.push_str(&format!("... 还有 {} 首歌曲\n", tracks.len() - 10));
+    }
+    
+    log::info!("🔍 统计测试结果: {}", result);
+    Ok(result)
+}
+
 // 测试命令：直接检查音频文件封面
 #[tauri::command]
 async fn test_audio_cover(file_path: String) -> Result<String, String> {
@@ -661,8 +698,8 @@ pub fn run() {
             check_audio_devices,
             // Album cover commands
             get_album_cover,
-            // Test commands
-            // test_audio_cover, // 临时注释掉
+// Test commands
+test_library_stats,
         ])
         .setup(|app| {
             if let Err(e) = init_app(app.handle()) {
