@@ -602,6 +602,17 @@
     overflow-y: auto; /* 启用垂直滚动 */
     overflow-x: hidden; /* 隐藏水平滚动 */
     height: 100%; /* 占满父容器高度 */
+    transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  
+  .app-sidebar-collapsed {
+    width: 80px;
+  }
+  
+  /* 收缩状态下的指示器调整 */
+  .app-sidebar-collapsed .bounce-indicator {
+    left: 12px;
+    right: 12px;
   }
 
   /* 侧边栏可见滚动条样式 */
@@ -633,7 +644,7 @@
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: 80px; /* 为底部播放器留出空间，适配新的紧凑设计 */
+    padding-bottom: 120px; /* 为固定播放器留出额外空间，避免内容被遮挡（播放器80px + 缓冲40px） */
     scrollbar-width: thin;
     scrollbar-color: var(--brand-400) rgba(0, 0, 0, 0.05);
   }
@@ -1791,14 +1802,22 @@
 
   /* 🎵 内容区播放器容器 */
   .content-player-container {
-    position: absolute;
+    position: fixed;
     bottom: 0;
-    left: 0;
+    left: 240px; /* 从侧边栏宽度开始 */
     right: 0;
-    width: 100%;
+    width: calc(100% - 240px); /* 只占右侧内容区域宽度 */
     padding: 0; /* 移除内边距，让播放器贴合边缘 */
     background: transparent;
     z-index: 100;
+    transition: left 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  
+  /* 收缩状态下的播放器容器 */
+  .content-player-collapsed {
+    left: 80px; /* 收缩后的侧边栏宽度 */
+    width: calc(100% - 80px); /* 调整宽度以适应收缩的侧边栏 */
   }
 
   /* 🎵 现代播放器样式 - 简洁设计，微妙融色处理 */
@@ -1846,16 +1865,27 @@
     border-radius: 6px; /* 轻微圆角 */
     overflow: hidden;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
     perspective: 400px;
     transform-style: preserve-3d;
+    transform-origin: center;
+    position: relative;
+    z-index: 10;
   }
 
   .album-thumbnail:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: scale(1.08) translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2), 0 0 20px rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+  }
+  
+  .album-thumbnail:active {
+    transform: scale(1.12) translateY(-3px);
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25), 0 0 30px rgba(59, 130, 246, 0.5);
+    border: 1px solid rgba(59, 130, 246, 0.6);
   }
 
   /* 专辑图片 */
@@ -2029,6 +2059,21 @@
     margin-left: 1px; /* 播放图标稍向右偏移 */
   }
 
+  /* 底部播放器光效已删除 - 仅保留基础容器 */
+  .mouse-light-container {
+    position: relative;
+  }
+
+  .mouse-light-container > * {
+    position: relative;
+    z-index: 1;
+  }
+
+
+
+
+
+
   /* 下行：进度区 - 3格栅格布局 */
   .progress-area {
     display: grid;
@@ -2077,6 +2122,7 @@
     inset: 0;
     background: #E5E7EB;
     border-radius: 3px;
+    pointer-events: none; /* 确保点击事件传递到父容器 */
   }
 
   /* 进度条填充 - 近黑色 */
@@ -2086,6 +2132,7 @@
     background: #111827; /* 接近纯黑 */
     border-radius: 3px;
     transition: width 0.2s ease;
+    pointer-events: none; /* 确保点击事件传递到父容器 */
   }
 
   /* 进度条拖拽手柄 */
@@ -2102,6 +2149,7 @@
     opacity: 0;
     transform: translateY(-50%) scale(0);
     transition: all 0.2s ease;
+    pointer-events: none; /* 确保点击事件传递到父容器 */
   }
 
   .progress-container:hover .progress-handle,
@@ -2783,7 +2831,7 @@
     }
 
     .app-content {
-      padding-bottom: 70px; /* 调整移动端底部间距 */
+      padding-bottom: 110px; /* 移动端播放器70px + 缓冲40px */
     }
 
     .player-main-content {
@@ -2934,7 +2982,7 @@
     }
 
     .app-content {
-      padding-bottom: 60px; /* 调整小屏幕底部间距 */
+      padding-bottom: 100px; /* 小屏幕播放器60px + 缓冲40px */
     }
 
     .player-main-content {
@@ -3593,6 +3641,86 @@
     display: none;
   }
   
+  /* 全局禁用文字选择 - 提升用户体验 */
+  * {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+  
+  /* 禁用拖拽选择高亮效果 */
+  ::selection {
+    background: transparent;
+  }
+  ::-moz-selection {
+    background: transparent;
+  }
+  
+  /* 允许搜索框和输入框选择文字 */
+  input, textarea, [contenteditable="true"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+  }
+  
+  /* 恢复输入框的选择高亮效果 */
+  input::selection, textarea::selection, [contenteditable="true"]::selection {
+    background: rgba(59, 130, 246, 0.3) !important;
+    color: inherit !important;
+  }
+  input::-moz-selection, textarea::-moz-selection, [contenteditable="true"]::-moz-selection {
+    background: rgba(59, 130, 246, 0.3) !important;
+    color: inherit !important;
+  }
+  
+  /* 允许调试信息和错误消息的文字选择（便于复制） */
+  .debug-info, .error-message, .console-output {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+  }
+  
+  /* 允许特定需要文字选择的元素 */
+  .selectable-text {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+  }
+
+  /* 沉浸式歌词过渡动画支持 */
+  .album-cover-target {
+    transform-style: preserve-3d;
+    perspective: 1000px;
+  }
+
+  /* Q弹动画辅助类 */
+  .bouncy-entrance {
+    animation: bouncyEntrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes bouncyEntrance {
+    0% {
+      transform: scale(0.3) translateY(20px);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.05) translateY(-5px);
+      opacity: 0.8;
+    }
+    70% {
+      transform: scale(0.95) translateY(2px);
+      opacity: 0.95;
+    }
+    100% {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+  }
+  
   /* 特别针对主要容器的滚动条隐藏 */
   main {
     scrollbar-width: none;
@@ -3706,21 +3834,45 @@
   animation-delay: 450ms;
 }
 
-/* 歌词行软膜联动动画 */
-@keyframes lyrics-membrane-ripple {
-  0% {
-    transform: translateY(0px) scale(1);
-  }
-  50% {
-    transform: translateY(-2px) scale(1.02);
-  }
-  100% {
-    transform: translateY(0px) scale(1);
-  }
+/* =================================
+   BLUR BACKDROP EFFECT
+   ================================= */
+
+/* 模糊背景条样式 - 灰色底层效果 */
+.blur-backdrop {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: rgba(156, 163, 175, 0.15);  /* 灰色半透明背景 */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 0;  /* 放在底层，文字在上方 */
 }
 
-.lyrics-membrane-effect {
-  animation: lyrics-membrane-ripple 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+/* 激活状态 */
+.blur-backdrop.active {
+  opacity: 1;
+}
+
+/* Q弹动画效果 - 现在通过JavaScript直接控制 */
+
+/* 高强度模糊效果 */
+.blur-backdrop.high-intensity {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(107, 114, 128, 0.25);  /* 深灰色，更明显 */
+}
+
+/* 低强度模糊效果 */
+.blur-backdrop.low-intensity {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  background: rgba(156, 163, 175, 0.08);  /* 浅灰色，更淡 */
 }
 
 /* 歌词高亮发光动画 - 新版光晕效果 */

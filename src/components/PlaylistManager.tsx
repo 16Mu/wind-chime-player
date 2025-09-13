@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -29,7 +29,10 @@ interface PlaylistManagerProps {
   };
 }
 
-export default function PlaylistManager({ onTrackSelect, membraneSettings = { enabled: true, intensity: 1, radius: 1 } }: PlaylistManagerProps) {
+export default function PlaylistManager({ 
+  onTrackSelect, 
+  membraneSettings = { enabled: true, intensity: 1, radius: 1 } 
+}: PlaylistManagerProps) {
   const [currentPlaylist, setCurrentPlaylist] = useState<Track[]>([]);
   const [playerState, setPlayerState] = useState<PlayerState>({
     is_playing: false,
@@ -39,13 +42,13 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
     shuffle: false,
   });
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 背景条状态
+  const [backdropPosition, setBackdropPosition] = useState<{ top: number; visible: boolean }>({ top: 0, visible: false });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const animationRef = useRef<number | null>(null);
 
-  // 软膜联动动画：容器与行引用
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const rowCentersRef = useRef<number[]>([]);
-  const animFrameRef = useRef<number | null>(null);
-  const mouseYRef = useRef<number | null>(null);
 
   useEffect(() => {
     // 监听播放器状态变化
@@ -62,140 +65,67 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
       unlistenStateChanged.then(fn => fn());
     };
   }, []);
-
-  // 计算行中心（容器坐标）
-  const recomputeRowCenters = () => {
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    const centers: number[] = [];
-    for (const row of rowRefs.current) {
-      if (!row) { centers.push(0); continue; }
-      const r = row.getBoundingClientRect();
-      const center = (r.top - crect.top) + r.height / 2;
-      centers.push(center);
+  
+  // 模糊背景条动画处理 - 优化版本，减少抖动
+  const updateBackdropPosition = (targetTop: number) => {
+    if (!membraneSettings.enabled || !backdropRef.current) return;
+    
+    // 取消之前的动画
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
-    rowCentersRef.current = centers;
-  };
-
-  // 动画主循环（直接使用鼠标位置作为焦点）
-  const tick = () => {
-    if (!membraneSettings.enabled) {
-      // 关闭时停止动画并清理
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
+    
+    // 直接设置位置，使用CSS transition来处理平滑动画
+    const backdrop = backdropRef.current;
+    backdrop.style.top = `${targetTop}px`;
+    
+    // 添加短暂的弹性效果
+    backdrop.style.transform = 'scale(1.02)';
+    backdrop.style.transition = 'top 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease-out';
+    
+    // 150ms后移除缩放效果
+    setTimeout(() => {
+      if (backdrop && backdrop.style) {
+        backdrop.style.transform = 'scale(1)';
+        backdrop.style.transition = 'top 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease-out';
       }
-      return;
-    }
-    animFrameRef.current = requestAnimationFrame(tick);
-    const container = containerRef.current;
-    if (!container) return;
-    const mouseY = mouseYRef.current;
-    if (mouseY == null) return;
-
-    // 根据距离应用高斯权重联动
-    const centers = rowCentersRef.current;
-    if (!centers.length) return;
-    const sigma = 56 * Math.max(0.2, membraneSettings.radius); // 影响范围（像素）
-    const maxScale = 0.012 * Math.max(0, membraneSettings.intensity); // 最大缩放系数
-    const maxBright = 0.05 * Math.max(0, membraneSettings.intensity); // 最大亮度增加
-    const maxTranslate = 2 * Math.max(0, membraneSettings.intensity); // 最大位移（px）
-
-    for (let i = 0; i < rowRefs.current.length; i++) {
-      const row = rowRefs.current[i];
-      if (!row) continue;
-      const d = centers[i] - mouseY; // 直接使用鼠标位置计算距离
-      const w = Math.exp(- (d * d) / (2 * sigma * sigma)); // 高斯权重 0..1
-      const scale = 1 + maxScale * w;
-      const translateY = (d / sigma) * maxTranslate * w; // 与距离成比例的小形变
-      const bright = 1 + maxBright * w;
-
-      row.style.transform = `translateZ(0) translateY(${translateY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
-      row.style.filter = `brightness(${bright.toFixed(3)})`;
-      row.style.transition = 'transform 80ms ease-out, filter 80ms ease-out';
-      // 轻微背景叠加，保持主题
-      (row.style as any).backgroundColor = `rgba(255, 255, 255, ${0.1 + 0.1 * w})`; // 白色基础上随权重微增
-    }
+      
+    }, 150);
   };
-
-  // 事件：进入、移动、离开
-  const handleMouseEnter = (e: React.MouseEvent) => {
+  
+  // 处理鼠标进入和移动
+  const handleRowMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!membraneSettings.enabled || !containerRef.current) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const relativeTop = rect.top - containerRect.top;
+    
+    setBackdropPosition({ top: relativeTop, visible: true });
+    updateBackdropPosition(relativeTop);
+  };
+  
+  const handleContainerMouseLeave = () => {
     if (!membraneSettings.enabled) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    mouseYRef.current = e.clientY - crect.top;
-    if (animFrameRef.current == null) {
-      animFrameRef.current = requestAnimationFrame(tick);
+    setBackdropPosition(prev => ({ ...prev, visible: false }));
+    
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
   };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!membraneSettings.enabled) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    mouseYRef.current = e.clientY - crect.top;
-  };
-
-  const handleMouseLeave = () => {
-    // 释放到初始状态
-    mouseYRef.current = null;
-    // 渐隐回归
-    for (const row of rowRefs.current) {
-      if (!row) continue;
-      row.style.transform = '';
-      row.style.filter = '';
-      row.style.transition = 'transform 180ms ease-out, filter 180ms ease-out, background-color 180ms ease-out';
-      (row.style as any).backgroundColor = '';
-    }
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  };
-
-  // 当关闭联动时，清理样式
-  useEffect(() => {
-    if (membraneSettings.enabled) return;
-    
-    // 立即停止动画
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    
-    // 重置鼠标状态
-    mouseYRef.current = null;
-    
-    // 清理所有行的样式
-    for (const row of rowRefs.current) {
-      if (!row) continue;
-      row.style.transform = '';
-      row.style.filter = '';
-      row.style.backgroundColor = '';
-      row.style.transition = 'transform 180ms ease-out, filter 180ms ease-out, background-color 180ms ease-out';
-    }
-  }, [membraneSettings.enabled]);
-
-  // 初始化与尺寸变化时重新计算行中心
-  useEffect(() => {
-    // 延迟到布局完成
-    const id = requestAnimationFrame(() => {
-      recomputeRowCenters();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [currentPlaylist.length]);
-
-  // 清理动画资源
+  
+  // 清理动画
   useEffect(() => {
     return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
   }, []);
+
+
 
   const loadCurrentPlaylist = async () => {
     try {
@@ -203,8 +133,6 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
       console.log('🎵 获取当前播放列表');
       const playlist = await invoke('generate_sequential_playlist') as Track[];
       setCurrentPlaylist(playlist);
-      // 重置 rowRefs 数组大小
-      rowRefs.current = new Array(playlist.length).fill(null);
       console.log('🎵 播放列表获取完成，共', playlist.length, '首歌曲');
     } catch (error) {
       console.error('🎵 获取播放列表失败:', error);
@@ -223,8 +151,6 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
         : await invoke('generate_sequential_playlist') as Track[];
       
       setCurrentPlaylist(playlist);
-      // 重置 rowRefs 数组大小
-      rowRefs.current = new Array(playlist.length).fill(null);
       
       // 同时加载到播放器
       await invoke('load_playlist_by_mode', { shuffle });
@@ -259,18 +185,11 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
 
   const handleTrackPlay = async (track: Track) => {
     try {
-      // 先选择曲目
+      // 现在 onTrackSelect 已经会自动播放，所以只需要调用它即可
+      console.log('🎵 PlaylistManager - 播放曲目:', track.title);
       onTrackSelect(track);
-      // 延迟一点再播放，确保界面更新
-      setTimeout(async () => {
-        try {
-          await invoke('player_play', { trackId: track.id });
-        } catch (error) {
-          console.error('播放失败:', error);
-        }
-      }, 100);
     } catch (error) {
-      console.error('选择曲目失败:', error);
+      console.error('🎵 PlaylistManager - 选择曲目失败:', error);
     }
   };
 
@@ -354,19 +273,33 @@ export default function PlaylistManager({ onTrackSelect, membraneSettings = { en
           <div className="p-6">
             <div 
               ref={containerRef}
-              onMouseEnter={membraneSettings.enabled ? handleMouseEnter : undefined}
-              onMouseMove={membraneSettings.enabled ? handleMouseMove : undefined}
-              onMouseLeave={membraneSettings.enabled ? handleMouseLeave : undefined}
-              className="space-y-2"
+              className="space-y-2 relative"
+              onMouseLeave={handleContainerMouseLeave}
             >
+              {/* 模糊背景条 */}
+              {membraneSettings.enabled && (
+                <div
+                  ref={backdropRef}
+                  className={`blur-backdrop ${
+                    backdropPosition.visible ? 'active' : ''
+                  } ${
+                    membraneSettings.intensity > 1.5 ? 'high-intensity' : 
+                    membraneSettings.intensity < 0.5 ? 'low-intensity' : ''
+                  }`}
+                  style={{
+                    top: `${backdropPosition.top}px`,
+                    opacity: backdropPosition.visible ? 0.8 : 0
+                  }}
+                />
+              )}
               {currentPlaylist.map((track, index) => (
                 <div
-                  ref={(el) => { rowRefs.current[index] = el; }}
                   key={track.id}
-                  className={`glass-card-interactive p-4 flex items-center gap-4 hover:bg-white/10 transition-colors cursor-pointer ${
+                  className={`glass-card-interactive p-4 flex items-center gap-4 hover:bg-white/10 transition-colors cursor-pointer relative z-10 ${
                     playerState.current_track?.id === track.id ? 'bg-brand-500/20 border-brand-500/30' : ''
                   }`}
                   onClick={() => handleTrackPlay(track)}
+                  onMouseEnter={handleRowMouseEnter}
                 >
                   {/* 序号 */}
                   <div className="w-8 text-center text-contrast-secondary font-mono text-sm">

@@ -302,6 +302,43 @@ async fn load_playlist_by_mode(shuffle: bool, state: State<'_, AppState>) -> Res
     Ok(())
 }
 
+// Favorites commands
+#[tauri::command]
+async fn favorites_add(track_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.add_favorite(track_id).map_err(|e| e.to_string()).map(|_| ())
+}
+
+#[tauri::command]
+async fn favorites_remove(track_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.remove_favorite(track_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn favorites_is_favorite(track_id: i64, state: State<'_, AppState>) -> Result<bool, String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.is_favorite(track_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn favorites_get_all(state: State<'_, AppState>) -> Result<Vec<Track>, String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.get_all_favorites().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn favorites_toggle(track_id: i64, state: State<'_, AppState>) -> Result<bool, String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.toggle_favorite(track_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn favorites_get_count(state: State<'_, AppState>) -> Result<i64, String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.get_favorites_count().map_err(|e| e.to_string())
+}
+
 // Playlist commands
 #[tauri::command]
 async fn playlists_list(state: State<'_, AppState>) -> Result<Vec<db::Playlist>, String> {
@@ -362,11 +399,45 @@ async fn close_window(window: tauri::Window) -> Result<(), String> {
 // Audio device commands
 #[tauri::command]
 async fn check_audio_devices() -> Result<String, String> {
-    use rodio::OutputStream;
+    use rodio::{OutputStream, Sink};
+    
+    log::info!("检查音频设备...");
     
     match OutputStream::try_default() {
-        Ok(_) => Ok("Audio devices available".to_string()),
-        Err(e) => Err(format!("No audio devices found: {}", e))
+        Ok((stream, handle)) => {
+            log::info!("✅ 默认音频输出设备可用");
+            
+            // 测试是否能创建sink
+            match Sink::try_new(&handle) {
+                Ok(sink) => {
+                    log::info!("✅ 音频sink创建成功");
+                    
+                    // 测试是否能播放一个简短的测试音
+                    use rodio::source::{SineWave, Source};
+                    use std::time::Duration;
+                    
+                    let source = SineWave::new(440.0)
+                        .take_duration(Duration::from_millis(100))
+                        .amplify(0.05);
+                    
+                    sink.append(source);
+                    sink.play();
+                    
+                    // 保持stream存活
+                    std::mem::forget(stream);
+                    
+                    Ok("音频设备完全可用，测试音播放成功".to_string())
+                }
+                Err(e) => {
+                    log::error!("❌ 音频sink创建失败: {}", e);
+                    Err(format!("音频设备部分可用但无法创建sink: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("❌ 找不到音频设备: {}", e);
+            Err(format!("找不到音频设备: {}", e))
+        }
     }
 }
 
@@ -409,10 +480,77 @@ async fn get_album_cover(track_id: i64, state: State<'_, AppState>) -> Result<Op
 }
 
 
+// Audio debug commands
+#[tauri::command]
+async fn debug_audio_system() -> Result<String, String> {
+    use rodio::OutputStream;
+    use cpal::traits::{DeviceTrait, HostTrait};
+    
+    log::info!("调试音频系统...");
+    
+    let mut result = String::new();
+    result.push_str("音频系统调试报告:\n\n");
+    
+    // 1. 检查音频主机
+    let hosts = cpal::available_hosts();
+    result.push_str(&format!("可用音频主机: {:?}\n", hosts));
+    
+    // 2. 检查默认主机和设备
+    let host = cpal::default_host();
+    if let Some(device) = host.default_output_device() {
+        if let Ok(name) = device.name() {
+            result.push_str(&format!("默认输出设备: {}\n", name));
+            
+            // 3. 检查设备配置
+            if let Ok(config) = device.default_output_config() {
+                result.push_str(&format!("默认配置: {:?}\n", config));
+            }
+            
+            // 4. 测试OutputStream创建
+            match OutputStream::try_from_device(&device) {
+                Ok((stream, handle)) => {
+                    result.push_str("✅ OutputStream创建成功\n");
+                    
+                    // 5. 测试Sink创建
+                    match rodio::Sink::try_new(&handle) {
+                        Ok(_) => result.push_str("✅ Sink创建成功\n"),
+                        Err(e) => result.push_str(&format!("❌ Sink创建失败: {}\n", e)),
+                    }
+                    
+                    std::mem::forget(stream); // 保持stream存活
+                }
+                Err(e) => {
+                    result.push_str(&format!("❌ OutputStream创建失败: {}\n", e));
+                }
+            }
+        }
+    } else {
+        result.push_str("❌ 未找到默认输出设备\n");
+    }
+    
+    // 6. 列出所有输出设备
+    match host.output_devices() {
+        Ok(devices) => {
+            result.push_str("\n所有输出设备:\n");
+            for (i, device) in devices.enumerate() {
+                if let Ok(name) = device.name() {
+                    result.push_str(&format!("  {}. {}\n", i + 1, name));
+                }
+            }
+        }
+        Err(e) => {
+            result.push_str(&format!("❌ 无法枚举输出设备: {}\n", e));
+        }
+    }
+    
+    log::info!("音频系统调试完成");
+    Ok(result)
+}
+
 // 测试命令：直接检查库统计数据
 #[tauri::command]
 async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String> {
-    log::info!("🔍 测试库统计数据");
+    log::info!("测试库统计数据");
     
     let db = state.inner().db.lock().map_err(|e| e.to_string())?;
     
@@ -442,7 +580,7 @@ async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String
         result.push_str(&format!("... 还有 {} 首歌曲\n", tracks.len() - 10));
     }
     
-    log::info!("🔍 统计测试结果: {}", result);
+    log::info!("统计测试结果: {}", result);
     Ok(result)
 }
 
@@ -451,7 +589,7 @@ async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String
 async fn test_audio_cover(file_path: String) -> Result<String, String> {
     use lofty::{probe::Probe, prelude::*};
     
-    log::info!("🔍 测试音频文件封面: {}", file_path);
+    log::info!("测试音频文件封面: {}", file_path);
     
     match Probe::open(&file_path) {
         Ok(probe) => {
@@ -683,6 +821,13 @@ pub fn run() {
             lyrics_parse_ass,
             lyrics_parse_vtt,
             lyrics_auto_detect,
+            // Favorites commands
+            favorites_add,
+            favorites_remove,
+            favorites_is_favorite,
+            favorites_get_all,
+            favorites_toggle,
+            favorites_get_count,
             // Playlist commands
             playlists_list,
             playlists_create,
@@ -696,10 +841,11 @@ pub fn run() {
             close_window,
             // Audio device commands
             check_audio_devices,
+            debug_audio_system,
             // Album cover commands
             get_album_cover,
-// Test commands
-test_library_stats,
+            // Test commands
+            test_library_stats,
         ])
         .setup(|app| {
             if let Err(e) = init_app(app.handle()) {

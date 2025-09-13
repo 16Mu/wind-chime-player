@@ -42,6 +42,9 @@ function LyricsDisplay({
   const [error, setError] = useState<string | null>(null);
   const [currentLineIndex, setCurrentLineIndex] = useState<number | null>(null);
   const [showImmersiveMode, setShowImmersiveMode] = useState(false);
+  
+  // 简化的滚动系统 - 移除连续滚动，仅保留基础引用
+  
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -62,26 +65,12 @@ function LyricsDisplay({
     return currentIndex >= 0 ? currentIndex : null;
   }, []);
 
-  // 滚动到当前歌词行
-  const scrollToCurrentLine = useCallback((index: number) => {
-    if (!lyricsRef.current || !lineRefs.current[index]) return;
-    
-    const container = lyricsRef.current;
-    const currentLine = lineRefs.current[index];
-    
-    // 计算滚动位置，让当前行居中显示
-    const containerHeight = container.clientHeight;
-    const lineHeight = currentLine.offsetHeight;
-    const lineTop = currentLine.offsetTop;
-    
-    const targetScroll = lineTop - (containerHeight / 2) + (lineHeight / 2);
-    
-    // 平滑滚动
-    container.scrollTo({
-      top: Math.max(0, targetScroll),
-      behavior: 'smooth'
-    });
-  }, []);
+  // 移除用户滚动处理 - 沉浸式模式自管理用户交互
+
+  // 移除预计算函数 - 沉浸式模式自带位置计算
+  
+  // 移除连续滚动相关函数 - 统一使用沉浸式模式的离散滚动
+  
 
   // 缓存已加载的歌词，避免重复加载
   const [lyricsCache, setLyricsCache] = useState<Map<number, ParsedLyrics | null>>(new Map());
@@ -94,7 +83,9 @@ function LyricsDisplay({
     if (lyricsCache.has(id)) {
       const cachedLyrics = lyricsCache.get(id);
       console.log('🎵 使用缓存的歌词, trackId:', id);
-      setLyrics(cachedLyrics);
+      if (cachedLyrics) {
+        setLyrics(cachedLyrics);
+      }
       setError(cachedLyrics ? null : '未找到歌词');
       return;
     }
@@ -222,24 +213,23 @@ function LyricsDisplay({
     }
   }, [track?.id]); // 移除 track?.path 和 loadLyrics 依赖
 
-  // 更新当前行索引 - 优化性能，减少不必要的日志
+  // 简化的发光系统 - 仅负责高亮当前行，滚动由沉浸式模式处理
   useEffect(() => {
-    if (lyrics?.lines && lyrics.lines.length > 0) {
-      const newIndex = getCurrentLineIndex(lyrics.lines, currentPositionMs);
-      
-      if (newIndex !== currentLineIndex) {
-        setCurrentLineIndex(newIndex);
-        
-        // 自动滚动到当前行（仅在播放时）
-        if (newIndex !== null && isPlaying) {
-          scrollToCurrentLine(newIndex);
-        }
-      }
-    } else if (currentLineIndex !== null) {
-      // 如果没有歌词但还有当前行索引，清除它
-      setCurrentLineIndex(null);
+    if (!lyrics?.lines || lyrics.lines.length === 0) {
+      return;
     }
-  }, [lyrics?.lines, currentPositionMs, currentLineIndex, getCurrentLineIndex, scrollToCurrentLine, isPlaying]);
+    
+    // 仅更新发光效果，不处理滚动
+    const currentIndex = getCurrentLineIndex(lyrics.lines, currentPositionMs);
+    if (currentIndex !== currentLineIndex) {
+      console.log('🎵 [发光切换] LyricsDisplay从第', currentLineIndex, '行切换到第', currentIndex, '行');
+      setCurrentLineIndex(currentIndex);
+    }
+  }, [lyrics?.lines, currentPositionMs, currentLineIndex, getCurrentLineIndex]);
+  
+  // 移除位置预计算和RAF清理 - 沉浸式模式自管理滚动
+
+
 
   // 渲染加载状态
   if (isLoading) {
@@ -390,8 +380,8 @@ function LyricsDisplay({
           </div>
         )}
       
-      {/* 歌词内容 */}
-      <div className="space-y-3 py-4">
+      {/* 歌词内容 - 平衡居中显示和滚动效果 */}
+      <div className="space-y-3" style={{ paddingTop: '50vh', paddingBottom: '50vh' }}>
         {lyrics.lines.map((line, index) => (
           <div
             key={index}
@@ -430,11 +420,15 @@ function LyricsDisplay({
               // 点击歌词行跳转到对应时间点
               if (track?.id) {
                 try {
+                  console.log('🎵 [用户点击] LyricsDisplay用户点击第', index, '行，时间戳:', line.timestamp_ms);
+                  
+                  // 跳转到指定时间点
                   await invoke('player_seek', { positionMs: line.timestamp_ms });
-                  // 如果原本在播放，确保seek后继续播放
                   if (isPlaying) {
                     await invoke('player_resume');
                   }
+                  
+                  // 沉浸式模式的离散滚动会自动处理位置
                 } catch (error) {
                   console.error('Lyrics seek failed:', error);
                 }

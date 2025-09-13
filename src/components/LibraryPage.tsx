@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import TracksView from './TracksView';
 import ArtistsView from './ArtistsView';
@@ -39,7 +39,7 @@ export default function LibraryPage({
   onTrackSelect, 
   searchQuery = '', 
   tracks, 
-  stats, 
+  stats: _stats, // 保留接口兼容性，但现在使用实时计算的统计数据
   isLoading, 
   isCached,
   onSearch,
@@ -55,7 +55,61 @@ export default function LibraryPage({
   const [activeTab, setActiveTab] = useState<'tracks' | 'artists' | 'albums'>('tracks');  // 当前活跃标签
   const [errorMessage, setErrorMessage] = useState<string | null>(null);  // 错误消息
 
-  // 🎵 只监听扫描相关事件（数据加载已移至App层）
+  // 实时计算统计数据 - 与前端显示逻辑保持一致
+  const realTimeStats = useMemo(() => {
+    if (!tracks.length) return { total_tracks: 0, total_artists: 0, total_albums: 0 };
+
+    // 计算实际的艺术家数量（使用与 ArtistsView 相同的分离逻辑）
+    const artistsMap = new Map<string, boolean>();
+    
+    tracks.forEach(track => {
+      const artistString = track.artist || '未知艺术家';
+      
+      // 分离合作艺术家：支持 "/" 、"、"、"&"、"feat."、"featuring"等分隔符
+      const separators = [/\s*\/\s*/, /\s*、\s*/, /\s*&\s*/, /\s*feat\.?\s+/i, /\s*featuring\s+/i, /\s*ft\.?\s+/i];
+      let artistNames = [artistString];
+      
+      separators.forEach(separator => {
+        const newNames: string[] = [];
+        artistNames.forEach(name => {
+          const split = name.split(separator);
+          newNames.push(...split);
+        });
+        artistNames = newNames;
+      });
+      
+      // 清理艺术家名称并添加到set中
+      artistNames.forEach(artistName => {
+        const cleanName = artistName.trim();
+        if (cleanName) {
+          artistsMap.set(cleanName, true);
+        }
+      });
+      
+      // 如果没有有效的艺术家名称，添加"未知艺术家"
+      if (artistNames.length === 0 || artistNames.every(name => !name.trim())) {
+        artistsMap.set('未知艺术家', true);
+      }
+    });
+
+    // 计算实际的专辑数量（使用与 AlbumsView 相同的逻辑）
+    const albumsMap = new Map<string, boolean>();
+    
+    tracks.forEach(track => {
+      const albumName = track.album || '未知专辑';
+      const artistName = track.artist || '未知艺术家';
+      const albumKey = `${albumName}::${artistName}`;
+      albumsMap.set(albumKey, true);
+    });
+
+    return {
+      total_tracks: tracks.length,
+      total_artists: artistsMap.size,
+      total_albums: albumsMap.size
+    };
+  }, [tracks]);
+
+  // 监听扫描事件
   useEffect(() => {
     if (typeof listen === 'undefined') return;
 
@@ -72,8 +126,7 @@ export default function LibraryPage({
       const unlistenScanComplete = await listen('library-scan-complete', () => {
         setIsScanning(false);
         setScanProgress(null);
-        // 扫描完成后刷新数据
-        console.log('🎵 扫描完成，刷新数据');
+        console.log('扫描完成，刷新数据');
         onRefresh();
       });
 
@@ -90,22 +143,19 @@ export default function LibraryPage({
     };
   }, []);
 
-  // 🔍 处理搜索查询变化（使用App传入的onSearch函数）
+  // 处理搜索查询变化
   useEffect(() => {
     const searchDebounced = setTimeout(() => {
       onSearch(searchQuery);
     }, 200);
 
     return () => clearTimeout(searchDebounced);
-  }, [searchQuery]); // 移除onSearch依赖，避免无限循环
-
-
-  // handleSearch 函数已移除，搜索现在通过 App 组件的 searchQuery prop 处理
+  }, [searchQuery]);
 
   return (
-    <div className="flex flex-col glass-card">
-      {/* 🎵 玻璃化顶部区域：标题和统计信息 */}
-      <div className="mb-6">
+    <div className="space-y-6">
+      {/* 顶部区域：标题和统计信息 */}
+      <div className="glass-card mb-6">
         <h2 className="text-2xl font-bold text-contrast-primary mb-2">音乐库</h2>
         {searchQuery ? (
           <p className="text-contrast-secondary text-base flex items-center gap-2 font-medium mb-4">
@@ -114,29 +164,28 @@ export default function LibraryPage({
             </svg>
             搜索 "<span className="font-semibold text-brand-600">{searchQuery}</span>" 找到 <span className="font-bold">{tracks.length}</span> 首歌曲
           </p>
-        ) : stats ? (
+        ) : tracks.length > 0 ? (
           <p className="text-contrast-secondary text-base flex items-center gap-4 font-medium mb-4">
             <span className="flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
-              <span className="font-bold">{stats.total_tracks || 0}</span> 首歌曲
+              <span className="font-bold">{realTimeStats.total_tracks}</span> 首歌曲
             </span>
             <span className="flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              <span className="font-bold">{stats.total_artists || 0}</span> 位艺术家
+              <span className="font-bold">{realTimeStats.total_artists}</span> 位艺术家
             </span>
             <span className="flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              <span className="font-bold">{stats.total_albums || 0}</span> 张专辑
+              <span className="font-bold">{realTimeStats.total_albums}</span> 张专辑
             </span>
           </p>
         ) : (
-          /* 统计数据加载中或不可用 */
           <p className="text-contrast-secondary text-base font-medium mb-4 flex items-center gap-2">
             <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -146,7 +195,7 @@ export default function LibraryPage({
         )}
       </div>
 
-      {/* 🚨 玻璃化错误消息 */}
+      {/* 错误消息 */}
       {errorMessage && (
         <div className="mb-4 glass-card" style={{ background: 'rgba(245, 82, 82, 0.1)', borderColor: 'rgba(245, 82, 82, 0.3)' }}>
           <div className="flex items-center gap-3">
@@ -170,7 +219,7 @@ export default function LibraryPage({
         </div>
       )}
 
-      {/* 📊 玻璃化扫描进度 */}
+      {/* 扫描进度 */}
       {isScanning && scanProgress && (
         <div className="mb-6 glass-card glass-card-compact">
           <div className="flex items-center justify-between mb-3">
@@ -203,12 +252,12 @@ export default function LibraryPage({
         </div>
       )}
 
-      {/* 🎨 玻璃化主要内容区域 - 整个红色框选区域 */}
+      {/* 主要内容区域 */}
       <div className="glass-surface-strong flex flex-col">
-        {/* 📊 标签页导航 */}
+        {/* 标签页导航 */}
         <div className="p-6 pb-0">
           <div className="glass-tabs">
-            {/* 🏷️ 滑动指示器 */}
+            {/* 滑动指示器 */}
             <div 
               className="tab-indicator"
               style={{
@@ -257,7 +306,7 @@ export default function LibraryPage({
           </div>
         </div>
 
-        {/* 🎶 玻璃化内容区域 */}
+        {/* 内容区域 */}
         <div className="p-6">
           {!isCached && isLoading && tracks.length === 0 ? (
             /* 只有在数据未缓存且首次加载时才显示加载状态 */
@@ -321,9 +370,12 @@ export default function LibraryPage({
                   tracks={tracks} 
                   onTrackSelect={onTrackSelect} 
                   isLoading={isLoading && !isCached}
-                  membraneEnabled={membraneSettings.enabled}
-                  membraneIntensity={membraneSettings.intensity}
-                  membraneRadius={membraneSettings.radius}
+                  showFavoriteButtons={true}
+                  blurBackdropSettings={{
+                    enabled: membraneSettings.enabled,
+                    intensity: membraneSettings.intensity === 1 ? 'medium' : membraneSettings.intensity > 1 ? 'high' : 'low',
+                    opacity: 0.8
+                  }}
                 />
               )}
               {activeTab === 'artists' && (

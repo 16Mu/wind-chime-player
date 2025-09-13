@@ -40,11 +40,16 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const [dragPosition, setDragPosition] = useState(0);
   const progressBarRef = useRef<HTMLDivElement>(null);
   
+  const transportControlsRef = useRef<HTMLDivElement>(null);
+  
+  
   // 简化状态管理
   
   // 歌词相关状态
   const [showLyrics, setShowLyrics] = useState(false);
   const [showLyricsManager, setShowLyricsManager] = useState(false);
+  
+  const albumThumbnailRef = useRef<HTMLDivElement>(null);
   
   // 音频设备状态
   const [audioDeviceError, setAudioDeviceError] = useState<string | null>(null);
@@ -53,7 +58,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 专辑封面状态
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
   
-  // 收藏状态 (临时演示用)
+  // 收藏状态
   const [isFavorite, setIsFavorite] = useState(false);
   
   // 简化布局，移除复杂动画状态
@@ -88,10 +93,17 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     const unlistenPlayerError = listen('player-error', (event: any) => {
       console.error('🎵 播放器错误:', event.payload);
       
-      // 检查是否是音频设备错误
-      if (typeof event.payload === 'string' && event.payload.includes('NoDevice')) {
-        setAudioDeviceError(event.payload);
-        setShowAudioTroubleshooter(true);
+      // 显示所有播放器错误
+      const errorMessage = typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload);
+      setAudioDeviceError(errorMessage);
+      setShowAudioTroubleshooter(true);
+      
+      // 特别处理音频设备相关错误
+      if (errorMessage.includes('NoDevice') || 
+          errorMessage.includes('音频设备') || 
+          errorMessage.includes('sink') ||
+          errorMessage.includes('播放列表为空')) {
+        console.warn('🎵 检测到音频系统问题:', errorMessage);
       }
     });
 
@@ -102,7 +114,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     });
 
     // 监听播放列表完成事件
-    const unlistenPlaylistCompleted = listen('playlist-completed', (event: any) => {
+    const unlistenPlaylistCompleted = listen('playlist-completed', () => {
       console.log('🎵 播放列表播放完成');
       // 可以在这里添加播放列表完成的UI反馈
       // 例如显示通知或重置UI状态
@@ -145,11 +157,20 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
         
         await invoke('player_play', { trackId: currentTrack.id });
         console.log('🎵 播放命令发送成功');
+        
+        // 清除任何之前的错误
+        setAudioDeviceError(null);
+        setShowAudioTroubleshooter(false);
       } else {
         console.warn('🎵 没有选中的曲目无法播放');
       }
     } catch (error) {
       console.error('🎵 播放失败:', error);
+      
+      // 显示播放错误
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setAudioDeviceError(errorMessage);
+      setShowAudioTroubleshooter(true);
     }
   };
 
@@ -159,6 +180,15 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       console.log('🎵 确保播放列表已加载，当前随机模式:', playerState.shuffle);
       await invoke('load_playlist_by_mode', { shuffle: playerState.shuffle });
       console.log('🎵 播放列表加载完成');
+      
+      // 调试：获取播放列表内容验证
+      try {
+        const playlist = await invoke('generate_sequential_playlist') as any[];
+        console.log('🎵 当前播放列表验证:', playlist.length, '首歌曲');
+        console.log('🎵 播放列表前3首:', playlist.slice(0, 3).map(t => ({ id: t.id, title: t.title, path: t.path })));
+      } catch (e) {
+        console.warn('🎵 播放列表验证失败:', e);
+      }
     } catch (error) {
       console.error('🎵 播放列表加载失败:', error);
     }
@@ -198,14 +228,18 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
 
   const handleSeek = async (positionMs: number) => {
+    console.log('🎵 开始跳转到位置:', positionMs, 'ms');
     try {
       await invoke('player_seek', { positionMs });
+      console.log('🎵 跳转命令发送成功');
+      
       // If it was playing, ensure it resumes after seek
       if (playerState.is_playing) {
+        console.log('🎵 跳转后恢复播放');
         await invoke('player_resume');
       }
     } catch (error) {
-      console.error('跳转失败:', error);
+      console.error('🎵 跳转失败:', error);
     }
   };
 
@@ -293,7 +327,39 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     }
   };
 
-  // 当曲目变化时加载专辑封面
+  // 检查曲目收藏状态
+  const checkFavoriteStatus = async (trackId: number) => {
+    try {
+      const isFav = await invoke('favorites_is_favorite', { trackId }) as boolean;
+      setIsFavorite(isFav);
+    } catch (error) {
+      console.error('检查收藏状态失败:', error);
+      setIsFavorite(false);
+    }
+  };
+
+  // 切换收藏状态
+  const toggleFavorite = async () => {
+    // 优先使用播放器状态中的当前曲目
+    const track = playerState.current_track || currentTrack;
+    if (!track) return;
+
+    try {
+      const newFavoriteState = await invoke('favorites_toggle', { trackId: track.id }) as boolean;
+      setIsFavorite(newFavoriteState);
+      
+      // 显示反馈消息
+      if (newFavoriteState) {
+        console.log(`✨ 已收藏: ${track.title || '未知歌曲'}`);
+      } else {
+        console.log(`💔 已取消收藏: ${track.title || '未知歌曲'}`);
+      }
+    } catch (error) {
+      console.error('切换收藏状态失败:', error);
+    }
+  };
+
+  // 当曲目变化时加载专辑封面和检查收藏状态
   useEffect(() => {
     // 优先使用播放器状态中的当前曲目，确保与实际播放保持同步
     const track = playerState.current_track || currentTrack;
@@ -307,6 +373,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
     if (track?.id) {
       loadAlbumCover(track.id);
+      checkFavoriteStatus(track.id);
+    } else {
+      setIsFavorite(false);
     }
   }, [playerState.current_track?.id, currentTrack?.id]);
 
@@ -322,12 +391,33 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 删除复杂的动画逻辑
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressBarRef.current || !displayTrack?.duration_ms) return;
+    console.log('🎵 进度条点击事件触发', e.currentTarget, e.target);
+    
+    if (!progressBarRef.current || !displayTrack?.duration_ms) {
+      console.log('🎵 进度条点击失败: 缺少必要条件', {
+        hasRef: !!progressBarRef.current,
+        hasDuration: !!displayTrack?.duration_ms,
+        displayTrack: displayTrack
+      });
+      return;
+    }
+    
+    // 阻止事件冒泡，避免与拖拽事件冲突
+    e.preventDefault();
+    e.stopPropagation();
     
     const rect = progressBarRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
     const newPosition = percentage * displayTrack.duration_ms;
+    
+    console.log('🎵 进度条点击计算:', {
+      clickX,
+      width: rect.width,
+      percentage,
+      newPosition,
+      duration: displayTrack.duration_ms
+    });
     
     handleSeek(newPosition);
   };
@@ -377,6 +467,11 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  // 处理封面点击，启动沉浸式歌词
+  const handleAlbumCoverClick = () => {
+    setShowLyrics(true);
+  };
+
   // 优先显示播放器状态中的当前曲目，确保与实际播放保持同步
   const displayTrack = playerState.current_track || currentTrack;
 
@@ -396,8 +491,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           <div className="player-left-section">
             {/* 专辑缩略图 */}
             <div 
+              ref={albumThumbnailRef}
               className="album-thumbnail" 
-              onClick={() => setShowLyrics(true)}
+              onClick={handleAlbumCoverClick}
               title="点击查看歌词"
             >
               <div className="album-cover-container">
@@ -435,7 +531,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           {/* 中轴区：传输控制与进度条 - 新设计 */}
           <div className="transport-area">
             {/* 上行：传输控制 - 5格栅格布局 */}
-            <div className="transport-controls">
+            <div 
+              ref={transportControlsRef}
+              className="transport-controls"
+            >
               {/* 左侧小键：随机播放 */}
               <button
                 onClick={() => handleSetShuffle(!playerState.shuffle)}
@@ -552,7 +651,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             {/* 收藏 */}
             <button 
               className={`function-square-btn ${isFavorite ? 'active' : ''}`} 
-              onClick={() => setIsFavorite(!isFavorite)}
+              onClick={toggleFavorite}
               title={isFavorite ? '取消收藏' : '收藏'}
             >
               <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">

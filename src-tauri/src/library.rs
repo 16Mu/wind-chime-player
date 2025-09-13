@@ -307,13 +307,13 @@ impl Library {
     }
 
     fn get_library_stats(&self) -> Result<LibraryEvent> {
-        log::info!("🎵 开始获取库统计数据");
+        log::info!("开始获取库统计数据");
         let db = self.db.lock().unwrap();
         let total_tracks = db.get_track_count()?;
         let total_artists = db.get_artist_count()?;
         let total_albums = db.get_album_count()?;
         
-        log::info!("🎵 统计数据: {} 首歌曲, {} 位艺术家, {} 张专辑", 
+        log::info!("统计数据: {} 首歌曲, {} 位艺术家, {} 张专辑", 
                   total_tracks, total_artists, total_albums);
 
         Ok(LibraryEvent::LibraryStats {
@@ -393,12 +393,12 @@ impl Library {
             
             // 检查图片大小限制
             if size > 3_145_728 { // 3MB
-                log::warn!("⚠️ 专辑封面过大 ({} 字节), 跳过", size);
+                log::warn!("专辑封面过大 ({} 字节), 跳过", size);
                 return (None, None);
             }
             
             if size < 512 { // 512 bytes
-                log::warn!("⚠️ 专辑封面过小 ({} 字节), 跳过", size);
+                log::warn!("专辑封面过小 ({} 字节), 跳过", size);
                 return (None, None);
             }
             

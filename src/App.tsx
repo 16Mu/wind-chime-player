@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
@@ -8,6 +8,7 @@ import PlaylistPlayer from './components/PlaylistPlayer';
 import ExplorePage from './components/ExplorePage';
 import MusicFolderManager from './components/MusicFolderManager';
 import PlaylistManager from './components/PlaylistManager';
+import FavoritesView from './components/FavoritesView';
 
 export type Page = 'explore' | 'library' | 'playlist' | 'favorite' | 'genres' | 'settings';
 
@@ -29,124 +30,90 @@ interface LibraryStats {
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('library');
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
-  const [playerVisible, setPlayerVisible] = useState(false);
-  const [animatingPlayer, setAnimatingPlayer] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
-  // 🎯 高对比度模式状态管理
+  // 高对比度设置
   const [isHighContrast, setIsHighContrast] = useState(() => {
-    // 检查系统偏好和本地存储
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('windchime-high-contrast');
       if (stored !== null) {
         return stored === 'true';
       }
-      // 检查系统偏好
       return window.matchMedia('(prefers-contrast: more)').matches;
     }
     return false;
   });
 
-  // 🎭 软膜联动动画设置
-  const [membraneSettings, setMembraneSettings] = useState(() => {
+  // 背景模糊效果设置
+  const [blurBackdropSettings, setBlurBackdropSettings] = useState(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('windchime-membrane-settings');
+      const stored = localStorage.getItem('windchime-blur-backdrop-settings');
       if (stored) {
         try {
           return JSON.parse(stored);
         } catch (error) {
-          console.warn('Failed to parse membrane settings:', error);
+          console.warn('Failed to parse blur backdrop settings:', error);
         }
       }
     }
     return {
       enabled: true,
-      intensity: 1,
-      radius: 1
+      intensity: 'medium',
+      opacity: 0.8
     };
   });
 
-  // 软膜联动效果详细设置的展开状态
-  const [membraneDetailsExpanded, setMembraneDetailsExpanded] = useState(false);
+  const [blurBackdropDetailsExpanded, setBlurBackdropDetailsExpanded] = useState(false);
   
-  // 🎵 全局音乐库数据管理 - 缓存机制
+  // 兼容PlaylistManager的设置格式
+  const membraneSettings = {
+    enabled: blurBackdropSettings.enabled,
+    intensity: blurBackdropSettings.intensity === 'high' ? 1.5 : blurBackdropSettings.intensity === 'low' ? 0.5 : 1,
+    radius: 1
+  };
+  
+  // 音乐库数据状态
   const [tracks, setTracks] = useState<Track[]>([]);
   const [libraryStats, setLibraryStats] = useState<LibraryStats | null>(null);
-  const [isLibraryLoading, setIsLibraryLoading] = useState(false); // 默认不加载
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [hasLibraryInitialized, setHasLibraryInitialized] = useState(false);
-  const [libraryDataCached, setLibraryDataCached] = useState(false); // 数据是否已缓存
-  
-  const playerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousPageRef = useRef<Page | null>(null); // 初始为 null，这样第一次切换会被检测到
+  const [libraryDataCached, setLibraryDataCached] = useState(false);
 
-  // 显示播放器动画
-  const showPlayer = useCallback(() => {
-    console.log('🎵 showPlayer 被调用，当前状态:', { animatingPlayer, playerVisible });
-    
-    // 如果已经显示且没有在进行隐藏动画，直接返回
-    if (playerVisible && !animatingPlayer) {
-      console.log('🎵 播放器已显示且无动画，跳过');
-      return;
-    }
-    
-    // 清除任何正在进行的定时器
-    if (playerTimeoutRef.current) {
-      clearTimeout(playerTimeoutRef.current);
-    }
-    
-    console.log('🎵 开始显示播放器动画');
-    setAnimatingPlayer(true);
-    setPlayerVisible(true);
-    
-    playerTimeoutRef.current = setTimeout(() => {
-      console.log('🎵 播放器显示动画完成');
-      setAnimatingPlayer(false);
-    }, 700);
-  }, [animatingPlayer, playerVisible]);
+  // 监听播放器曲目变化事件
+  useEffect(() => {
+    const unlistenTrackChanged = listen('player-track-changed', (event: any) => {
+      console.log('App收到曲目变化事件:', event.payload);
+      if (event.payload) {
+        setSelectedTrack(event.payload);
+        console.log('已同步更新selectedTrack:', event.payload.title);
+      }
+    });
 
-  // 隐藏播放器动画
-  const hidePlayer = useCallback(() => {
-    console.log('🎵 hidePlayer 被调用，当前状态:', { animatingPlayer, playerVisible });
-    
-    // 如果已经隐藏且没有在进行显示动画，直接返回
-    if (!playerVisible && !animatingPlayer) {
-      console.log('🎵 播放器已隐藏且无动画，跳过');
-      return;
-    }
-    
-    // 清除任何正在进行的定时器
-    if (playerTimeoutRef.current) {
-      clearTimeout(playerTimeoutRef.current);
-    }
-    
-    console.log('🎵 开始隐藏播放器动画');
-    setAnimatingPlayer(true);
-    setPlayerVisible(false);
-    
-    playerTimeoutRef.current = setTimeout(() => {
-      console.log('🎵 播放器隐藏动画完成');
-      setAnimatingPlayer(false);
-    }, 500);
-  }, [animatingPlayer, playerVisible]);
+    return () => {
+      unlistenTrackChanged.then(fn => fn());
+    };
+  }, []);
 
-  // 全局播放曲目处理函数
+  // 播放曲目处理
   const handleTrackSelect = async (track: Track) => {
-    console.log('🎵 全局播放曲目:', track);
+    console.log('全局播放曲目:', track);
     
-    // 先加载当前的歌曲列表到播放列表
     if (typeof invoke !== 'undefined') {
       try {
-        console.log('🎵 加载播放列表，共', tracks.length, '首歌曲');
+        console.log('加载播放列表，共', tracks.length, '首歌曲');
         await invoke('player_load_playlist', { tracks });
-        console.log('🎵 播放列表加载完成，开始播放曲目:', track.title);
+        console.log('播放列表加载完成，开始播放曲目:', track.title);
+        
+        await invoke('player_play', { trackId: track.id });
+        console.log('播放命令已发送');
       } catch (error) {
-        console.error('加载播放列表失败:', error);
+        console.error('播放失败:', error);
       }
     }
     
     setSelectedTrack(track);
-    console.log('🎵 设置选中曲目完成，当前播放器可见性:', playerVisible);
+    console.log('设置选中曲目完成');
   };
 
   // 窗口控制函数
@@ -174,9 +141,8 @@ export default function App() {
     }
   };
 
-  // 编程方式拖拽处理
+  // 窗口拖拽处理
   const handleDragStart = async (e: React.MouseEvent) => {
-    // 检查是否点击的是不可拖拽区域
     const target = e.target as HTMLElement;
     const noDragElement = target.closest('[data-tauri-drag-region="false"]');
     
@@ -197,36 +163,33 @@ export default function App() {
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    // 搜索逻辑现在在App中处理
     handleLibrarySearch(query);
   };
 
-  // 🎯 高对比度模式切换函数
+  // 高对比度切换
   const toggleHighContrast = useCallback(() => {
     const newValue = !isHighContrast;
     setIsHighContrast(newValue);
     
-    // 保存到本地存储
     if (typeof window !== 'undefined') {
       localStorage.setItem('windchime-high-contrast', newValue.toString());
     }
   }, [isHighContrast]);
 
-  // 🎭 软膜联动设置更新函数
-  const updateMembraneSettings = useCallback((newSettings: Partial<typeof membraneSettings>) => {
-    const updated = { ...membraneSettings, ...newSettings };
-    setMembraneSettings(updated);
+  // 更新模糊效果设置
+  const updateBlurBackdropSettings = useCallback((newSettings: Partial<typeof blurBackdropSettings>) => {
+    const updated = { ...blurBackdropSettings, ...newSettings };
+    setBlurBackdropSettings(updated);
     
-    // 保存到本地存储
     if (typeof window !== 'undefined') {
-      localStorage.setItem('windchime-membrane-settings', JSON.stringify(updated));
+      localStorage.setItem('windchime-blur-backdrop-settings', JSON.stringify(updated));
     }
-  }, [membraneSettings]);
+  }, [blurBackdropSettings]);
 
-  // 🎵 全局音乐库数据加载和搜索逻辑
+  // 音乐库数据加载
   const loadLibraryTracks = useCallback(async () => {
     if (typeof invoke === 'undefined') {
-      console.warn('🎵 Tauri API 不可用，跳过加载曲目');
+      console.warn('Tauri API 不可用，跳过加载曲目');
       return;
     }
     try {
@@ -239,14 +202,14 @@ export default function App() {
 
   const loadLibraryStats = useCallback(async () => {
     if (typeof invoke === 'undefined') {
-      console.warn('🎵 Tauri API 不可用，跳过加载统计');
+      console.warn('Tauri API 不可用，跳过加载统计');
       return;
     }
     try {
-      console.log('🎵 开始加载统计数据...');
-      console.log('🎵 当前libraryStats状态:', libraryStats);
+      console.log('开始加载统计数据...');
+      console.log('当前libraryStats状态:', libraryStats);
       await invoke('library_get_stats');
-      console.log('🎵 统计数据请求已发送，等待后端响应...');
+      console.log('统计数据请求已发送，等待后端响应...');
     } catch (error) {
       console.error('加载统计失败:', error);
     }
@@ -256,9 +219,8 @@ export default function App() {
     if (typeof invoke === 'undefined') return;
     
     if (query && query.trim()) {
-      console.log('🔍 执行模糊搜索:', query);
+      console.log('执行搜索:', query);
       try {
-        // 搜索时不显示加载状态，因为数据已缓存
         if (!libraryDataCached) {
           setIsLibraryLoading(true);
         }
@@ -268,73 +230,34 @@ export default function App() {
         setIsLibraryLoading(false);
       }
     } else {
-      // 搜索为空时：恢复所有数据
+      // 恢复完整列表
       if (libraryDataCached && hasLibraryInitialized) {
-        console.log('🎵 恢复缓存的音乐库数据');
-        await loadLibraryTracks(); // 不设置loading状态，因为数据已缓存
+        console.log('恢复缓存的音乐库数据');
+        await loadLibraryTracks();
       } else if (hasLibraryInitialized) {
-        console.log('🎵 重新加载音乐库数据');
+        console.log('重新加载音乐库数据');
         setIsLibraryLoading(true);
         loadLibraryTracks();
       }
     }
-  }, [hasLibraryInitialized, libraryDataCached]); // 移除 loadLibraryTracks 依赖
-
-  // 监听页面切换，控制播放器显示/隐藏
+  }, [hasLibraryInitialized, libraryDataCached]);
+  
+  // 监听曲目选择
   useEffect(() => {
-    // 只有在初始化完成后才响应页面切换
-    if (!isInitialized) {
-      return;
-    }
-    
-    const previousPage = previousPageRef.current;
-    console.log('🎵 监听到页面切换:', { 
-      previousPage, 
-      currentPage, 
-      playerVisible, 
-      selectedTrack: selectedTrack?.title,
-      isInitialized 
-    });
-    
-    // 只有当页面真正发生改变时才处理
-    if (previousPage !== currentPage) {
-      if (currentPage === 'settings') {
-        // 进入设置页面，隐藏播放器
-        console.log('🎵 进入设置页面，隐藏播放器');
-        hidePlayer();
-      } else {
-        // 其他页面都显示播放器
-        console.log('🎵 进入非设置页面，显示播放器');
-        showPlayer();
-      }
-      
-      // 更新上一个页面的引用
-      previousPageRef.current = currentPage;
-    }
-  }, [currentPage, isInitialized]); // 移除 showPlayer 和 hidePlayer 依赖
-
-  // 监听选中曲目变化，更新播放器内容（但不控制显示/隐藏）
-  useEffect(() => {
-    console.log('🎵 监听到曲目状态变化:', { selectedTrack: selectedTrack?.title });
-    // 只更新曲目，不控制播放器的显示/隐藏
     if (selectedTrack) {
-      console.log('🎵 曲目已选择:', selectedTrack.title);
+      console.log('曲目已选择:', selectedTrack.title);
     }
-  }, [selectedTrack]); // 移除 currentPage 依赖
+  }, [selectedTrack]);
 
-  // 🚀 应用启动时初始化（只执行一次）
+  // 应用初始化
   useEffect(() => {
-    console.log('🎵 应用启动，初始页面:', currentPage);
-    // 设置初始的 previousPage
-    previousPageRef.current = currentPage;
+    console.log('应用启动，初始页面:', currentPage);
 
-    // 🎵 初始化音乐库数据（只在应用启动时执行一次）
     const initializeLibraryData = async () => {
-      // 检测是否在Tauri环境中运行
-      const isInTauriApp = typeof window !== 'undefined' && window.__TAURI__;
+      const isInTauriApp = typeof window !== 'undefined' && (window as any).__TAURI__;
       
       if (!isInTauriApp || typeof invoke === 'undefined' || typeof listen === 'undefined') {
-        console.warn('🎵 Tauri API 不可用，使用模拟数据');
+        console.warn('Tauri API 不可用，使用模拟数据');
         // 设置模拟数据
         const mockTracks: Track[] = [
           {
@@ -356,7 +279,6 @@ export default function App() {
         ];
         setTracks(mockTracks);
         
-        // 动态计算统计数据而不是硬编码
         const uniqueArtists = new Set(mockTracks.map(track => track.artist).filter(artist => artist && artist.trim() !== ''));
         const uniqueAlbums = new Set(mockTracks.map(track => track.album).filter(album => album && album.trim() !== ''));
         
@@ -367,12 +289,12 @@ export default function App() {
         });
         setIsLibraryLoading(false);
         setHasLibraryInitialized(true);
-        setLibraryDataCached(true); // 标记数据已缓存
+        setLibraryDataCached(true);
         return;
       }
 
-      // 加载真实数据（只在首次启动时）
-      console.log('🎵 首次加载音乐库数据...');
+      // 加载真实数据
+      console.log('首次加载音乐库数据...');
       setIsLibraryLoading(true);
       try {
         await loadLibraryTracks();
@@ -384,32 +306,9 @@ export default function App() {
     };
 
     initializeLibraryData();
-    
-    // 如果启动时不是设置页面，显示播放器
-    if (currentPage !== 'settings') {
-      console.log('🎵 启动时在非设置页面，显示播放器');
-      // 直接设置状态，避免依赖showPlayer导致重复执行
-      setPlayerVisible(true);
-      setAnimatingPlayer(true);
-      
-      playerTimeoutRef.current = setTimeout(() => {
-        console.log('🎵 启动时播放器显示动画完成');
-        setAnimatingPlayer(false);
-        setIsInitialized(true); // 在动画完成后才标记为初始化完成
-      }, 700);
-    } else {
-      // 如果在设置页面，直接标记为初始化完成
-      console.log('🎵 启动时在设置页面，标记初始化完成');
-      setIsInitialized(true);
-    }
-    
-    // 应用初始化完成
-    return () => {};  // 清理函数
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在组件挂载时执行一次
+  }, []);
 
-  // 🎵 设置音乐库事件监听器
+  // 设置音乐库事件监听
   useEffect(() => {
     if (typeof listen === 'undefined') return;
 
@@ -419,7 +318,7 @@ export default function App() {
           setTracks(event.payload);
           setIsLibraryLoading(false);
           setHasLibraryInitialized(true);
-          setLibraryDataCached(true); // 标记数据已缓存
+          setLibraryDataCached(true);
         }
       });
 
@@ -427,34 +326,32 @@ export default function App() {
         if (Array.isArray(event.payload)) {
           setTracks(event.payload);
           setIsLibraryLoading(false);
-          // 搜索结果不改变缓存状态，因为这是临时的筛选结果
         }
       });
 
       const unlistenStats = await listen('library-stats', (event: any) => {
-        console.log('🎵 收到统计数据事件:', event.payload);
-        console.log('🎵 事件类型:', typeof event.payload);
-        console.log('🎵 事件结构:', JSON.stringify(event.payload, null, 2));
-        console.log('🎵 当前状态中的libraryStats:', libraryStats);
+        console.log('收到统计数据事件:', event.payload);
+        console.log('事件类型:', typeof event.payload);
+        console.log('事件结构:', JSON.stringify(event.payload, null, 2));
+        console.log('当前状态中的libraryStats:', libraryStats);
         
         if (event.payload && typeof event.payload === 'object') {
-          // 验证统计数据结构
           if ('total_tracks' in event.payload && 'total_artists' in event.payload && 'total_albums' in event.payload) {
-            console.log('🎵 统计数据有效，更新状态:', event.payload);
-            console.log('🎵 更新前的状态:', libraryStats);
+            console.log('统计数据有效，更新状态:', event.payload);
+            console.log('更新前的状态:', libraryStats);
             setLibraryStats(event.payload);
-            console.log('🎵 setLibraryStats调用完成');
+            console.log('setLibraryStats调用完成');
           } else {
-            console.warn('🎵 统计数据格式无效:', event.payload);
+            console.warn('统计数据格式无效:', event.payload);
           }
         } else {
-          console.warn('🎵 统计数据事件载荷无效');
+          console.warn('统计数据事件载荷无效');
         }
       });
 
-      // 🎵 监听播放器错误
+      // 监听播放器错误
       const unlistenPlayerError = await listen('player-error', (event: any) => {
-        console.error('🎵 播放器错误:', event.payload);
+        console.error('播放器错误:', event.payload);
         if (event.payload && typeof event.payload === 'object') {
           alert('播放失败: ' + (event.payload.PlaybackError || '未知错误'));
         }
@@ -475,11 +372,10 @@ export default function App() {
     };
   }, []);
 
-  // 🎯 监听系统对比度偏好变化和应用对比度模式
+  // 对比度模式应用
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 应用对比度模式到DOM
     const applyContrastMode = (highContrast: boolean) => {
       if (highContrast) {
         document.documentElement.setAttribute('data-contrast', 'high');
@@ -488,13 +384,11 @@ export default function App() {
       }
     };
 
-    // 立即应用当前状态
     applyContrastMode(isHighContrast);
 
     // 监听系统偏好变化
     const mediaQuery = window.matchMedia('(prefers-contrast: more)');
     const handleSystemChange = (e: MediaQueryListEvent) => {
-      // 只有在没有手动设置过偏好时才跟随系统
       const hasManualPreference = localStorage.getItem('windchime-high-contrast') !== null;
       if (!hasManualPreference) {
         setIsHighContrast(e.matches);
@@ -508,29 +402,21 @@ export default function App() {
     };
   }, [isHighContrast]);
 
-  // 清理定时器
-  useEffect(() => {
-    return () => {
-      if (playerTimeoutRef.current) {
-        clearTimeout(playerTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return (
     <div className="app-container">
-      {/* 🔮 玻璃化顶部标题栏 */}
+      {/* 顶部标题栏 */}
       <header 
         className="app-header h-16 flex items-center justify-between px-6 relative"
         onMouseDown={handleDragStart}
       >
-        {/* 背景拖拽层 */}
+        {/* 拖拽区域 */}
         <div 
           className="absolute inset-0 z-0"
           data-tauri-drag-region
         ></div>
         
-        {/* 左侧：品牌标识 */}
+        {/* 品牌标识 */}
         <div className="flex items-center gap-3 relative z-10">
           <div className="w-9 h-9 bg-gradient-to-br from-brand-600 to-sky-400 rounded-xl flex items-center justify-center shadow-md">
             <span className="text-white text-sm font-bold">W</span>
@@ -541,7 +427,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 中间：玻璃化搜索栏 */}
+        {/* 搜索栏 */}
         <div className="w-full max-w-md mx-8 relative z-20" data-tauri-drag-region="false">
           <div className="relative">
             <input
@@ -571,9 +457,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* 右侧：玻璃化窗口控制按钮 */}
+        {/* 窗口控制按钮 */}
         <div className="flex items-center gap-2 relative z-20" data-tauri-drag-region="false">
-          {/* 最小化按钮 */}
           <button
             onClick={handleMinimize}
             className="w-9 h-9 rounded-xl glass-surface glass-interactive flex items-center justify-center group"
@@ -584,7 +469,6 @@ export default function App() {
             </svg>
           </button>
           
-          {/* 最大化/还原按钮 */}
           <button
             onClick={handleMaximize}
             className="w-9 h-9 rounded-xl glass-surface glass-interactive flex items-center justify-center group"
@@ -595,7 +479,6 @@ export default function App() {
             </svg>
           </button>
           
-          {/* 关闭按钮 */}
           <button
             onClick={handleClose}
             className="w-9 h-9 rounded-xl glass-surface glass-interactive flex items-center justify-center group hover:border-red-300"
@@ -608,13 +491,17 @@ export default function App() {
         </div>
       </header>
 
-      {/* 🎨 玻璃化主要内容区域 */}
+      {/* 主要内容区域 */}
       <div className="app-main">
-        <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+        <Sidebar 
+          currentPage={currentPage} 
+          onNavigate={setCurrentPage}
+          onCollapseChange={setSidebarCollapsed}
+        />
         
         <main className="app-content">
           
-          {/* 🚀 探索页面 */}
+          {/* 探索页面 */}
           {currentPage === 'explore' && (
             <div className="p-6 h-full">
               <div className="glass-card h-full">
@@ -623,9 +510,9 @@ export default function App() {
             </div>
           )}
           
-          {/* 📚 音乐库页面 */}
+          {/* 音乐库页面 */}
           {currentPage === 'library' && (
-            <div className="p-6 h-full">
+            <div className="p-6">
               <LibraryPage 
                 onTrackSelect={handleTrackSelect} 
                 searchQuery={searchQuery}
@@ -636,7 +523,7 @@ export default function App() {
                 onSearch={handleLibrarySearch}
                 membraneSettings={membraneSettings}
                 onRefresh={() => {
-                  console.log('🔄 手动刷新音乐库数据');
+                  console.log('手动刷新音乐库数据');
                   setLibraryDataCached(false);
                   setIsLibraryLoading(true);
                   loadLibraryTracks();
@@ -645,9 +532,10 @@ export default function App() {
               />
             </div>
           )}
-          {/* 📋 播放列表页面 */}
+          
+          {/* 播放列表页面 */}
           {currentPage === 'playlist' && (
-            <div className="p-6 h-full">
+            <div className="p-6">
               <PlaylistManager 
                 onTrackSelect={handleTrackSelect} 
                 membraneSettings={membraneSettings}
@@ -655,28 +543,17 @@ export default function App() {
             </div>
           )}
           
-          
-          {/* ❤️ 我的收藏页面 */}
+          {/* 我的收藏页面 */}
           {currentPage === 'favorite' && (
-            <div className="p-6 h-full">
-              <div className="glass-card h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-slate-400 mb-6">
-                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-3xl font-bold text-slate-900 mb-4">我的收藏</h2>
-                  <p className="text-slate-600 text-lg mb-6">您最喜爱的音乐作品</p>
-                  <div className="glass-badge brand">即将推出</div>
-                </div>
-              </div>
+            <div className="p-6">
+              <FavoritesView 
+                onTrackSelect={handleTrackSelect} 
+                membraneSettings={membraneSettings}
+              />
             </div>
           )}
           
-          
-          
-          {/* 🎭 音乐分类页面 */}
+          {/* 音乐分类页面 */}
           {currentPage === 'genres' && (
             <div className="p-6 h-full">
               <div className="glass-card h-full flex items-center justify-center">
@@ -695,7 +572,7 @@ export default function App() {
           )}
           
           
-          {/* ⚙️ 应用设置页面 */}
+          {/* 应用设置页面 */}
           {currentPage === 'settings' && (
             <div className="p-6">
               <div className="glass-card">
@@ -711,7 +588,7 @@ export default function App() {
                     <p className="text-slate-600 text-lg mb-6">个性化您的音乐播放体验</p>
                   </div>
 
-                  {/* 🎯 可访问性设置区域 */}
+                  {/* 可访问性设置 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -761,10 +638,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 🎵 音乐库管理区域 */}
+                  {/* 音乐库管理 */}
                   <MusicFolderManager className="mb-6" />
 
-                  {/* 🔍 调试工具区域 */}
+                  {/* 调试工具 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -798,7 +675,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 🎭 交互动画设置区域 */}
+                  {/* 交互动画设置 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -807,19 +684,19 @@ export default function App() {
                       交互动画
                     </h3>
                     <div className="space-y-4">
-                      {/* 软膜联动效果 */}
+                      {/* 模糊背景条 */}
                       <div className="glass-surface rounded-lg overflow-hidden">
                         <button
-                          onClick={() => setMembraneDetailsExpanded(!membraneDetailsExpanded)}
+                          onClick={() => setBlurBackdropDetailsExpanded(!blurBackdropDetailsExpanded)}
                           className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 active:scale-[0.98] transition-all duration-200 group"
                           style={{
                             transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
                           }}
                         >
                           <div className="text-left">
-                            <div className="font-semibold text-slate-900 mb-1">软膜联动效果</div>
+                            <div className="font-semibold text-slate-900 mb-1">模糊背景条</div>
                             <div className="text-sm text-slate-600">
-                              鼠标滑过曲目列表时，相邻行产生弹性联动，营造软膜质感
+                              鼠标悬停时显示Q弹跟随的模糊背景条，营造现代玻璃质感
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
@@ -827,7 +704,7 @@ export default function App() {
                             <div 
                               className={`
                                 px-2 py-1 rounded-full text-xs font-medium transition-all duration-300
-                                ${membraneSettings.enabled 
+                                ${blurBackdropSettings.enabled 
                                   ? 'bg-green-100 text-green-700 scale-100' 
                                   : 'bg-slate-100 text-slate-600 scale-95'
                                 }
@@ -836,13 +713,13 @@ export default function App() {
                                 transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
                               }}
                             >
-                              {membraneSettings.enabled ? '已启用' : '已禁用'}
+                              {blurBackdropSettings.enabled ? '已启用' : '已禁用'}
                             </div>
                             
                             {/* 展开/收起图标 */}
                             <svg
                               className={`w-5 h-5 text-slate-400 transition-all ${
-                                membraneDetailsExpanded 
+                                blurBackdropDetailsExpanded 
                                   ? 'rotate-180 scale-110 duration-800' 
                                   : 'scale-100 duration-200'
                               }`}
@@ -863,13 +740,13 @@ export default function App() {
                           className={`
                             border-t border-white/30 bg-slate-50/30 overflow-hidden 
                             transition-all ease-out
-                            ${membraneDetailsExpanded 
+                            ${blurBackdropDetailsExpanded 
                               ? 'max-h-96 opacity-100 duration-1000' 
                               : 'max-h-0 opacity-0 duration-300'
                             }
                           `}
                           style={{
-                            transitionTimingFunction: membraneDetailsExpanded 
+                            transitionTimingFunction: blurBackdropDetailsExpanded 
                               ? 'cubic-bezier(0.34, 1.56, 0.64, 1)' // Q弹展开
                               : 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' // 平滑收缩
                           }}
@@ -877,7 +754,7 @@ export default function App() {
                           <div 
                             className={`
                               p-4 space-y-4 transition-all
-                              ${membraneDetailsExpanded 
+                              ${blurBackdropDetailsExpanded 
                                 ? 'transform translate-y-0 opacity-100 duration-600 delay-200' 
                                 : 'transform -translate-y-2 opacity-0 duration-150 delay-0'
                               }
@@ -888,12 +765,12 @@ export default function App() {
                           >
                             {/* 启用/禁用开关 */}
                             <div className="flex items-center justify-between">
-                              <span className="font-medium text-slate-900">启用软膜联动</span>
+                              <span className="font-medium text-slate-900">启用模糊背景条</span>
                               <button
-                                onClick={() => updateMembraneSettings({ enabled: !membraneSettings.enabled })}
+                                onClick={() => updateBlurBackdropSettings({ enabled: !blurBackdropSettings.enabled })}
                                 className={`
                                   relative w-12 h-6 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
-                                  ${membraneSettings.enabled 
+                                  ${blurBackdropSettings.enabled 
                                     ? 'bg-brand-600 shadow-inner' 
                                     : 'bg-slate-300 shadow-inner'
                                   }
@@ -902,10 +779,10 @@ export default function App() {
                                 <div
                                   className={`
                                     absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 flex items-center justify-center
-                                    ${membraneSettings.enabled ? 'transform translate-x-6' : ''}
+                                    ${blurBackdropSettings.enabled ? 'transform translate-x-6' : ''}
                                   `}
                                 >
-                                  {membraneSettings.enabled ? (
+                                  {blurBackdropSettings.enabled ? (
                                     <svg className="w-3 h-3 text-brand-600" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
@@ -916,49 +793,56 @@ export default function App() {
                               </button>
                             </div>
 
-                            {/* 动画强度滑块 */}
-                            <div 
-                              className={`
-                                space-y-3 transition-all duration-300 ease-out
-                                ${membraneSettings.enabled 
-                                  ? 'opacity-100 transform translate-y-0' 
-                                  : 'opacity-50 transform translate-y-1 pointer-events-none'
-                                }
-                              `}
-                            >
-                              <div>
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-medium text-slate-900">动画强度</span>
-                                  <span className="text-sm text-slate-600">{Math.round(membraneSettings.intensity * 100)}%</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min="0.2"
-                                  max="2"
-                                  step="0.1"
-                                  value={membraneSettings.intensity}
-                                  onChange={(e) => updateMembraneSettings({ intensity: parseFloat(e.target.value) })}
-                                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider"
-                                  disabled={!membraneSettings.enabled}
-                                />
+                            {/* 模糊强度选择 */}
+                            <div className={`transition-all duration-500 ${
+                              blurBackdropSettings.enabled 
+                                ? 'opacity-100 transform translate-y-0' 
+                                : 'opacity-50 transform translate-y-2 pointer-events-none'
+                            }`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm text-slate-600">模糊强度</span>
+                                <span className="text-sm text-slate-600 capitalize">{blurBackdropSettings.intensity}</span>
                               </div>
+                              <div className="flex gap-2">
+                                {['low', 'medium', 'high'].map((intensity) => (
+                                  <button
+                                    key={intensity}
+                                    onClick={() => updateBlurBackdropSettings({ intensity: intensity as 'low' | 'medium' | 'high' })}
+                                    className={`
+                                      flex-1 py-2 px-3 rounded-md text-xs font-medium transition-all duration-200
+                                      ${blurBackdropSettings.intensity === intensity
+                                        ? 'bg-brand-500 text-white shadow-md scale-105'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                      }
+                                    `}
+                                    disabled={!blurBackdropSettings.enabled}
+                                  >
+                                    {intensity === 'low' ? '轻微' : intensity === 'medium' ? '适中' : '强烈'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
 
-                              <div>
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-medium text-slate-900">影响范围</span>
-                                  <span className="text-sm text-slate-600">{Math.round(membraneSettings.radius * 100)}%</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min="0.4"
-                                  max="2"
-                                  step="0.1"
-                                  value={membraneSettings.radius}
-                                  onChange={(e) => updateMembraneSettings({ radius: parseFloat(e.target.value) })}
-                                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider"
-                                  disabled={!membraneSettings.enabled}
-                                />
+                            {/* 透明度调节 */}
+                            <div className={`transition-all duration-500 ${
+                              blurBackdropSettings.enabled 
+                                ? 'opacity-100 transform translate-y-0' 
+                                : 'opacity-50 transform translate-y-2 pointer-events-none'
+                            }`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm text-slate-600">透明度</span>
+                                <span className="text-sm text-slate-600">{Math.round(blurBackdropSettings.opacity * 100)}%</span>
                               </div>
+                              <input
+                                type="range"
+                                min="0.2"
+                                max="1"
+                                step="0.1"
+                                value={blurBackdropSettings.opacity}
+                                onChange={(e) => updateBlurBackdropSettings({ opacity: parseFloat(e.target.value) })}
+                                className="w-full accent-brand-500"
+                                disabled={!blurBackdropSettings.enabled}
+                              />
                             </div>
                           </div>
                         </div>
@@ -966,7 +850,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 🎵 音频设置区域 */}
+                  {/* 音频设置 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -980,7 +864,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 📱 界面设置区域 */}
+                  {/* 界面设置 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -994,7 +878,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 📖 关于软件区域 */}
+                  {/* 关于软件 */}
                   <div className="glass-surface p-6 mb-6">
                     <h3 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-3">
                       <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1096,12 +980,16 @@ export default function App() {
               </div>
             </div>
           )}
-          {/* 右侧内容区域播放器 - 固定在右侧内容区底端，除设置页面外始终显示 */}
-          {currentPage !== 'settings' && (
-            <div className="content-player-container">
-              <PlaylistPlayer currentTrack={selectedTrack} />
-            </div>
-          )}
+          
+          {/* 底部播放器 */}
+          <div className={`content-player-container transition-all duration-700 ${
+            sidebarCollapsed ? 'content-player-collapsed' : ''
+          }`}
+          style={{
+            transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+          }}>
+            <PlaylistPlayer currentTrack={selectedTrack} />
+          </div>
         </main>
       </div>
     </div>

@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
 interface Track {
   id: number;
   path: string;
@@ -12,159 +14,187 @@ interface TracksViewProps {
   tracks: Track[];
   onTrackSelect: (track: Track) => void;
   isLoading: boolean;
-  // 软膜联动设置（可选）
-  membraneEnabled?: boolean; // 是否启用
-  membraneIntensity?: number; // 强度系数（建议 0.5 - 1.5）
-  membraneRadius?: number; // 影响范围系数（建议 0.6 - 1.6）
+  // 模糊背景条设置
+  blurBackdropSettings?: {
+    enabled: boolean;
+    intensity: 'low' | 'medium' | 'high';
+    opacity: number; // 0-1
+  };
+  // 收藏功能设置（可选）
+  showFavoriteButtons?: boolean; // 是否显示收藏按钮
+  onFavoriteChange?: (trackId: number, isFavorite: boolean) => void; // 收藏状态变化回调
 }
 
-export default function TracksView({ tracks, onTrackSelect, isLoading, membraneEnabled = true, membraneIntensity = 1, membraneRadius = 1 }: TracksViewProps) {
-  // 软膜联动动画：容器与行引用
-  const containerRef = useRef<HTMLDivElement | null>(null);
+export default function TracksView({ 
+  tracks, 
+  onTrackSelect, 
+  isLoading,
+  blurBackdropSettings = { enabled: true, intensity: 'medium', opacity: 0.8 },
+  showFavoriteButtons = false,
+  onFavoriteChange
+}: TracksViewProps) {
+
+  // 收藏状态管理
+  const [favoriteStates, setFavoriteStates] = useState<{ [trackId: number]: boolean }>({});
+  
+  // 悬停状态管理 - 追踪哪一行正在被悬停
+  const [hoveredRowId, setHoveredRowId] = useState<number | null>(null);
+  
+  // 专辑封面状态管理
+  const [albumCoverUrls, setAlbumCoverUrls] = useState<{ [trackId: number]: string }>({});
+  
+  // 模糊背景条状态管理
+  const [backdropPosition, setBackdropPosition] = useState<{ top: number; visible: boolean }>({ top: 0, visible: false });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const animationRef = useRef<number | null>(null);
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
-  const rowCentersRef = useRef<number[]>([]);
-  const animFrameRef = useRef<number | null>(null);
-  const mouseYRef = useRef<number | null>(null);
 
-  // 计算行中心（容器坐标）
-  const recomputeRowCenters = () => {
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    const centers: number[] = [];
-    for (const row of rowRefs.current) {
-      if (!row) { centers.push(0); continue; }
-      const r = row.getBoundingClientRect();
-      const center = (r.top - crect.top) + r.height / 2;
-      centers.push(center);
+  // 批量检查收藏状态
+  const checkFavoriteStates = async (trackList: Track[]) => {
+    if (!showFavoriteButtons || trackList.length === 0) return;
+    
+    try {
+      const promises = trackList.map(track => 
+        invoke('favorites_is_favorite', { trackId: track.id }) as Promise<boolean>
+      );
+      
+      const results = await Promise.all(promises);
+      const newStates: { [trackId: number]: boolean } = {};
+      
+      trackList.forEach((track, index) => {
+        newStates[track.id] = results[index];
+      });
+      
+      setFavoriteStates(newStates);
+    } catch (error) {
+      console.error('批量检查收藏状态失败:', error);
     }
-    rowCentersRef.current = centers;
   };
 
-  // 动画主循环（直接使用鼠标位置作为焦点）
-  const tick = () => {
-    if (!membraneEnabled) {
-      // 关闭时停止动画并清理
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
+  // 切换收藏状态
+  const toggleFavorite = async (track: Track, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止触发行点击事件
+    
+    try {
+      const newFavoriteState = await invoke('favorites_toggle', { trackId: track.id }) as boolean;
+      
+      setFavoriteStates(prev => ({
+        ...prev,
+        [track.id]: newFavoriteState
+      }));
+      
+      // 调用回调函数
+      onFavoriteChange?.(track.id, newFavoriteState);
+      
+      console.log(newFavoriteState ? `✨ 已收藏: ${track.title}` : `💔 已取消收藏: ${track.title}`);
+    } catch (error) {
+      console.error('切换收藏状态失败:', error);
+    }
+  };
+
+  // 加载专辑封面
+  const loadAlbumCover = async (trackId: number) => {
+    try {
+      const result = await invoke('get_album_cover', { trackId }) as [number[], string] | null;
+      if (result) {
+        const [imageData, mimeType] = result;
+        const blob = new Blob([new Uint8Array(imageData)], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        
+        setAlbumCoverUrls(prev => ({
+          ...prev,
+          [trackId]: url
+        }));
       }
-      return;
-    }
-    animFrameRef.current = requestAnimationFrame(tick);
-    const container = containerRef.current;
-    if (!container) return;
-    const mouseY = mouseYRef.current;
-    if (mouseY == null) return;
-
-    // 根据距离应用高斯权重联动
-    const centers = rowCentersRef.current;
-    if (!centers.length) return;
-    const sigma = 56 * Math.max(0.2, membraneRadius); // 影响范围（像素）
-    const maxScale = 0.012 * Math.max(0, membraneIntensity); // 最大缩放系数
-    const maxBright = 0.05 * Math.max(0, membraneIntensity); // 最大亮度增加
-    const maxTranslate = 2 * Math.max(0, membraneIntensity); // 最大位移（px）
-
-    for (let i = 0; i < rowRefs.current.length; i++) {
-      const row = rowRefs.current[i];
-      if (!row) continue;
-      const d = centers[i] - mouseY; // 直接使用鼠标位置计算距离
-      const w = Math.exp(- (d * d) / (2 * sigma * sigma)); // 高斯权重 0..1
-      const scale = 1 + maxScale * w;
-      const translateY = (d / sigma) * maxTranslate * w; // 与距离成比例的小形变
-      const bright = 1 + maxBright * w;
-
-      row.style.transform = `translateZ(0) translateY(${translateY.toFixed(2)}px) scale(${scale.toFixed(4)})`;
-      row.style.filter = `brightness(${bright.toFixed(3)})`;
-      row.style.transition = 'transform 80ms ease-out, filter 80ms ease-out';
-      // 轻微背景叠加，保持主题
-      (row.style as any).backgroundColor = `rgba(248, 250, 252, ${0.6 + 0.2 * w})`; // slate-50 基础上随权重微增
+    } catch (error) {
+      console.error('加载专辑封面失败:', trackId, error);
     }
   };
 
-  // 事件：进入、移动、离开
-  const handleMouseEnter = (e: React.MouseEvent) => {
-    if (!membraneEnabled) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    mouseYRef.current = e.clientY - crect.top;
-    if (animFrameRef.current == null) {
-      animFrameRef.current = requestAnimationFrame(tick);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!membraneEnabled) return;
-    const container = containerRef.current;
-    if (!container) return;
-    const crect = container.getBoundingClientRect();
-    mouseYRef.current = e.clientY - crect.top;
-  };
-
-  const handleMouseLeave = () => {
-    // 释放到初始状态
-    mouseYRef.current = null;
-    // 渐隐回归
-    for (const row of rowRefs.current) {
-      if (!row) continue;
-      row.style.transform = '';
-      row.style.filter = '';
-      row.style.transition = 'transform 180ms ease-out, filter 180ms ease-out, background-color 180ms ease-out';
-      (row.style as any).backgroundColor = '';
-    }
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  };
-
-  // 当关闭联动时，清理样式
+  // 当歌曲列表变化时重新检查收藏状态
   useEffect(() => {
-    if (membraneEnabled) return;
+    if (showFavoriteButtons) {
+      checkFavoriteStates(tracks);
+    }
+  }, [tracks, showFavoriteButtons]);
+
+  // 模糊背景条动画处理 - 优化版本，减少抖动
+  const updateBackdropPosition = (targetTop: number) => {
+    if (!blurBackdropSettings.enabled || !backdropRef.current) return;
     
-    // 立即停止动画
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
+    // 取消之前的动画
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
     
-    // 重置鼠标状态
-    mouseYRef.current = null;
+    // 直接设置位置，使用CSS transition来处理平滑动画
+    const backdrop = backdropRef.current;
+    backdrop.style.top = `${targetTop}px`;
     
-    // 清理所有行的样式
-    for (const row of rowRefs.current) {
-      if (!row) continue;
-      row.style.transform = '';
-      row.style.filter = '';
-      row.style.backgroundColor = '';
-      row.style.transition = 'transform 180ms ease-out, filter 180ms ease-out, background-color 180ms ease-out';
+    // 添加短暂的弹性效果
+    backdrop.style.transform = 'scale(1.02)';
+    backdrop.style.transition = 'top 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease-out';
+    
+    // 200ms后移除缩放效果
+    setTimeout(() => {
+      if (backdrop && backdrop.style) {
+        backdrop.style.transform = 'scale(1)';
+        backdrop.style.transition = 'top 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease-out';
+      }
+    }, 150);
+  };
+  
+  // 处理鼠标进入和移动
+  const handleRowMouseEnter = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    if (!blurBackdropSettings.enabled || !containerRef.current) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const relativeTop = rect.top - containerRect.top;
+    
+    setBackdropPosition({ top: relativeTop, visible: true });
+    updateBackdropPosition(relativeTop);
+  };
+  
+  const handleContainerMouseLeave = () => {
+    if (!blurBackdropSettings.enabled) return;
+    setBackdropPosition(prev => ({ ...prev, visible: false }));
+    
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
-  }, [membraneEnabled]);
-
-  // 初始化与尺寸变化时重新计算行中心
-  useEffect(() => {
-    // 延迟到布局完成
-    const id = requestAnimationFrame(() => {
-      recomputeRowCenters();
-    });
-    const handleResize = () => recomputeRowCenters();
-    window.addEventListener('resize', handleResize);
-    return () => {
-      cancelAnimationFrame(id);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [tracks.length]);
-
-  // 组件卸载时清理动画
+  };
+  
+  // 清理动画
   useEffect(() => {
     return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
   }, []);
+
+  // 当歌曲列表变化时加载封面
+  useEffect(() => {
+    // 限制数量以避免性能问题
+    const visibleTracks = tracks.slice(0, 50);
+    visibleTracks.forEach(track => {
+      loadAlbumCover(track.id);
+    });
+  }, [tracks]);
+
+  // 清理URL对象
+  useEffect(() => {
+    return () => {
+      Object.values(albumCoverUrls).forEach(url => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [albumCoverUrls]);
+
   const formatDuration = (ms?: number) => {
     if (!ms) return '--:--';
     const seconds = Math.floor(ms / 1000);
@@ -214,38 +244,43 @@ export default function TracksView({ tracks, onTrackSelect, isLoading, membraneE
   }
 
   return (
-    <div
+    <div 
       ref={containerRef}
-      onMouseEnter={membraneEnabled ? handleMouseEnter : undefined}
-      onMouseMove={membraneEnabled ? handleMouseMove : undefined}
-      onMouseLeave={membraneEnabled ? handleMouseLeave : undefined}
-      className="glass-surface rounded-xl overflow-hidden"
+      className="glass-surface rounded-xl overflow-hidden relative"
+      onMouseLeave={handleContainerMouseLeave}
     >
+      {/* 模糊背景条 */}
+      {blurBackdropSettings.enabled && (
+        <div
+          ref={backdropRef}
+          className={`blur-backdrop ${
+            backdropPosition.visible ? 'active' : ''
+          } ${
+            blurBackdropSettings.intensity === 'high' ? 'high-intensity' : 
+            blurBackdropSettings.intensity === 'low' ? 'low-intensity' : ''
+          }`}
+          style={{
+            top: `${backdropPosition.top}px`,
+            opacity: backdropPosition.visible ? blurBackdropSettings.opacity : 0
+          }}
+        />
+      )}
       <table className="w-full">
         <thead className="sticky top-0 z-10 bg-white/40 backdrop-blur-md border-b border-white/30">
           <tr>
+            {/* 封面 + 歌名/歌手合并列 */}
             <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary tracking-wider hover:bg-slate-50/50 transition-colors cursor-pointer group">
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
-                <span className="tracking-wide">标题</span>
+                <span className="tracking-wide">歌曲</span>
                 <svg className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-60 transition-opacity ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </span>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary tracking-wider hover:bg-slate-50/50 transition-colors cursor-pointer group w-2/5">
-              <span className="flex items-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <span className="tracking-wide">艺术家</span>
-                <svg className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-60 transition-opacity ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
-            </th>
+            {/* 专辑列 */}
             <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary tracking-wider hover:bg-slate-50/50 transition-colors cursor-pointer group hidden md:table-cell">
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,8 +292,8 @@ export default function TracksView({ tracks, onTrackSelect, isLoading, membraneE
                 </svg>
               </span>
             </th>
-            <th className="px-6 py-3 text-right text-xs font-semibold text-contrast-primary tracking-wider hover:bg-slate-50/50 transition-colors cursor-pointer group min-w-32">
-              <span className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <th className="px-6 py-3 text-center text-xs font-semibold text-contrast-primary tracking-wider hover:bg-slate-50/50 transition-colors cursor-pointer group min-w-32">
+              <span className="flex items-center justify-center gap-2 whitespace-nowrap">
                 <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -276,38 +311,111 @@ export default function TracksView({ tracks, onTrackSelect, isLoading, membraneE
               ref={(el) => { rowRefs.current[index] = el; }}
               key={track.id}
               className={`
-                border-b border-white/30 glass-interactive
+                border-b border-white/30 glass-interactive cursor-pointer group
                 bg-slate-50/60 backdrop-blur-md
-                hover:bg-slate-100/40 hover:backdrop-blur-lg
+                hover:bg-slate-100/50 hover:backdrop-blur-lg hover:shadow-sm
+                active:bg-slate-100/60 active:scale-[0.995]
                 transition-all duration-200 ease-out
+                relative z-10
               `}
+              onClick={() => {
+                console.log('🎵 TracksView - 播放曲目:', track);
+                onTrackSelect(track);
+              }}
+              onMouseEnter={(e) => {
+                setHoveredRowId(track.id);
+                handleRowMouseEnter(e);
+              }}
+              onMouseLeave={() => setHoveredRowId(null)}
             >
+              {/* 封面 + 歌曲信息列 */}
               <td className="px-6 py-3">
-                <div 
-                  className="font-medium text-slate-900 cursor-pointer hover:text-brand-600 transition-colors duration-150 ease-out flex items-center gap-3 group text-sm leading-relaxed"
-                  onClick={() => {
-                    console.log('🎵 TracksView - 播放曲目:', track);
-                    onTrackSelect(track);
-                  }}
-                >
-                  <svg className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 group-hover:text-brand-600 transition-all duration-150 ease-out text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  <span className="truncate" title={track.title || '未知标题'}>{track.title || '未知标题'}</span>
+                <div className="flex items-center gap-4 min-w-0">
+                  {/* 专辑封面缩略图 */}
+                  <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-slate-100/80 backdrop-blur-sm border border-white/40 shadow-sm ring-1 ring-black/5">
+                    {albumCoverUrls[track.id] ? (
+                      <img 
+                        src={albumCoverUrls[track.id]} 
+                        alt={`${track.album || '未知专辑'} 封面`}
+                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        onError={() => {
+                          // 如果图片加载失败，清理URL
+                          setAlbumCoverUrls(prev => {
+                            const { [track.id]: removed, ...rest } = prev;
+                            if (removed) URL.revokeObjectURL(removed);
+                            return rest;
+                          });
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400 bg-gradient-to-br from-slate-50 to-slate-100">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 歌曲信息 */}
+                  <div className="flex items-center min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
+                      {/* 歌曲名称 */}
+                      <div className="font-medium text-slate-900 group-hover:text-brand-600 transition-colors duration-150 ease-out text-sm leading-tight truncate" title={track.title || '未知标题'}>
+                        {track.title || '未知标题'}
+                      </div>
+                      {/* 歌手名称 */}
+                      <div className="text-slate-500 text-xs leading-tight truncate mt-0.5 group-hover:text-slate-600 transition-colors duration-150" title={track.artist || '未知艺术家'}>
+                        {track.artist || '未知艺术家'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </td>
-              <td className="px-6 py-3 text-slate-800 font-medium text-sm leading-relaxed w-2/5">
-                <span className="truncate block" title={track.artist || '未知艺术家'}>
-                  {track.artist || '未知艺术家'}
-                </span>
-              </td>
+              
+              {/* 专辑列 */}
               <td className="px-6 py-3 text-slate-700 font-medium text-sm leading-relaxed hidden md:table-cell">
                 <span className="truncate block" title={track.album || '未知专辑'}>
                   {track.album || '未知专辑'}
                 </span>
               </td>
-              <td className="px-6 py-3 text-slate-700 font-mono text-sm leading-relaxed font-medium text-right min-w-32">
-                {formatDuration(track.duration_ms)}
+              <td className="px-6 py-3 text-slate-700 font-mono text-sm leading-relaxed font-medium min-w-32 text-center relative">
+                {/* 时长显示 - 绝对居中，不受收藏按钮影响 */}
+                <div className="flex items-center justify-center w-full">
+                  <span className={`
+                    transition-all duration-200 font-mono
+                    ${hoveredRowId === track.id && showFavoriteButtons ? 'text-slate-500' : 'text-slate-700'}
+                  `}>
+                    {formatDuration(track.duration_ms)}
+                  </span>
+                </div>
+                
+                {/* 收藏按钮 - 绝对定位在右侧，不影响时长居中 */}
+                {showFavoriteButtons && (
+                  <div className={`
+                    absolute top-1/2 right-2 -translate-y-1/2
+                    transition-all duration-200 ease-in-out
+                    ${hoveredRowId === track.id 
+                      ? 'opacity-100 translate-x-0 scale-100' 
+                      : 'opacity-0 translate-x-2 scale-95 pointer-events-none'
+                    }
+                  `}>
+                    <button
+                      onClick={(e) => toggleFavorite(track, e)}
+                      className={`
+                        w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110
+                        ${favoriteStates[track.id] 
+                          ? 'text-red-500 hover:text-red-600 hover:bg-red-50' 
+                          : 'text-slate-400 hover:text-red-400 hover:bg-slate-50'
+                        }
+                      `}
+                      title={favoriteStates[track.id] ? '取消收藏' : '收藏'}
+                    >
+                      <svg className="w-3 h-3" fill={favoriteStates[track.id] ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}

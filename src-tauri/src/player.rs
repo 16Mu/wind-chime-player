@@ -367,7 +367,7 @@ impl Player {
                 if sink.empty() {
                     log::info!("✅ Sink is empty and ready for audio");
                 } else {
-                    log::warn!("⚠️ Sink is not empty - may have residual audio");
+                    log::warn!("Sink is not empty - may have residual audio");
                 }
                 return Ok(sink);
             }
@@ -420,7 +420,7 @@ impl Player {
                         // 这里有一个架构问题：新的stream无法存储在self中
                         // 作为紧急修复，我们暂时泄漏这个stream的内存来保持其存活
                         std::mem::forget(fresh_stream);
-                        log::warn!("⚠️ Leaking OutputStream memory to keep audio alive - needs architectural fix");
+                        log::warn!("Leaking OutputStream memory to keep audio alive - needs architectural fix");
                         
                         return Ok(sink);
                     }
@@ -437,7 +437,7 @@ impl Player {
         // 第四次尝试：跳过有问题的替代配置方法
         // 注意：create_sink_with_alternative_config 有stream生命周期问题
         // 会导致sink创建成功但没有声音输出
-        log::warn!("⚠️ Skipping alternative audio configurations due to stream lifecycle issues");
+        log::warn!("Skipping alternative audio configurations due to stream lifecycle issues");
         
         // 最终失败，返回详细错误信息
         let diagnostic_info = self.get_audio_troubleshooting_info();
@@ -474,7 +474,7 @@ impl Player {
                             // 将stream转移到一个长期存储位置，而不是直接丢弃
                             // 这是一个临时解决方案，理想情况下应该重构Player结构来持有多个stream
                             std::mem::forget(stream); // 暂时保持现有逻辑
-                            log::warn!("⚠️ Using alternative config with potential stream lifecycle issue");
+                            log::warn!("Using alternative config with potential stream lifecycle issue");
                             return Ok(sink);
                         }
                     }
@@ -665,9 +665,20 @@ impl Player {
     }
 
     fn handle_command(&self, command: PlayerCommand) -> Result<()> {
+        log::info!("📨 收到播放器命令: {:?}", std::mem::discriminant(&command));
         match command {
             PlayerCommand::Play(track_id) => {
-                self.play_track_by_id(track_id)?;
+                log::info!("开始播放曲目 ID: {}", track_id);
+                match self.play_track_by_id(track_id) {
+                    Ok(_) => {
+                        log::info!("✅ 播放曲目成功: {}", track_id);
+                    }
+                    Err(e) => {
+                        log::error!("❌ 播放曲目失败: {} - {}", track_id, e);
+                        let _ = self.event_tx.send(PlayerEvent::PlaybackError(e.to_string()));
+                        return Err(e);
+                    }
+                }
             }
             PlayerCommand::Pause => {
                 self.pause()?;
@@ -705,11 +716,27 @@ impl Player {
 
     fn play_track_by_id(&self, track_id: i64) -> Result<()> {
         let playlist = self.playlist.lock().unwrap();
-        if let Some((index, _track)) = playlist.iter().enumerate().find(|(_, t)| t.id == track_id) {
+        log::info!("在播放列表中查找曲目 ID: {}, 播放列表长度: {}", track_id, playlist.len());
+        
+        // 调试：列出播放列表中的所有曲目ID
+        if playlist.is_empty() {
+            log::error!("❌ 播放列表为空！无法播放任何曲目");
+            drop(playlist);
+            return Err(anyhow::anyhow!("播放列表为空，无法播放曲目"));
+        }
+        
+        log::info!("播放列表曲目IDs: {:?}", 
+            playlist.iter().take(10).map(|t| t.id).collect::<Vec<_>>());
+        
+        if let Some((index, track)) = playlist.iter().enumerate().find(|(_, t)| t.id == track_id) {
+            log::info!("✅ 找到曲目 ID: {} 在索引: {}, 曲目: {}", 
+                track_id, index, track.title.as_deref().unwrap_or("未知标题"));
             drop(playlist);
             self.play_track_at_index(index)?;
         } else {
-            return Err(anyhow::anyhow!("Track not found in playlist"));
+            log::error!("❌ 未在播放列表中找到曲目 ID: {}", track_id);
+            drop(playlist);
+            return Err(anyhow::anyhow!("曲目未在播放列表中找到: {}", track_id));
         }
         Ok(())
     }
@@ -735,7 +762,11 @@ impl Player {
                 .map_err(|e| anyhow::anyhow!("Failed to create audio sink: {}. {}", e, self.get_audio_troubleshooting_info()))?;
 
             // Load and play the audio file
-            log::info!("Attempting to open audio file: {}", track.path);
+            log::info!("尝试打开音频文件: {}", track.path);
+            log::info!("当前播放曲目信息: ID={}, 标题={}, 艺术家={}", 
+                track.id, 
+                track.title.as_deref().unwrap_or("未知"), 
+                track.artist.as_deref().unwrap_or("未知"));
             
             // 标准化文件路径，处理Windows路径和中文字符
             let path = std::path::Path::new(&track.path);
@@ -779,33 +810,51 @@ impl Player {
             log::info!("File exists and format supported, attempting to decode...");
             
             // 尝试解码音频文件，包含重试机制
-            let source = self.decode_audio_file(&canonical_path, &extension)?;
-
-            log::info!("Audio file decoded successfully, starting playback...");
-            
-            // 安全地启动播放
-            match self.start_playback_safely(&new_sink, source, &track, &extension) {
-                Ok(_) => {
-                    log::info!("Playback started successfully for: {} ({})", 
-                              track.title.as_deref().unwrap_or("Unknown"), extension);
+            log::info!("开始解码音频文件: {:?}", canonical_path);
+            let source = match self.decode_audio_file(&canonical_path, &extension) {
+                Ok(source) => {
+                    log::info!("✅ 音频文件解码成功");
+                    source
                 }
                 Err(e) => {
-                    return Err(anyhow::anyhow!(
-                        "播放启动失败: {} - 文件: {} ({})", 
+                    log::error!("❌ 音频文件解码失败: {}", e);
+                    let _ = self.event_tx.send(PlayerEvent::PlaybackError(format!("音频解码失败: {}", e)));
+                    return Err(e);
+                }
+            };
+
+            log::info!("音频文件解码成功，开始启动播放...");
+            
+            // 安全地启动播放
+            log::info!("开始安全启动播放...");
+            match self.start_playback_safely(&new_sink, source, &track, &extension) {
+                Ok(_) => {
+                    log::info!("✅ 播放启动成功: {} ({})", 
+                              track.title.as_deref().unwrap_or("未知标题"), extension);
+                }
+                Err(e) => {
+                    log::error!("❌ 播放启动失败: {} - 文件: {} ({})", 
                         e, 
                         track.title.as_deref().unwrap_or("未知曲目"), 
-                        extension
-                    ));
+                        extension);
+                    let error_msg = format!("播放启动失败: {} - 文件: {} ({})", 
+                        e, 
+                        track.title.as_deref().unwrap_or("未知曲目"), 
+                        extension);
+                    let _ = self.event_tx.send(PlayerEvent::PlaybackError(error_msg.clone()));
+                    return Err(anyhow::anyhow!(error_msg));
                 }
             }
 
             // Update sink
+            log::info!("更新音频sink...");
             {
                 let mut sink = self.sink.lock().unwrap();
                 *sink = Some(new_sink);
             }
 
             // Record playback start time and reset seek offset
+            log::info!("设置播放开始时间...");
             {
                 let mut start_time = self.playback_start_time.lock().unwrap();
                 *start_time = Some(Instant::now());
@@ -816,6 +865,7 @@ impl Player {
             }
 
             // Update state
+            log::info!("更新播放器状态...");
             {
                 let mut state = self.state.lock().unwrap();
                 state.is_playing = true;
@@ -829,9 +879,12 @@ impl Player {
             }
 
             // Emit events
+            log::info!("发送状态变化事件...");
             let state = self.state.lock().unwrap().clone();
             let _ = self.event_tx.send(PlayerEvent::StateChanged(state));
-            let _ = self.event_tx.send(PlayerEvent::TrackChanged(Some(track)));
+            let _ = self.event_tx.send(PlayerEvent::TrackChanged(Some(track.clone())));
+            
+            log::info!("播放曲目完全设置完成: {}", track.title.as_deref().unwrap_or("未知标题"));
         }
         Ok(())
     }

@@ -36,6 +36,13 @@ pub struct LyricLine {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Favorite {
+    pub id: i64,
+    pub track_id: i64,
+    pub created_at: i64,
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -110,6 +117,17 @@ impl Database {
             [],
         )?;
 
+        // Create favorites table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS favorites (
+                id INTEGER PRIMARY KEY,
+                track_id INTEGER NOT NULL UNIQUE,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
         // Create FTS table for search
         self.conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5(
@@ -143,6 +161,11 @@ impl Database {
 
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_lyrics_track ON lyrics(track_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_favorites_track ON favorites(track_id)",
             [],
         )?;
 
@@ -669,5 +692,81 @@ impl Database {
 
         log::info!("删除了文件夹 '{}' 下的 {} 首曲目", folder_path, deleted_count);
         Ok(deleted_count)
+    }
+
+    // Favorites methods
+    pub fn add_favorite(&self, track_id: i64) -> Result<i64> {
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO favorites (track_id) VALUES (?1)"
+        )?;
+        
+        stmt.execute([track_id])?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn remove_favorite(&self, track_id: i64) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "DELETE FROM favorites WHERE track_id = ?1"
+        )?;
+        
+        stmt.execute([track_id])?;
+        Ok(())
+    }
+
+    pub fn is_favorite(&self, track_id: i64) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM favorites WHERE track_id = ?1",
+            [track_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn get_all_favorites(&self) -> Result<Vec<Track>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime
+             FROM tracks t
+             JOIN favorites f ON t.id = f.track_id
+             ORDER BY f.created_at DESC"
+        )?;
+
+        let track_iter = stmt.query_map([], |row| {
+            Ok(Track {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                title: row.get(2)?,
+                artist: row.get(3)?,
+                album: row.get(4)?,
+                duration_ms: row.get(5)?,
+                album_cover_data: row.get(6)?,
+                album_cover_mime: row.get(7)?,
+            })
+        })?;
+
+        let mut tracks = Vec::new();
+        for track in track_iter {
+            tracks.push(track?);
+        }
+
+        Ok(tracks)
+    }
+
+    pub fn get_favorites_count(&self) -> Result<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM favorites",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn toggle_favorite(&self, track_id: i64) -> Result<bool> {
+        if self.is_favorite(track_id)? {
+            self.remove_favorite(track_id)?;
+            Ok(false)
+        } else {
+            self.add_favorite(track_id)?;
+            Ok(true)
+        }
     }
 }
