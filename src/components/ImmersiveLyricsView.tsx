@@ -1,6 +1,395 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
+// 歌词滚动配置参数（严格按照手册第9章推荐）
+// 🎨 动画效果预设方案
+const ANIMATION_PRESETS = {
+  // Q弹系列 🏀
+  BOUNCY_SOFT: {
+    easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+    durBase: 350, durK: 1.0, durMin: 450, durMax: 1000,
+    name: '轻柔Q弹'
+  },
+  BOUNCY_STRONG: {
+    easing: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+    durBase: 400, durK: 1.2, durMin: 500, durMax: 1200,
+    name: '强烈Q弹'
+  },
+  BOUNCY_PLAYFUL: {
+    easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+    durBase: 320, durK: 1.1, durMin: 420, durMax: 1100,
+    name: '俏皮Q弹'
+  },
+  
+  // 平滑系列 🌊
+  SMOOTH_ELEGANT: {
+    easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+    durBase: 280, durK: 0.9, durMin: 380, durMax: 900,
+    name: '优雅平滑'
+  },
+  SMOOTH_SWIFT: {
+    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    durBase: 250, durK: 0.8, durMin: 320, durMax: 800,
+    name: '敏捷平滑'
+  },
+  SMOOTH_DREAMY: {
+    easing: 'cubic-bezier(0.165, 0.84, 0.44, 1)',
+    durBase: 380, durK: 1.3, durMin: 500, durMax: 1400,
+    name: '梦幻平滑'
+  },
+  
+  // 特殊效果 ✨
+  ORGANIC_FLOW: {
+    easing: 'cubic-bezier(0.23, 1, 0.32, 1)',
+    durBase: 320, durK: 1.0, durMin: 400, durMax: 1000,
+    name: '自然流动'
+  },
+  PRECISE_SNAP: {
+    easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+    durBase: 200, durK: 0.7, durMin: 240, durMax: 600,
+    name: '精准快速'
+  }
+};
+
+// 动态生成滚动配置的函数
+const createScrollConfig = (animationKey: keyof typeof ANIMATION_PRESETS) => {
+  const animation = ANIMATION_PRESETS[animationKey];
+  console.log(`🎨 [动画效果] 已启用: ${animation.name} | 缓动: ${animation.easing}`);
+  
+  return {
+    SEEK_INDEX_SPAN: 3,
+    SEEK_TIME_MULTIPLIER: 3.0,
+    SEEK_TIME_MIN_MS: 8000,
+    SEEK_TIME_MAX_MS: 30000,
+    MIN_DELTA_NO_ANIM_PX: 30,
+    DURATION_BASE_MS: animation.durBase,
+    DURATION_K_PER_PX: animation.durK,
+    DURATION_MIN_MS: animation.durMin,
+    DURATION_MAX_MS: animation.durMax,
+    EASING: animation.easing
+  };
+};
+
+// 距离自适应时长计算函数
+const computeDurationMs = (deltaY: number, config: ReturnType<typeof createScrollConfig>): number => {
+  const abs = Math.abs(deltaY);
+  const { DURATION_BASE_MS, DURATION_K_PER_PX, DURATION_MIN_MS, DURATION_MAX_MS } = config;
+  return Math.max(DURATION_MIN_MS, Math.min(DURATION_MAX_MS, DURATION_BASE_MS + DURATION_K_PER_PX * abs));
+};
+
+// 轻量日志系统（按照手册第16章设计）
+type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
+type LogEvent = {
+  name: string;
+  level: LogLevel;
+  ts: number;
+  ctx: Record<string, any>;
+};
+
+const LOG_CONFIG = {
+  level: 'info' as LogLevel,  // 恢复正常日志级别
+  sampling: 0.1 // 恢复正常采样率
+};
+
+const logBuffer: LogEvent[] = [];
+const LOG_BUFFER_SIZE = 500;
+
+const shouldLog = (level: LogLevel): boolean => {
+  const levels = ['error', 'warn', 'info', 'debug', 'trace'];
+  const currentIndex = levels.indexOf(LOG_CONFIG.level);
+  const eventIndex = levels.indexOf(level);
+  return eventIndex <= currentIndex && Math.random() < LOG_CONFIG.sampling;
+};
+
+const lyricsLog = (name: string, level: LogLevel, ctx: Record<string, any>) => {
+  if (!shouldLog(level)) return;
+  
+  const event: LogEvent = {
+    name,
+    level,
+    ts: Date.now(),
+    ctx: {
+      ...ctx,
+      dpr: window.devicePixelRatio,
+      screenW: window.innerWidth,
+      screenH: window.innerHeight
+    }
+  };
+  
+  logBuffer.push(event);
+  if (logBuffer.length > LOG_BUFFER_SIZE) {
+    logBuffer.shift();
+  }
+  
+  // 控制台输出（开发环境）
+  if (level !== 'trace') {
+    console.log(`[歌词滚动-${level}] ${name}:`, ctx);
+  }
+  
+  // 异常判定
+  if (name === 'scroll_compute' && ctx.branch === 'animated' && ctx.durationMs <= 120 && Math.abs(ctx.deltaY) >= 8) {
+    console.warn('[疑似闪切] 短时长覆盖较大位移:', ctx);
+  }
+  
+  // 周期性跳切诊断
+  if (name === 'scroll_compute' && ctx.isJumpCut) {
+    console.warn(`🔴 [跳切检测] 第${ctx.idx}行 → deltaY:${ctx.deltaY}px, 阈值:${ctx.minDeltaThreshold}px`, ctx);
+  }
+  
+  if (name === 'scroll_compute' && ctx.branch === 'animated') {
+    console.log(`🟢 [正常动画] 第${ctx.idx}行 → deltaY:${ctx.deltaY}px, 时长:${ctx.durationMs}ms`, ctx);
+  }
+};
+
+// 方案B：单引擎状态机事件模型（按照手册定义）
+type ScrollEvent = 
+  | { type: 'IndexChange'; idx: number; tMs: number }
+  | { type: 'Seek'; idx: number; tMs: number; dtMs: number; absIdxDelta: number }
+  | { type: 'LayoutChange'; reason: 'font' | 'window' | 'lyrics' };
+
+type ScrollState = 'Idle' | 'AlignInstant' | 'AlignAnimated';
+
+// 单引擎滚动调度器Hook（消除多effect竞态写入）
+const useLyricsScrollOrchestrator = (
+  lyricsRef: React.RefObject<HTMLDivElement | null>,
+  movingWrapRef: React.RefObject<HTMLDivElement | null>,
+  lineRefs: React.RefObject<(HTMLDivElement | null)[]>,
+  lyrics: ParsedLyrics | null,
+  onLineIndexChange: (current: number | null, previous: number | null) => void,
+  scrollConfig: ReturnType<typeof createScrollConfig>
+) => {
+  const stateRef = useRef<ScrollState>('Idle');
+  const lastTranslateYRef = useRef<number>(0);
+  const lastIdxRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
+
+  // 测量行中心位置（防护版本）
+  const measureCenter = useCallback((idx: number): number | null => {
+    const el = lineRefs.current?.[idx];
+    const container = lyricsRef.current;
+    if (!el || !container) {
+      lyricsLog('measure_line_center', 'trace', { 
+        idx, 
+        elExists: !!el, 
+        containerExists: !!container, 
+        isReady: false 
+      });
+      return null;
+    }
+    
+    const rect = el.getBoundingClientRect();
+    const offsetTop = el.offsetTop;
+    const offsetHeight = el.offsetHeight;
+    
+    if (rect.height === 0 || offsetHeight === 0) {
+      lyricsLog('measure_line_center', 'trace', { 
+        idx, 
+        rectHeight: rect.height, 
+        offsetHeight, 
+        isReady: false 
+      });
+      return null;
+    }
+    
+    const centerY = offsetTop + offsetHeight / 2;
+    lyricsLog('measure_line_center', 'trace', { 
+      idx, 
+      centerY, 
+      offsetTop, 
+      offsetHeight, 
+      containerH: container.clientHeight, 
+      isReady: true 
+    });
+    
+    return centerY;
+  }, []);
+
+  // 计算目标位移
+  const computeTranslateY = useCallback((centerY: number): number => {
+    const container = lyricsRef.current;
+    if (!container) return 0;
+    return Math.round(container.clientHeight / 2 - centerY);
+  }, []);
+
+  // 瞬时对齐动作
+  const applyTransformInstant = useCallback((y: number) => {
+    const moving = movingWrapRef.current;
+    if (!moving) return;
+    
+    lyricsLog('transition_interrupt', 'info', { 
+      prevTransition: moving.style.transition, 
+      currentTransform: moving.style.transform, 
+      reason: 'instant align' 
+    });
+    
+    moving.style.transition = 'none';
+    moving.style.transform = `translate3d(0, ${y}px, 0)`;
+    
+    lyricsLog('transition_apply', 'info', { 
+      transitionText: 'none', 
+      transformText: `translate3d(0, ${y}px, 0)`, 
+      ts: Date.now() 
+    });
+    
+    lastTranslateYRef.current = y;
+  }, []);
+
+  // 动画对齐动作
+  const applyTransformAnimated = useCallback((y: number, duration: number, easing: string) => {
+    const moving = movingWrapRef.current;
+    if (!moving) return;
+    
+    lyricsLog('transition_interrupt', 'info', { 
+      prevTransition: moving.style.transition, 
+      currentTransform: moving.style.transform, 
+      reason: 'animated align' 
+    });
+    
+    // 中断上一次动画
+    moving.style.transition = 'none';
+    // 强制reflow确保中断生效
+    void moving.offsetHeight;
+    
+    // 设置新的过渡
+    const transitionText = `transform ${duration}ms ${easing}`;
+    moving.style.transition = transitionText;
+    moving.style.transform = `translate3d(0, ${y}px, 0)`;
+    
+    lyricsLog('transition_apply', 'info', { 
+      transitionText, 
+      transformText: `translate3d(0, ${y}px, 0)`, 
+      ts: Date.now() 
+    });
+    
+    lastTranslateYRef.current = y;
+  }, []);
+
+  // 事件调度器（单写入通道）
+  const dispatch = useCallback((event: ScrollEvent) => {
+    
+    const container = lyricsRef.current;
+    const moving = movingWrapRef.current;
+    if (!container || !moving || !lyrics?.lines?.length) {
+      console.log(`⚠️ [Orchestrator] 条件不满足:`, { container: !!container, moving: !!moving, linesLength: lyrics?.lines?.length });
+      return;
+    }
+
+    // 获取目标索引
+    let idx: number;
+    if (event.type === 'LayoutChange') {
+      // LayoutChange应该基于当前实际显示的行，而不是lastIdxRef
+      // 因为lastIdxRef可能在状态更新异步过程中不同步
+      idx = lastIdxRef.current ?? 0;
+    } else {
+      idx = event.idx;
+    }
+    if (idx < 0) idx = 0;
+
+    // 记录事件
+    if (event.type === 'IndexChange') {
+      lyricsLog('line_index_change', 'info', { 
+        t: event.tMs, 
+        idx, 
+        lastIdx: lastIdxRef.current, 
+        dtMs: event.tMs - lastTimeRef.current,
+        eventType: event.type
+      });
+    } else if (event.type === 'Seek') {
+      lyricsLog('line_index_change', 'info', { 
+        t: event.tMs, 
+        idx, 
+        lastIdx: lastIdxRef.current, 
+        dtMs: event.dtMs, 
+        absIdxDelta: event.absIdxDelta,
+        eventType: event.type
+      });
+    }
+
+    // 统一测量
+    const centerY = measureCenter(idx);
+    if (centerY == null) {
+      lyricsLog('measure_unready', 'warn', { idx, skipReason: `${event.type} - centerY is null` });
+      return; // 未就绪，等待下次事件
+    }
+    
+    const targetY = computeTranslateY(centerY);
+    const deltaY = targetY - lastTranslateYRef.current;
+
+    // 判定分支
+    const isSeek = event.type === 'Seek';
+    const isLayout = event.type === 'LayoutChange';
+    const useInstant = isSeek || isLayout || Math.abs(deltaY) < scrollConfig.MIN_DELTA_NO_ANIM_PX;
+
+    // 记录滚动计算
+    const branch = useInstant ? (isSeek ? 'seek' : isLayout ? 'layout' : 'minDelta') : 'animated';
+    const duration = !useInstant ? computeDurationMs(deltaY, scrollConfig) : 0;
+    
+    // 周期性诊断：标记是否为跳切
+    const isJumpCut = useInstant && event.type === 'IndexChange';
+    
+    lyricsLog('scroll_compute', 'debug', { 
+      idx: idx, // 添加行索引用于诊断
+      targetTranslateY: targetY, 
+      lastTranslateY: lastTranslateYRef.current, 
+      deltaY, 
+      absDeltaY: Math.abs(deltaY),
+      durationMs: duration, 
+      easing: scrollConfig.EASING, 
+      branch,
+      eventType: event.type,
+      isJumpCut: isJumpCut, // 关键诊断字段
+      minDeltaThreshold: scrollConfig.MIN_DELTA_NO_ANIM_PX,
+      belowThreshold: Math.abs(deltaY) < scrollConfig.MIN_DELTA_NO_ANIM_PX,
+      centerY: centerY, // 测量值
+      containerH: container.clientHeight
+    });
+
+    // 执行动作（单写入通道）
+    if (useInstant) {
+      stateRef.current = 'AlignInstant';
+      applyTransformInstant(targetY);
+      if (isLayout) {
+        lyricsLog('layout_resync', 'info', { 
+          idx, 
+          translateY: targetY, 
+          containerH: container.clientHeight, 
+          centerY, 
+          reason: event.reason 
+        });
+      } else if (isSeek) {
+        lyricsLog('seek_align', 'info', { 
+          idx, 
+          dtMs: event.type === 'Seek' ? event.dtMs : 0, 
+          absIdxDelta: event.type === 'Seek' ? event.absIdxDelta : 0, 
+          translateY: targetY 
+        });
+      }
+    } else {
+      stateRef.current = 'AlignAnimated';
+      applyTransformAnimated(targetY, duration, scrollConfig.EASING);
+    }
+
+    // 同步高亮与追踪（仅在索引实际变化时）
+    // 推迟状态更新到下一帧，确保DOM写入完成后再更新状态，避免时序竞态
+    if (event.type !== 'LayoutChange' && lastIdxRef.current !== idx) {
+      const prevIdx = lastIdxRef.current;
+      requestAnimationFrame(() => {
+        onLineIndexChange(idx, prevIdx);
+      });
+    }
+    
+    // 更新追踪变量
+    lastIdxRef.current = idx;
+    if (event.type === 'IndexChange' || event.type === 'Seek') {
+      lastTimeRef.current = event.tMs;
+    }
+    
+    stateRef.current = 'Idle';
+  }, [lyrics?.lines, measureCenter, computeTranslateY, applyTransformInstant, applyTransformAnimated, onLineIndexChange]);
+
+  return { dispatch, lastIdxRef, lastTimeRef };
+};
+
 // 智能响应式字体大小计算 - 基于窗口尺寸、分辨率和设备像素比
 const getResponsiveFontSizes = () => {
   // 获取精确的视口尺寸
@@ -165,63 +554,113 @@ export default function ImmersiveLyricsView({
   const [showSkinPanel, setShowSkinPanel] = useState(false);
   const [currentSkin, setCurrentSkin] = useState<'classic' | 'split' | 'fullscreen' | 'card' | 'minimal'>('classic');
   
+  // 🎨 动画效果设置状态（从localStorage读取）
+  const [selectedAnimation, setSelectedAnimation] = useState<keyof typeof ANIMATION_PRESETS>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('windchime-lyrics-animation-settings');
+      if (stored) {
+        try {
+          const settings = JSON.parse(stored);
+          return settings.enabled ? settings.style : 'BOUNCY_SOFT';
+        } catch (error) {
+          console.warn('Failed to parse lyrics animation settings:', error);
+        }
+      }
+    }
+    return 'BOUNCY_SOFT';
+  });
+  
+  
+  // 监听localStorage变化，同步动画设置
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'windchime-lyrics-animation-settings' && e.newValue) {
+        try {
+          const settings = JSON.parse(e.newValue);
+          if (settings.enabled) {
+            setSelectedAnimation(settings.style);
+            console.log(`🎨 [动画设置] 已同步: ${ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS]?.name}`);
+          } else {
+            // 禁用时使用精准快速模式（最小动画）
+            setSelectedAnimation('PRECISE_SNAP');
+            console.log('🎨 [动画设置] 动画已禁用，使用精准快速模式');
+          }
+        } catch (error) {
+          console.warn('Failed to sync lyrics animation settings:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // 初始化时检查设置状态
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('windchime-lyrics-animation-settings');
+      if (stored) {
+        try {
+          const settings = JSON.parse(stored);
+          if (!settings.enabled) {
+            setSelectedAnimation('PRECISE_SNAP');
+            console.log('🎨 [动画设置] 初始化：动画已禁用，使用精准快速模式');
+          }
+        } catch (error) {
+          console.warn('Failed to parse lyrics animation settings on init:', error);
+        }
+      }
+    }
+  }, []);
+  
+  // 动态滚动配置
+  const SCROLL_CONFIG = createScrollConfig(selectedAnimation);
+  
   // 用户跳转状态
   // const [isUserJumping, setIsUserJumping] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const lyricsRef = useRef<HTMLDivElement>(null);
+  const movingWrapRef = useRef<HTMLDivElement>(null); // 被 transform 的内部包裹层
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   
-  // 滚动系统 - 位置映射
-  const targetPositions = useRef<number[]>([]);
-  const lastSeekTime = useRef<number>(-1);
-  const currentPositionRef = useRef<number>(currentPositionMs);
+  // 时间戳数组（二分查找用）
+  const timestampsRef = useRef<number[]>([]);
   
-  // 渐进式切换定时器管理
-  const transitionTimers = useRef<{
-    scrollTimer?: NodeJS.Timeout;
-    glowTimer?: NodeJS.Timeout;
-    cleanupTimer?: NodeJS.Timeout;
-    seekCleanupTimer?: NodeJS.Timeout;
-  }>({});
-  
-  // 更新播放位置 ref，确保滚动系统能获取最新值
-  useEffect(() => {
-    currentPositionRef.current = currentPositionMs;
-    // 初始化lastSeekTime，避免第一次检测时误判
-    if (lastSeekTime.current === -1) {
-      lastSeekTime.current = currentPositionMs;
-      console.log('🔄 [时间初始化] 设置初始时间戳:', currentPositionMs);
-    }
-  }, [currentPositionMs]);
-  
-  // 清理所有过渡定时器
-  const clearTransitionTimers = useCallback(() => {
-    let clearedCount = 0;
-    if (transitionTimers.current.scrollTimer) {
-      clearTimeout(transitionTimers.current.scrollTimer);
-      transitionTimers.current.scrollTimer = undefined;
-      clearedCount++;
-    }
-    if (transitionTimers.current.glowTimer) {
-      clearTimeout(transitionTimers.current.glowTimer);
-      transitionTimers.current.glowTimer = undefined;
-      clearedCount++;
-    }
-    if (transitionTimers.current.cleanupTimer) {
-      clearTimeout(transitionTimers.current.cleanupTimer);
-      transitionTimers.current.cleanupTimer = undefined;
-      clearedCount++;
-    }
-    if (transitionTimers.current.seekCleanupTimer) {
-      clearTimeout(transitionTimers.current.seekCleanupTimer);
-      transitionTimers.current.seekCleanupTimer = undefined;
-      clearedCount++;
-    }
-    if (clearedCount > 0) {
-      console.log(`🧹 [定时器清理] 清除了${clearedCount}个定时器`);
-    }
+  // 高亮状态变更回调
+  const handleLineIndexChange = useCallback((current: number | null, previous: number | null) => {
+    setPreviousLineIndex(previous);
+    setCurrentLineIndex(current);
   }, []);
+
+  // 方案B：单引擎滚动调度器（消除竞态写入）
+  const { dispatch, lastIdxRef, lastTimeRef } = useLyricsScrollOrchestrator(
+    lyricsRef,
+    movingWrapRef,
+    lineRefs,
+    lyrics,
+    handleLineIndexChange,
+    SCROLL_CONFIG
+  );
+
+  // 二分查找当前行索引
+  const findIndexAtTime = useCallback((timeMs: number): number => {
+    const ts = timestampsRef.current;
+    if (ts.length === 0) return -1;
+    let lo = 0;
+    let hi = ts.length - 1;
+    if (timeMs < ts[0]) return -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ts[mid] === timeMs) return mid;
+      if (ts[mid] < timeMs) lo = mid + 1; else hi = mid - 1;
+    }
+    return Math.max(0, lo - 1);
+  }, []);
+
+  // 已移除独立的getLineCenter函数，由orchestrator内部的measureCenter取代
+
+  // 已移除连续滚动的tick函数，改为仅在行切换时触发滚动（符合手册要求）
   
   // 背景渐变状态管理
   const [backgroundPhase] = useState(0);
@@ -276,138 +715,7 @@ export default function ImmersiveLyricsView({
   }, []);
   
   
-  // 预计算每行的目标对齐位置（精确居中对齐）
-  const calculateTargetPositions = useCallback(() => {
-    if (!lyricsRef.current || !lyrics?.lines) return;
-    
-    const container = lyricsRef.current;
-    const containerHeight = container.clientHeight;
-    const positions: number[] = [];
-    
-    lyrics.lines.forEach((_, index) => {
-      const lineElement = lineRefs.current[index];
-      if (lineElement) {
-        const lineTop = lineElement.offsetTop;
-        const lineHeight = lineElement.offsetHeight;
-        
-        // 精确计算：让行的几何中心对准容器的可视中心
-        // lineTop 是行顶部相对于滚动容器的位置
-        // 目标：让发光行显示在视口的中央位置
-        const lineCenterY = lineTop + lineHeight / 2;
-        const containerCenterY = containerHeight / 2;
-        const targetPosition = lineCenterY - containerCenterY;
-        
-        // 只为前几行输出详细日志，避免刷屏
-        if (index < 3) {
-          console.log(`🎯 [位置计算] 第${index}行: lineTop=${lineTop}, lineHeight=${lineHeight}, targetPosition=${targetPosition}`);
-        }
-        
-        positions[index] = Math.max(0, targetPosition);
-        
-      } else {
-        positions[index] = 0;
-      }
-    });
-    
-    targetPositions.current = positions;
-    console.log('🎯 [位置预计算] 完成，共', positions.length, '行，容器高度:', containerHeight);
-    console.log('🎯 [位置数组] 前5行位置:', positions.slice(0, 5).map((pos, i) => `第${i}行:${Math.round(pos)}px`));
-  }, [lyrics?.lines]);
   
-  // 滚动到指定歌词行居中位置
-  const scrollToLine = useCallback((lineIndex: number) => {
-    if (!lyricsRef.current || lineIndex < 0 || targetPositions.current.length === 0) {
-      console.log(`❌ [滚动终止] 条件不满足: container=${!!lyricsRef.current}, lineIndex=${lineIndex}, positions=${targetPositions.current.length}`);
-      return;
-    }
-    
-    // 检查目标位置是否存在（包括0值）
-    if (targetPositions.current[lineIndex] === undefined) {
-      console.log(`❌ [滚动终止] 第${lineIndex}行目标位置未计算`);
-      return;
-    }
-    
-    const container = lyricsRef.current;
-    const targetPosition = targetPositions.current[lineIndex];
-    const currentPosition = container.scrollTop;
-    const distance = Math.abs(targetPosition - currentPosition);
-    
-    console.log(`🎵 [滚动开始] 第${lineIndex}行: 当前位置=${Math.round(currentPosition)}px, 目标位置=${Math.round(targetPosition)}px, 距离=${Math.round(distance)}px`);
-    
-    // 只有距离非常小时才直接跳转（减小阈值）
-    if (distance < 3) {
-      container.scrollTop = targetPosition;
-      console.log(`🎵 [直接跳转] 距离太小，直接到达目标位置`);
-      return;
-    }
-    
-    // 平滑滚动动画 - 确保有明显的滚动效果
-    const duration = Math.min(1200, Math.max(800, distance * 3)); // 800-1200ms的动画时长，更长的滚动时间
-    const startTime = performance.now();
-    const startPosition = currentPosition;
-    const scrollDistance = targetPosition - startPosition;
-    
-    console.log(`🎵 [滚动动画] 开始动画: 时长=${duration}ms, 滚动距离=${Math.round(scrollDistance)}px`);
-    
-    const animateScroll = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // 使用更优雅的缓动函数，慢启动，中间加速，缓慢结束
-      const easeInOutQuart = (t: number): number => {
-        return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
-      };
-      
-      const easedProgress = easeInOutQuart(progress);
-      const newPosition = startPosition + (scrollDistance * easedProgress);
-      
-      container.scrollTop = newPosition;
-      
-      if (progress < 1) {
-        requestAnimationFrame(animateScroll);
-      } else {
-        console.log(`✅ [滚动完成] 到达第${lineIndex}行目标位置: ${Math.round(container.scrollTop)}`);
-      }
-    };
-    
-    requestAnimationFrame(animateScroll);
-  }, []);
-  
-  // 获取当前应该显示的歌词行
-  const getCurrentLineIndex = useCallback((lines: LyricLine[], positionMs: number): number | null => {
-    if (!lines.length) return null;
-    
-    let currentIndex = -1;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].timestamp_ms <= positionMs) {
-        currentIndex = i;
-      } else {
-        break;
-      }
-    }
-    
-    return currentIndex >= 0 ? currentIndex : null;
-  }, []);
-  
-  // 处理seek跳转的滚动
-  const handleSeekScroll = useCallback((targetLineIndex: number | null) => {
-    if (!lyricsRef.current || targetLineIndex === null) return;
-    
-    const currentTimeMs = currentPositionRef.current;
-    
-    // 检测是否为seek操作（时间跳跃）- 与主检测逻辑保持一致
-    const isSeek = Math.abs(currentTimeMs - lastSeekTime.current) > 3000;
-    
-    if (isSeek) {
-      // Seek时立即跳转到目标行
-      if (targetPositions.current[targetLineIndex] !== undefined) {
-        lyricsRef.current.scrollTop = targetPositions.current[targetLineIndex];
-        console.log('🎯 [Seek跳转] 立即定位到第', targetLineIndex, '行，时间:', currentTimeMs);
-      }
-      // 更新最后时间记录
-      lastSeekTime.current = currentTimeMs;
-    }
-  }, []);
   
   
 
@@ -495,162 +803,127 @@ export default function ImmersiveLyricsView({
     }
   }, [track?.id, track?.path]); // 移除loadLyrics依赖，避免无限循环
 
-  // 执行渐进式切换 - 独立函数，避免竞态条件
-  const performGradualTransition = useCallback((fromIndex: number | null, toIndex: number) => {
-    console.log('🎵 [渐进切换] 从第', fromIndex, '行切换到第', toIndex, '行');
-    
-    // 清理之前的所有定时器
-    clearTransitionTimers();
-    
-    // 阶段1: 标记前一行开始淡出 (立即)
-    setPreviousLineIndex(fromIndex);
-    
-    // 阶段2: 开始滚动动画 (80ms后，更快响应)
-    transitionTimers.current.scrollTimer = setTimeout(() => {
-      console.log(`🎵 [定时器触发] 开始滚动到第${toIndex}行`);
-      scrollToLine(toIndex);
-    }, 80);
-    
-    // 阶段3: 新行开始发光 (200ms后，滚动刚开始时)
-    transitionTimers.current.glowTimer = setTimeout(() => {
-      console.log(`🎵 [定时器触发] 第${toIndex}行开始发光`);
-      setCurrentLineIndex(toIndex);
-    }, 200);
-    
-    // 阶段4: 清除前一行标记 (1400ms后，确保过渡完成)
-    transitionTimers.current.cleanupTimer = setTimeout(() => {
-      setPreviousLineIndex(null);
-    }, 1400);
-  }, [clearTransitionTimers, scrollToLine]);
+  // 已移除基于定时器的渐进切换，统一由 rAF + transform 引擎驱动
+  // （占位以保持结构稳定）
 
-  // 歌词行检测逻辑 - 分离状态检测和切换逻辑
+  // 更新时间戳表
   useEffect(() => {
-    if (!lyrics?.lines || lyrics.lines.length === 0) {
-      console.log('📝 [歌词检测] 无歌词数据，跳过');
-      return;
-    }
+    if (!lyrics?.lines || lyrics.lines.length === 0) return;
+    timestampsRef.current = lyrics.lines.map(l => l.timestamp_ms);
+  }, [lyrics?.lines]);
+
+  // 计算歌词平均时间间隔（用于动态seek检测）
+  const calculateAverageInterval = useCallback(() => {
+    if (!lyrics?.lines?.length || lyrics.lines.length < 2) return 5000; // 默认5秒
     
-    const detectedIndex = getCurrentLineIndex(lyrics.lines, currentPositionMs);
-    console.log(`📝 [歌词检测] 时间=${Math.floor(currentPositionMs/1000)}s, 检测到第${detectedIndex}行, 当前发光=${currentLineIndex}`);
+    let totalInterval = 0;
+    let count = 0;
     
-    // 只有真正发生变化时才执行切换
-    if (detectedIndex !== currentLineIndex) {
-      const currentTimeMs = currentPositionRef.current;
-      const timeDiff = Math.abs(currentTimeMs - lastSeekTime.current);
-      // 提高Seek检测阈值，避免正常播放被误判 - 从1000ms提高到3000ms
-      const isSeek = timeDiff > 3000;
-      
-      console.log(`🔄 [行切换] 从第${currentLineIndex}行 → 第${detectedIndex}行, isSeek=${isSeek}, 时间差=${timeDiff}ms, 阈值=3000ms`);
-      
-      if (isSeek) {
-        // Seek时立即切换，清理所有定时器
-        console.log('⚡ [Seek模式] 立即切换');
-        clearTransitionTimers();
-        handleSeekScroll(detectedIndex);
-        setPreviousLineIndex(currentLineIndex);
-        setCurrentLineIndex(detectedIndex);
-        // Seek后也需要清理前一行标记 - 使用管理的定时器
-        transitionTimers.current.seekCleanupTimer = setTimeout(() => {
-          setPreviousLineIndex(null);
-        }, 1000);
-      } else if (detectedIndex !== null && targetPositions.current.length > 0) {
-        // 正常播放时执行渐进式切换
-        console.log('🎭 [渐进模式] 开始渐进式切换，目标位置数组长度:', targetPositions.current.length, '从第', currentLineIndex, '行到第', detectedIndex, '行');
-        console.log('🎭 [渐进条件] currentLineIndex类型:', typeof currentLineIndex, '值:', currentLineIndex);
-        
-        // 检查是否是从null初始化的情况
-        if (currentLineIndex === null) {
-          console.log('🎭 [初始化切换] 从null初始化到第', detectedIndex, '行，直接设置不执行动画');
-          setCurrentLineIndex(detectedIndex);
-          // 初始化时立即滚动到位置
-          if (targetPositions.current[detectedIndex] !== undefined) {
-            setTimeout(() => {
-              if (lyricsRef.current) {
-                lyricsRef.current.scrollTop = targetPositions.current[detectedIndex];
-                console.log('🎭 [初始化滚动] 立即定位到第', detectedIndex, '行');
-              }
-            }, 100);
-          }
-        } else {
-          // 正常的渐进式切换
-          performGradualTransition(currentLineIndex, detectedIndex);
-        }
-        // 更新时间戳，避免累积误差
-        lastSeekTime.current = currentTimeMs;
-      } else {
-        console.log('❌ [切换终止] 条件不满足: detectedIndex=', detectedIndex, 'positions=', targetPositions.current.length);
-      }
-    } else {
-      // 每5秒输出一次当前状态
-      if (Math.floor(currentPositionMs / 5000) !== Math.floor((currentPositionMs - 100) / 5000)) {
-        console.log(`📊 [状态] 第${currentLineIndex}行持续发光, 时间=${Math.floor(currentPositionMs/1000)}s`);
+    for (let i = 1; i < lyrics.lines.length; i++) {
+      const interval = lyrics.lines[i].timestamp_ms - lyrics.lines[i-1].timestamp_ms;
+      if (interval > 0 && interval < 60000) { // 排除异常值（>60秒的间隔）
+        totalInterval += interval;
+        count++;
       }
     }
-  }, [lyrics?.lines, currentPositionMs, getCurrentLineIndex, handleSeekScroll, clearTransitionTimers, performGradualTransition]); // 移除currentLineIndex依赖，避免循环
-  
-  // 歌词加载完成后预计算位置
+    
+    return count > 0 ? totalInterval / count : 5000;
+  }, [lyrics?.lines]);
+
+  // 播放位置变化事件发送（替代旧的直接写样式）
   useEffect(() => {
-    if (lyrics?.lines && lyrics.lines.length > 0) {
-      console.log('🎯 [位置系统] 开始初始化位置计算，歌词行数:', lyrics.lines.length);
-      // 等待DOM完全渲染后计算位置
-      const checkAndCalculate = () => {
-        // 检查是否所有行都已渲染
-        const allRendered = lineRefs.current.slice(0, lyrics.lines.length).every(ref => ref !== null);
-        const renderedCount = lineRefs.current.slice(0, lyrics.lines.length).filter(ref => ref !== null).length;
-        console.log('🎯 [DOM检查] 已渲染:', renderedCount, '/', lyrics.lines.length, '行，全部就绪:', allRendered);
-        
-        if (allRendered && lyricsRef.current) {
-          console.log('✅ [位置计算] DOM已就绪，开始计算', lyrics.lines.length, '行位置');
-          calculateTargetPositions();
-        } else {
-          console.log('⏳ [位置计算] DOM未就绪，延迟100ms重试');
-          setTimeout(checkAndCalculate, 100);
-        }
-      };
+    if (!lyrics?.lines?.length) return;
+
+    const idx = findIndexAtTime(currentPositionMs);
+    if (idx < 0) return;
+    
+    const lastIdx = lastIdxRef.current;
+    const lastTime = lastTimeRef.current;
+    
+    // 索引未变化则不发送事件
+    if (lastIdx === idx) return;
+    
+    console.log(`🎵 [索引变化] ${lastIdx} → ${idx} (时间: ${currentPositionMs}ms)`);
+    
+    const dtMs = currentPositionMs - lastTime;
+    const absIdxDelta = lastIdx !== null ? Math.abs(idx - lastIdx) : 0;
+    
+    // 🎯 智能seek检测：基于歌曲自身特征的动态阈值
+    let isSeek = false;
+    let dynamicTimeThreshold = SCROLL_CONFIG.SEEK_TIME_MIN_MS;
+    
+    if (lastIdx !== null) {
+      const avgInterval = calculateAverageInterval();
+      dynamicTimeThreshold = Math.max(
+        Math.min(avgInterval * SCROLL_CONFIG.SEEK_TIME_MULTIPLIER, SCROLL_CONFIG.SEEK_TIME_MAX_MS),
+        SCROLL_CONFIG.SEEK_TIME_MIN_MS
+      );
       
-      // 使用 requestAnimationFrame 确保DOM完全渲染
-      requestAnimationFrame(() => {
-        setTimeout(checkAndCalculate, 50);
-      });
-    } else {
-      console.log('🎯 [位置系统] 无歌词数据，清空位置数组');
-      targetPositions.current = [];
+      isSeek = (
+        absIdxDelta >= SCROLL_CONFIG.SEEK_INDEX_SPAN ||
+        Math.abs(dtMs) > dynamicTimeThreshold
+      );
+      
+      // 详细诊断信息
+      console.log(`🎯 [Seek判断] ${isSeek ? '⚡SEEK' : '🎵动画'}: dtMs=${dtMs}ms, 跨度=${absIdxDelta}行`);
+      console.log(`📊 [动态阈值] 平均间隔=${Math.round(avgInterval)}ms, 动态阈值=${Math.round(dynamicTimeThreshold)}ms`);
     }
-  }, [lyrics?.lines, calculateTargetPositions]);
+    
+    // 发送相应事件
+    if (isSeek) {
+      dispatch({ type: 'Seek', idx, tMs: currentPositionMs, dtMs, absIdxDelta });
+    } else {
+      dispatch({ type: 'IndexChange', idx, tMs: currentPositionMs });
+    }
+  }, [currentPositionMs, lyrics?.lines?.length, findIndexAtTime, dispatch, calculateAverageInterval]);
+
+  // 布局变化事件发送（字体变化时）
+  useEffect(() => {
+    if (currentLineIndex == null) return;
+    console.log(`📤 发送LayoutChange事件: reason=font`);
+    dispatch({ type: 'LayoutChange', reason: 'font' });
+  }, [fontSizes, dispatch]); // 移除currentLineIndex依赖，避免每次行变化都触发
+
+  // 窗口大小变化事件发送（集成到原有的resize监听中）
+
+  // 歌词内容变化事件发送
+  useEffect(() => {
+    if (!lyrics?.lines?.length) return;
+    console.log(`📤 发送LayoutChange事件: reason=lyrics`);
+    dispatch({ type: 'LayoutChange', reason: 'lyrics' });
+  }, [lyrics?.lines, dispatch]); // 移除currentLineIndex依赖，避免每次行变化都触发
   
-  // 窗口大小变化时重新计算位置 (合并到现有的resize处理中)
+  // DOM 渲染同步：确保行引用数组长度匹配
+  useEffect(() => {
+    if (lyrics?.lines) {
+      // 确保 lineRefs 数组长度与歌词行数匹配
+      lineRefs.current = lineRefs.current.slice(0, lyrics.lines.length);
+    }
+  }, [lyrics?.lines]);
+  
+  // 窗口大小变化时更新字体并发送LayoutChange事件
   useEffect(() => {
     let resizeTimeout: NodeJS.Timeout;
-    
     const handleResize = () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
         setFontSizes(getResponsiveFontSizes());
-        // 重新计算位置
-        if (lyrics?.lines) {
-          setTimeout(() => {
-            calculateTargetPositions();
-          }, 50);
+        // 发送窗口变化事件到orchestrator
+        if (currentLineIndex != null) {
+          dispatch({ type: 'LayoutChange', reason: 'window' });
         }
       }, 300);
     };
-    
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
-    
     return () => {
       clearTimeout(resizeTimeout);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
     };
-  }, [lyrics?.lines, calculateTargetPositions]);
+  }, [dispatch, currentLineIndex]);
   
-  // 组件卸载时清理所有定时器
-  useEffect(() => {
-    return () => {
-      clearTransitionTimers();
-    };
-  }, [clearTransitionTimers]);
+  // 组件卸载时 rAF 在对应 effect 中已清理
 
   // 背景渐变动画 - 暂时禁用以调试重渲染问题
   // useEffect(() => {
@@ -1064,14 +1337,13 @@ export default function ImmersiveLyricsView({
       {/* 专辑封面模糊背景层 */}
       {albumCoverUrl && (
         <div 
-          className="absolute inset-0 -z-10"
+          className="absolute -inset-8 -z-10"
           style={{
             backgroundImage: `url(${albumCoverUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             filter: 'blur(60px) brightness(0.6)',
-            transform: 'scale(1.1)', // 稍微放大避免边缘模糊缺失
             transition: 'all 0.6s ease-out'
           }}
         />
@@ -1129,10 +1401,10 @@ export default function ImmersiveLyricsView({
                      </div>
                    )}
                  </div>
-                 <div className="text-center space-y-3 max-w-xs">
-                   <h1 className="text-white text-2xl font-bold">{track?.title || '未知歌曲'}</h1>
-                   <p className="text-white/80 text-lg">{track?.artist || '未知艺术家'}</p>
-                   {track?.album && <p className="text-white/60 text-base">{track.album}</p>}
+                 <div className="text-center space-y-3 w-full max-w-sm">
+                   <h1 className="text-white text-2xl font-bold truncate px-2" title={track?.title || '未知歌曲'}>{track?.title || '未知歌曲'}</h1>
+                   <p className="text-white/80 text-lg truncate px-2" title={track?.artist || '未知艺术家'}>{track?.artist || '未知艺术家'}</p>
+                   {track?.album && <p className="text-white/60 text-base truncate px-2" title={track.album}>{track.album}</p>}
                  </div>
                </div>
                
@@ -1199,29 +1471,26 @@ export default function ImmersiveLyricsView({
               
               <div 
                 ref={lyricsRef}
-                className="absolute inset-0 overflow-y-auto overflow-x-hidden px-8 py-16"
+                className="absolute inset-0 overflow-hidden px-8 py-16"
                 style={{ 
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  scrollBehavior: 'auto', // 禁用原生平滑滚动，使用我们的连续映射
-                  WebkitOverflowScrolling: 'auto', // 禁用iOS动量滚动
-                  overscrollBehavior: 'none', // 防止过度滚动
-                  willChange: 'scroll-position', // 提示浏览器优化滚动性能
-                  transform: 'translateZ(0)' // 启用硬件加速
+                  overscrollBehavior: 'none',
+                  willChange: 'transform',
+                  transform: 'translateZ(0)'
                 }}
               >
-               <div className="min-h-full flex flex-col justify-center">
-                 {/* 歌词容器 - 通过滚动让当前行居中显示 */}
-                 <div 
-                   className="py-16 relative" 
-                   style={{ 
-                     display: 'flex', 
-                     flexDirection: 'column', 
-                     gap: `${fontSizes.spacingInfo?.lineSpacing || Math.max(fontSizes.current * 0.6, 16)}px`,
-                     paddingTop: '30vh', // 减少内边距，给滚动留出空间
-                     paddingBottom: '30vh' // 减少内边距，给滚动留出空间
-                   }}
-                 >
+               <div className="min-h-full flex flex-col justify-center will-change-transform" ref={movingWrapRef} style={{ transform: 'translate3d(0,0,0)', contain: 'layout paint', backfaceVisibility: 'hidden' }}>
+                {/* 歌词容器 - 行容器高度稳定化（按照手册第14章要求） */}
+                <div 
+                  className="py-16 relative" 
+                  style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    // 固定间距，不随当前行变化
+                    gap: `${fontSizes.spacingInfo?.lineSpacing || Math.max(fontSizes.normal * 0.6, 16)}px`,
+                    paddingTop: '30vh',
+                    paddingBottom: '30vh'
+                  }}
+                >
                     {lyrics?.lines.map((line, index) => {
                       // 基于碰撞检测的发光效果，而非索引
                       const isCurrent = index === currentLineIndex;
@@ -1231,27 +1500,37 @@ export default function ImmersiveLyricsView({
                       
                       // 移除垂直偏移效果，让歌词保持在原始位置流动
                      
+                     // 计算scale因子（按照手册第14章：文本层统一font-size，通过scale呈现差异）
+                     const baseScale = isCurrent 
+                       ? fontSizes.current / fontSizes.normal
+                       : wasPrevious 
+                         ? fontSizes.near / fontSizes.normal 
+                         : 1;
+                     
                      return (
                        <div
                          key={index}
                          ref={(el) => {
                            lineRefs.current[index] = el;
                          }}
-                         className="cursor-pointer relative px-4 py-2"
+                         className="cursor-pointer relative px-4"
                          style={{
+                           // 固定高度，不随当前行状态变化（防止布局漂移）
+                           height: `${fontSizes.spacingInfo?.lineHeight || fontSizes.normal * 1.6}px`,
+                           display: 'flex',
+                           alignItems: 'center',
+                           justifyContent: 'center',
                            opacity: isCurrent ? 1 : wasPrevious ? 0.4 : isNear ? 0.85 : distance <= 5 ? Math.max(0.15, 0.7 - distance * 0.1) : 0.1,
                            filter: isCurrent ? 'none' : wasPrevious ? `blur(0.2px) brightness(0.85)` : `blur(${Math.min(distance * 0.15, 0.4)}px) brightness(0.92)`,
-                           transform: `scale(${isCurrent ? 1.005 : wasPrevious ? 0.98 : 1})`, // 前一行稍微缩小
+                           // 容器层不做scale变化，保持布局稳定
                            transition: isCurrent || wasPrevious 
-                             ? `all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)` // 当前行和前一行使用较长过渡
-                             : `all 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)`, // 其他行使用标准过渡
-                           transitionProperty: 'opacity, filter, transform',
+                             ? `opacity 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)`
+                             : `opacity 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
                          }}
                          onClick={async () => {
                            if (track?.id) {
                              try {
                                console.log('🎵 [用户点击] 用户点击第', index, '行，时间戳:', line.timestamp_ms);
-                               
                                
                                // 跳转到指定时间点
                                await invoke('player_seek', { positionMs: line.timestamp_ms });
@@ -1273,7 +1552,8 @@ export default function ImmersiveLyricsView({
                              ${wasPrevious && !isCurrent ? 'lyrics-fade-out' : ''}
                            `}
                            style={{
-                             fontSize: `${isCurrent ? fontSizes.current : wasPrevious ? fontSizes.near : fontSizes.normal}px`,
+                             // 统一font-size（按照手册第14章要求）
+                             fontSize: `${fontSizes.normal}px`,
                              color: isCurrent 
                                ? 'rgba(255, 255, 255, 1)' 
                                : wasPrevious 
@@ -1290,11 +1570,12 @@ export default function ImmersiveLyricsView({
                              fontWeight: isCurrent ? 600 : wasPrevious ? 500 : 400,
                              letterSpacing: isCurrent ? '0.015em' : wasPrevious ? '0.010em' : '0.005em',
                              lineHeight: '1.6',
-                             transform: `scale(${isCurrent ? 1.01 : wasPrevious ? 0.99 : 1})`,
+                             // 通过scale实现视觉差异，不影响布局高度
+                             transform: `scale(${Math.round(baseScale * 100) / 100})`, // 轻微量化避免亚像素抖动
+                             transformOrigin: 'center',
                              transition: isCurrent || wasPrevious 
-                               ? 'all 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)' // 更长的过渡时间用于切换
-                               : 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                             transitionProperty: 'font-size, color, text-shadow, font-weight, letter-spacing, transform, filter, opacity',
+                               ? 'transform 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), color 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), text-shadow 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), font-weight 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), letter-spacing 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)' 
+                               : 'transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), color 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), text-shadow 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), font-weight 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), letter-spacing 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                              filter: isCurrent 
                                ? 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.25))' 
                                : wasPrevious 

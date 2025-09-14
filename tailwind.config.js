@@ -4,6 +4,7 @@ module.exports = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class', // 启用 class 驱动的深色模式
   theme: {
     extend: {
       colors: {
@@ -29,6 +30,27 @@ module.exports = {
         'border-primary': '#CBD5E1',
         'border-secondary': '#E2E8F0',
         'border-focus': '#2563EB',
+        // 深色模式专用色彩
+        dark: {
+          50: '#0B1220',   // 深蓝黑 - 主要表面
+          100: '#0F172A',  // 深灰蓝 - 次要表面  
+          200: '#111827',  // 暖深灰 - 三级表面
+          300: '#1E293B',  // 中性深灰
+          400: '#334155',  // 浅深灰
+          500: '#475569',  // 中等灰
+          600: '#64748B',  // 禁用文字
+          700: '#94A3B8',  // 辅助文字
+          800: '#C7D2FE',  // 次要文字
+          900: '#E5EAF3',  // 主要文字
+        },
+        // 深色玻璃效果色彩
+        'glass-dark': {
+          bg: 'rgba(15, 23, 42, 0.25)',
+          'bg-strong': 'rgba(15, 23, 42, 0.4)',
+          'bg-overlay': 'rgba(15, 23, 42, 0.6)',
+          border: 'rgba(255, 255, 255, 0.08)',
+          'border-outer': 'rgba(99, 102, 241, 0.3)',
+        },
       },
       fontFamily: {
         'primary': ['Segoe UI Variable', 'Microsoft YaHei UI', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif'],

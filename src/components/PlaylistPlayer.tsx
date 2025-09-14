@@ -83,7 +83,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
     const unlistenPositionChanged = listen('player-position-changed', (event: any) => {
       // 注意：现在event.payload直接是position数字
-      console.log('🎵 收到位置更新:', event.payload);
       setPlayerState(prev => ({
         ...prev,
         position_ms: event.payload,
@@ -477,7 +476,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const getCurrentPosition = () => {
     const position = isDragging ? dragPosition : playerState.position_ms;
-    console.log('🎵 getCurrentPosition:', position, 'isDragging:', isDragging, 'playerState.position_ms:', playerState.position_ms);
     return position;
   };
 

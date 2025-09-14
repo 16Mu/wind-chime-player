@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, Sender};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}};
 use tauri::{AppHandle, Emitter, Manager, State};
 use anyhow::Result;
 
@@ -16,6 +16,7 @@ use lyrics::{LyricsParser, ParsedLyrics};
 // Global state
 static PLAYER_TX: OnceLock<Sender<PlayerCommand>> = OnceLock::new();
 static LIBRARY_TX: OnceLock<Sender<LibraryCommand>> = OnceLock::new();
+static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
 
 struct AppState {
     player_tx: Sender<PlayerCommand>,
@@ -690,6 +691,12 @@ fn start_event_listeners(app_handle: AppHandle) {
         let rx = state.inner().player_rx.clone();
 
         loop {
+            // 检查关闭信号
+            if SHUTDOWN_SIGNAL.load(Ordering::Relaxed) {
+                log::info!("播放器事件监听器收到关闭信号，正在退出...");
+                break;
+            }
+
             let event_received = {
                 if let Ok(guard) = rx.try_lock() {
                     guard.try_recv().ok()
@@ -724,6 +731,7 @@ fn start_event_listeners(app_handle: AppHandle) {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             }
         }
+        log::info!("播放器事件监听器已退出");
     });
 
     // Library event listener
@@ -732,6 +740,12 @@ fn start_event_listeners(app_handle: AppHandle) {
         let rx = state.inner().library_rx.clone();
 
         loop {
+            // 检查关闭信号
+            if SHUTDOWN_SIGNAL.load(Ordering::Relaxed) {
+                log::info!("音乐库事件监听器收到关闭信号，正在退出...");
+                break;
+            }
+
             let event_received = {
                 if let Ok(guard) = rx.try_lock() {
                     guard.try_recv().ok()
@@ -774,6 +788,7 @@ fn start_event_listeners(app_handle: AppHandle) {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             }
         }
+        log::info!("音乐库事件监听器已退出");
     });
 }
 
@@ -857,6 +872,35 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                log::info!("程序正在关闭，开始清理资源...");
+                cleanup_resources();
+                log::info!("资源清理完成");
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// 资源清理函数
+fn cleanup_resources() {
+    log::info!("开始清理应用资源...");
+    
+    // 设置关闭信号，通知所有监听器退出
+    SHUTDOWN_SIGNAL.store(true, Ordering::Relaxed);
+    log::info!("已发送关闭信号给事件监听器");
+    
+    // 停止播放器
+    if let Some(tx) = PLAYER_TX.get() {
+        let _ = tx.send(PlayerCommand::Stop);
+        log::info!("已发送停止命令给播放器");
+        // 给播放器一些时间来停止
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    
+    // 给事件监听器一些时间来优雅退出
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    
+    log::info!("应用资源清理完成");
 }

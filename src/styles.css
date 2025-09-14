@@ -124,6 +124,98 @@
   --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
 }
 
+/* =================================
+   🌙 DARK THEME VARIABLES
+   ================================= */
+
+[data-theme="dark"] {
+  /* 🎯 深色模式设计令牌系统 */
+  
+  /* 背景色系统 - 深色调 */
+  --surface-primary: #0B1220;              /* 主要表面 - 深蓝黑 */
+  --surface-secondary: #0F172A;            /* 次要表面 - 深灰蓝 */
+  --surface-tertiary: #111827;             /* 三级表面 - 暖深灰 */
+  --surface-overlay: rgba(15, 23, 42, 0.95); /* 覆盖层 - 高不透明深色 */
+  
+  /* 文本系统 - 亮色对比 */
+  --text-primary: #E5EAF3;                 /* 主要文字 - 亮白蓝 */
+  --text-secondary: #C7D2FE;               /* 次要文字 - 淡紫白 */
+  --text-muted: #94A3B8;                   /* 辅助文字 - 中性灰 */
+  --text-disabled: #64748B;                /* 禁用文字 - 暗灰 */
+  
+  /* 边框系统 - 柔和亮描边 */
+  --border-primary: rgba(148, 163, 184, 0.2);  /* 主要边框 - 柔和灰 */
+  --border-secondary: rgba(100, 116, 139, 0.15); /* 次要边框 - 更淡 */
+  --border-focus: #6366F1;                     /* 焦点边框 - 亮蓝紫 */
+  
+  /* 🔮 深色玻璃材质系统 - 精细调整 */
+  --glass-bg: rgba(15, 23, 42, 0.15);         /* 基础玻璃背景 - 更透明，减少粗糙感 */
+  --glass-bg-strong: rgba(15, 23, 42, 0.25);  /* 强调玻璃背景 - 适中透明度 */
+  --glass-bg-overlay: rgba(15, 23, 42, 0.4);  /* 浮层玻璃背景 - 中等不透明 */
+  --glass-border: rgba(255, 255, 255, 0.06);  /* 玻璃内描边 - 更柔和 */
+  --glass-border-outer: rgba(99, 102, 241, 0.2); /* 玻璃外描边 - 更淡 */
+  --glass-blur: 16px;                          /* 增加模糊程度，提升质感 */
+  
+  /* 🌈 深色背景系统 */
+  --bg-app: linear-gradient(135deg, 
+    #020617 0%,                            /* 极深蓝黑 */
+    #0F172A 50%,                           /* 深蓝灰 */
+    #1E293B 100%);                         /* 暖深灰 */
+  --bg-noise: none;                        /* 移除噪点纹理 */
+  
+  /* 🌟 深色阴影系统 - 柔和发光 */
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 12px rgba(99, 102, 241, 0.1);
+  --shadow-medium: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 16px rgba(99, 102, 241, 0.12);
+  --shadow-deep: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 24px rgba(99, 102, 241, 0.15);
+  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.4), 0 0 48px rgba(99, 102, 241, 0.2);
+  
+  /* 深色渐变系统 */
+  --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+  
+  /* 状态色系统 - 深色适配 */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+}
+
+/* =================================
+   🌙 系统偏好深色模式自动适配
+   ================================= */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* 自动应用深色模式变量（当用户未手动设置主题时） */
+    --surface-primary: #0B1220;
+    --surface-secondary: #0F172A;
+    --surface-tertiary: #111827;
+    --surface-overlay: rgba(15, 23, 42, 0.95);
+    
+    --text-primary: #E5EAF3;
+    --text-secondary: #C7D2FE;
+    --text-muted: #94A3B8;
+    --text-disabled: #64748B;
+    
+    --border-primary: rgba(148, 163, 184, 0.2);
+    --border-secondary: rgba(100, 116, 139, 0.15);
+    --border-focus: #6366F1;
+    
+    --glass-bg: rgba(15, 23, 42, 0.15);
+    --glass-bg-strong: rgba(15, 23, 42, 0.25);
+    --glass-bg-overlay: rgba(15, 23, 42, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-border-outer: rgba(99, 102, 241, 0.2);
+    
+    --bg-app: linear-gradient(135deg, #020617 0%, #0F172A 50%, #1E293B 100%);
+    
+    --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 12px rgba(99, 102, 241, 0.1);
+    --shadow-medium: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 16px rgba(99, 102, 241, 0.12);
+    --shadow-deep: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 24px rgba(99, 102, 241, 0.15);
+    --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.4), 0 0 48px rgba(99, 102, 241, 0.2);
+    
+    --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+  }
+}
+
 /* 🎯 高对比度模式 */
 [data-contrast="high"] {
   /* 覆盖文字颜色 */
@@ -165,6 +257,133 @@
     --shadow-medium: var(--shadow-moderate);
     --shadow-deep: var(--shadow-prominent);
   }
+}
+
+/* 🔤 文本截断工具 */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 🌙 深色主题兼容性类 */
+.dark\:text-dark-900 {
+  color: var(--text-primary);
+}
+
+.dark\:text-dark-700 {
+  color: var(--text-secondary);
+}
+
+.dark\:text-dark-600 {
+  color: var(--text-muted);
+}
+
+.dark\:bg-dark-100 {
+  background-color: var(--surface-secondary);
+}
+
+.dark\:bg-dark-200 {
+  background-color: var(--surface-tertiary);
+}
+
+.dark\:border-dark-500 {
+  border-color: var(--border-primary);
+}
+
+.dark\:border-dark-400 {
+  border-color: var(--border-secondary);
+}
+
+.dark\:hover\:border-dark-400:hover {
+  border-color: var(--border-secondary);
+}
+
+.dark\:bg-glass-dark-bg {
+  background-color: var(--glass-bg);
+}
+
+.dark\:bg-glass-dark-bg-strong {
+  background-color: var(--glass-bg-strong);
+}
+
+.dark\:border-glass-dark-border {
+  border-color: var(--glass-border);
+}
+
+.dark\:hover\:bg-dark-200\/50:hover {
+  background-color: rgba(var(--surface-tertiary), 0.5);
+}
+
+.dark\:placeholder-dark-600::placeholder {
+  color: var(--text-muted);
+}
+
+.dark\:bg-green-900\/30 {
+  background-color: rgba(34, 197, 94, 0.3);
+}
+
+.dark\:text-green-300 {
+  color: #86efac;
+}
+
+.dark\:text-blue-300 {
+  color: #93c5fd;
+}
+
+.dark\:bg-brand-900\/30 {
+  background-color: rgba(99, 102, 241, 0.3);
+}
+
+.dark\:text-brand-400 {
+  color: #a78bfa;
+}
+
+.dark\:bg-dark-300 {
+  background-color: rgba(17, 24, 39, 1);
+}
+
+.dark\:hover\:bg-dark-300:hover {
+  background-color: rgba(17, 24, 39, 1);
+}
+
+.dark\:bg-dark-500 {
+  border-color: var(--border-primary);
+}
+
+.dark\:hover\:border-brand-600:hover {
+  border-color: var(--brand-600);
+}
+
+.dark\:hover\:bg-brand-900\/20:hover {
+  background-color: rgba(99, 102, 241, 0.2);
+}
+
+/* 🎵 音乐库行级透明度类 - 微妙层级感 */
+.dark\:bg-white\/02 {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.dark\:hover\:bg-white\/05:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark\:active\:bg-white\/08:active {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark\:border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
@@ -270,6 +489,50 @@
     overflow: hidden;
   }
   
+  /* 🎵 音乐库专用玻璃效果 - 增强层级感 */
+  .glass-music-library {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    backdrop-filter: blur(var(--glass-blur)) saturate(115%);
+    box-shadow: var(--shadow-soft);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* 深色模式下的音乐库增强效果 */
+  [data-theme="dark"] .glass-music-library {
+    background: rgba(15, 23, 42, 0.25); /* 比默认稍微不透明 */
+    border: 1px solid rgba(255, 255, 255, 0.08); /* 增强边框可见度 */
+    box-shadow: 
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 0 12px rgba(99, 102, 241, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08); /* 内发光效果 */
+  }
+  
+  .glass-music-library::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      rgba(255, 255, 255, 0.1) 50%, 
+      transparent 100%);
+    opacity: 0.6;
+  }
+  
+  /* 深色模式下的增强高光 */
+  [data-theme="dark"] .glass-music-library::before {
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      rgba(255, 255, 255, 0.15) 50%, 
+      transparent 100%);
+    opacity: 0.8;
+  }
+  
   .glass-overlay::before {
     content: '';
     position: absolute;
@@ -283,25 +546,29 @@
   
   /* 🎯 交互状态 */
   .glass-interactive {
-    transition: all var(--dur-normal) var(--ease-productive);
+    transition: transform var(--dur-normal) var(--ease-productive),
+                box-shadow var(--dur-normal) var(--ease-productive),
+                border-color var(--dur-normal) var(--ease-productive);
     cursor: pointer;
+    will-change: transform;
+    transform: translateZ(0); /* 强制GPU合成 */
   }
   
   .glass-interactive:hover {
-    transform: translateY(-1px) scale(1.01);
+    transform: translateY(-1px) scale(1.01) translateZ(0);
     box-shadow: var(--shadow-medium);
     border-color: var(--glass-border-outer);
   }
   
   .glass-interactive:active {
-    transform: translateY(0) scale(0.99);
+    transform: translateY(0) scale(0.99) translateZ(0);
     transition: transform var(--dur-fast) var(--ease-productive);
   }
   
   /* 🎵 品牌按钮 */
   .btn-brand {
     background: var(--gradient-brand);
-    color: white;
+    color: var(--surface-primary);
     border: none;
     border-radius: var(--radius-lg);
     padding: var(--space-3) var(--space-6);
@@ -311,9 +578,13 @@
     box-shadow: var(--shadow-soft);
     position: relative;
     overflow: hidden;
-    transition: all var(--dur-normal) var(--ease-productive);
+    transition: transform var(--dur-normal) var(--ease-productive),
+                box-shadow var(--dur-normal) var(--ease-productive),
+                filter var(--dur-normal) var(--ease-productive);
     cursor: pointer;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    will-change: transform;
+    transform: translateZ(0); /* 强制GPU合成 */
   }
   
   .btn-brand::before {
@@ -327,14 +598,14 @@
   }
   
   .btn-brand:hover {
-    transform: translateY(-2px);
+    transform: translateY(-2px) translateZ(0);
     box-shadow: var(--shadow-glow), var(--shadow-medium);
     filter: brightness(1.05);
   }
   
   .btn-brand:active {
-    transform: translateY(-1px) scale(0.98);
-    transition: all var(--dur-fast) var(--ease-productive);
+    transform: translateY(-1px) scale(0.98) translateZ(0);
+    transition: transform var(--dur-fast) var(--ease-productive);
   }
   
   .btn-brand:disabled {
@@ -413,7 +684,7 @@
     border-radius: var(--radius-xl);
     font-size: 14px;
     font-weight: 500;
-    color: var(--slate-700);
+    color: var(--text-muted);
     cursor: pointer;
     transition: all var(--dur-normal) var(--ease-productive);
     z-index: 2;
@@ -422,20 +693,20 @@
   }
   
   .glass-tab.active {
-    color: var(--slate-900);
+    color: var(--text-primary);
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
   .glass-tab:not(.active):hover {
     color: var(--brand-600);
-    background: rgba(255, 255, 255, 0.5);
+    background: var(--glass-bg);
   }
   
   /* 滑动指示器 */
   .tab-indicator {
     position: absolute;
-    background: white;
+    background: var(--surface-primary);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-soft);
     transition: all 0.7s var(--ease-bounce-out);
@@ -589,12 +860,18 @@
   
   .app-main {
     flex: 1;
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
     height: calc(100vh - 64px); /* 只减去顶部标题栏高度，播放器是固定定位不影响布局 */
+    transition: grid-template-columns 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+    --sidebar-width: 240px;
+  }
+  
+  .app-main.sidebar-collapsed {
+    --sidebar-width: 80px;
   }
   
   .app-sidebar {
-    width: 240px;
     background: var(--glass-bg-strong);
     border-right: 1px solid var(--glass-border);
     backdrop-filter: blur(var(--glass-blur)) saturate(110%);
@@ -602,11 +879,27 @@
     overflow-y: auto; /* 启用垂直滚动 */
     overflow-x: hidden; /* 隐藏水平滚动 */
     height: 100%; /* 占满父容器高度 */
-    transition: width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 100%; /* 占满grid列宽度 */
   }
   
-  .app-sidebar-collapsed {
-    width: 80px;
+  /* 动画期间减少backdrop-filter */
+  .app-sidebar.animating {
+    backdrop-filter: blur(4px) saturate(100%);
+    transition: backdrop-filter 0.1s ease;
+  }
+  
+  /* 通用动画优化类 - 减少昂贵效果 */
+  .animating .glass-surface {
+    backdrop-filter: blur(4px) saturate(100%) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  .animating .backdrop-blur-md {
+    backdrop-filter: blur(4px) !important;
+  }
+  
+  .animating .shadow-lg {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
   }
   
   /* 收缩状态下的指示器调整 */
@@ -637,7 +930,6 @@
   }
   
   .app-content {
-    flex: 1;
     position: relative;
     height: 100%; /* 占满父容器高度 */
     display: flex;
@@ -1804,20 +2096,14 @@
   .content-player-container {
     position: fixed;
     bottom: 0;
-    left: 240px; /* 从侧边栏宽度开始 */
+    left: var(--sidebar-width, 240px); /* 根据CSS变量动态调整 */
     right: 0;
-    width: calc(100% - 240px); /* 只占右侧内容区域宽度 */
+    width: calc(100% - var(--sidebar-width, 240px)); /* 根据CSS变量动态调整 */
     padding: 0; /* 移除内边距，让播放器贴合边缘 */
     background: transparent;
     z-index: 100;
-    transition: left 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), 
+    transition: left 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
                 width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  
-  /* 收缩状态下的播放器容器 */
-  .content-player-collapsed {
-    left: 80px; /* 收缩后的侧边栏宽度 */
-    width: calc(100% - 80px); /* 调整宽度以适应收缩的侧边栏 */
   }
 
   /* 🎵 现代播放器样式 - 简洁设计，微妙融色处理 */
@@ -1825,16 +2111,23 @@
     position: relative;
     width: 100%;
     height: 80px; /* 图片中的播放器高度较紧凑 */
-    /* 纯白色背景，微妙融色处理 */
-    background: #FFFFFF;
-    border-top: 1px solid rgba(229, 231, 235, 0.6); /* 微妙的顶部边框 */
+    /* 表面背景，微妙融色处理 */
+    background: var(--surface-primary);
+    border-top: 1px solid var(--border-secondary); /* 微妙的顶部边框 */
     border-radius: 0; /* 保持原来的直角设计 */
-    color: #1F2937;
+    color: var(--text-primary);
     overflow: hidden;
     /* 轻微顶部阴影，融色处理 */
     box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
     transform: none;
     opacity: 1;
+  }
+  
+  /* 确保深色模式下的播放器背景 */
+  [data-theme="dark"] .modern-player {
+    background: var(--surface-primary);
+    border-top-color: var(--border-secondary);
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.2);
   }
 
   /* 播放器主容器 - 左中右三栏布局 */
@@ -1925,7 +2218,7 @@
   .track-title {
     font-size: 15px;
     font-weight: 700; /* 加粗 */
-    color: #111827; /* 深黑色 */
+    color: var(--text-primary); /* 主文本色 */
     line-height: 1.3;
     margin: 0;
     width: 100%;
@@ -1939,7 +2232,7 @@
   .track-artist {
     font-size: 13px;
     font-weight: 500;
-    color: #6B7280; /* 中性灰色 */
+    color: var(--text-muted); /* 辅助文本色 */
     line-height: 1.3;
     margin: 0;
     width: 100%;
@@ -1974,21 +2267,21 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #F9FAFB;
-    border: 1px solid #E5E7EB;
+    background: var(--surface-tertiary);
+    border: 1px solid var(--border-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6B7280;
+    color: var(--text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
     justify-self: center; /* 栅格内居中 */
   }
 
   .control-small-btn:hover {
-    background: #F3F4F6;
-    border-color: #7C5CFF;
-    color: #7C5CFF;
+    background: var(--surface-secondary);
+    border-color: var(--brand-600);
+    color: var(--brand-600);
     transform: scale(1.05);
   }
 
@@ -1997,9 +2290,9 @@
   }
 
   .control-small-btn.active {
-    background: linear-gradient(135deg, #7C5CFF, #6366F1);
-    border-color: #7C5CFF;
-    color: #fff;
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+    border-color: var(--brand-600);
+    color: var(--surface-primary);
   }
 
   /* 中键：上一首/下一首 */
@@ -2007,21 +2300,21 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: #F9FAFB;
-    border: 1px solid #E5E7EB;
+    background: var(--surface-tertiary);
+    border: 1px solid var(--border-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6B7280;
+    color: var(--text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
     justify-self: center; /* 栅格内居中 */
   }
 
   .control-medium-btn:hover {
-    background: #F3F4F6;
-    border-color: #7C5CFF;
-    color: #7C5CFF;
+    background: var(--surface-secondary);
+    border-color: var(--brand-600);
+    color: var(--brand-600);
     transform: scale(1.05);
   }
 
@@ -2034,12 +2327,12 @@
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #7C5CFF, #6366F1);
+    background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
     border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--surface-primary);
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 4px 16px rgba(124, 92, 255, 0.3);
@@ -2087,7 +2380,7 @@
   .time-current {
     font-size: 12px;
     font-weight: 600;
-    color: #6B7280;
+    color: var(--text-muted);
     font-family: 'Courier New', monospace;
     text-align: center;
     line-height: 1;
@@ -2098,7 +2391,7 @@
   .time-total {
     font-size: 12px;
     font-weight: 600;
-    color: #6B7280;
+    color: var(--text-muted);
     font-family: 'Courier New', monospace;
     text-align: center;
     line-height: 1;
@@ -2120,16 +2413,16 @@
   .progress-track {
     position: absolute;
     inset: 0;
-    background: #E5E7EB;
+    background: var(--border-secondary);
     border-radius: 3px;
     pointer-events: none; /* 确保点击事件传递到父容器 */
   }
 
-  /* 进度条填充 - 近黑色 */
+  /* 进度条填充 */
   .progress-bar {
     position: relative;
     height: 100%;
-    background: #111827; /* 接近纯黑 */
+    background: var(--text-primary); /* 使用主文本色 */
     border-radius: 3px;
     transition: width 0.2s ease;
     pointer-events: none; /* 确保点击事件传递到父容器 */
@@ -2143,8 +2436,8 @@
     transform: translateY(-50%);
     width: 12px;
     height: 12px;
-    background: #111827;
-    border: 2px solid #fff;
+    background: var(--text-primary);
+    border: 2px solid var(--surface-primary);
     border-radius: 50%;
     opacity: 0;
     transform: translateY(-50%) scale(0);
@@ -2176,20 +2469,20 @@
     width: 36px;
     height: 36px;
     border-radius: 8px; /* 圆角 */
-    background: #F9FAFB; /* 浅灰色背景 */
-    border: 1px solid #E5E7EB; /* 淡描边 */
+    background: var(--surface-tertiary); /* 使用设计令牌 */
+    border: 1px solid var(--border-secondary); /* 淡描边 */
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6B7280; /* 深灰色图标 */
+    color: var(--text-muted); /* 辅助文本色 */
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .function-square-btn:hover {
-    background: #F3F4F6;
-    border-color: #7C5CFF; /* 悬停时主题色描边 */
-    color: #7C5CFF;
+    background: var(--surface-secondary);
+    border-color: var(--brand-600); /* 悬停时主题色描边 */
+    color: var(--brand-600);
     transform: translateY(-1px) scale(1.02);
   }
 
@@ -2379,7 +2672,7 @@
 
   /* 歌曲信息优化 - 紧凑布局 */
   .track-title {
-    color: #111827; /* 深色文字 */
+    color: var(--text-primary); /* 使用主题变量 */
     font-weight: 700; /* 加粗字体 */
     font-size: 15px; /* 稍微减小 */
     line-height: 1.3; /* 紧凑行高 */
@@ -2391,7 +2684,7 @@
   }
 
   .track-artist {
-    color: #6B7280; /* 中性灰色艺术家名称 */
+    color: var(--text-muted); /* 使用主题变量 */
     font-size: 13px; /* 稍微减小 */
     font-weight: 500; /* 减轻字重 */
     line-height: 1.3; /* 紧凑行高 */
@@ -2426,7 +2719,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6B7280; /* 中性灰色图标 */
+    color: var(--text-muted); /* 使用主题变量 */
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     box-shadow: 
@@ -2556,7 +2849,7 @@
     border-radius: 50%;
     background: #F3F4F6; /* 浅灰色背景 */
     border: 1px solid #E5E7EB; /* 浅边框 */
-    color: #6B7280; /* 中性灰色图标 */
+    color: var(--text-muted); /* 使用主题变量 */
   }
 
   .secondary-btn:hover {
@@ -2613,7 +2906,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6B7280; /* 中性灰色图标 */
+    color: var(--text-muted); /* 使用主题变量 */
     cursor: pointer;
     transition: all 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
@@ -2658,7 +2951,7 @@
     justify-content: space-between;
     align-items: center;
     font-size: 12px; /* 稍微增大字号 */
-    color: #6B7280; /* 中性灰色文字 */
+    color: var(--text-muted); /* 使用主题变量 */
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     font-weight: 500;
@@ -2825,8 +3118,8 @@
       height: 70px; /* 调整移动端高度 */
       border-radius: 0; /* 移动端也保持直角 */
       /* 保持简洁设计 */
-      background: #FFFFFF;
-      border-top: 1px solid rgba(229, 231, 235, 0.6);
+      background: var(--surface-primary);
+      border-top: 1px solid var(--border-secondary);
       box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
     }
 
@@ -2976,8 +3269,8 @@
       height: 60px; /* 小屏幕紧凑布局 */
       border-radius: 0; /* 小屏幕也保持直角 */
       /* 保持简洁设计 */
-      background: #FFFFFF;
-      border-top: 1px solid rgba(229, 231, 235, 0.6);
+      background: var(--surface-primary);
+      border-top: 1px solid var(--border-secondary);
       box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
     }
 
@@ -3381,20 +3674,29 @@
 @layer utilities {
   /* 🎯 Q弹动画效果 */
   .bounce-indicator {
-    transition: all 0.6s var(--ease-bounce-out);
+    transition: transform 0.6s var(--ease-bounce-out),
+                opacity 0.6s var(--ease-bounce-out);
+    will-change: transform, opacity;
+    transform: translateZ(0);
   }
   
   .elastic-hover {
-    transition: all 0.25s var(--ease-elastic);
+    transition: transform 0.25s var(--ease-elastic);
+    will-change: transform;
+    transform: translateZ(0);
   }
   
   .spring-click {
-    transition: all 0.15s var(--ease-back-out);
+    transition: transform 0.15s var(--ease-back-out);
+    will-change: transform;
+    transform: translateZ(0);
   }
   
   /* 🎨 按钮弹性交互 */
   .btn-elastic {
     transition: transform 0.2s var(--ease-back-out);
+    will-change: transform;
+    transform: translateZ(0);
   }
   
   .btn-elastic:hover {
@@ -3844,10 +4146,13 @@
   left: 0;
   width: 100%;
   height: 60px;
-  background: rgba(156, 163, 175, 0.15);  /* 灰色半透明背景 */
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* 统一品牌色调：暗色为品牌蓝/靛蓝的柔和玻璃渐变，亮色为浅品牌色 */
+  background: linear-gradient(135deg, rgba(43, 111, 255, 0.12), rgba(126, 200, 255, 0.10));
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
   border-radius: 8px;
+  border: 1px solid var(--glass-border-outer);
+  box-shadow: 0 2px 16px rgba(43, 111, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   opacity: 0;
   pointer-events: none;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -3863,16 +4168,28 @@
 
 /* 高强度模糊效果 */
 .blur-backdrop.high-intensity {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background: rgba(107, 114, 128, 0.25);  /* 深灰色，更明显 */
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  background: linear-gradient(135deg, rgba(43, 111, 255, 0.18), rgba(126, 200, 255, 0.14));
 }
 
 /* 低强度模糊效果 */
 .blur-backdrop.low-intensity {
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  background: rgba(156, 163, 175, 0.08);  /* 浅灰色，更淡 */
+  backdrop-filter: blur(4px) saturate(110%);
+  -webkit-backdrop-filter: blur(4px) saturate(110%);
+  background: linear-gradient(135deg, rgba(43, 111, 255, 0.08), rgba(126, 200, 255, 0.06));
+}
+
+/* 列表行选中样式（统一暗色与亮色的品牌高亮） */
+.selected-row {
+  background: linear-gradient(135deg, rgba(43, 111, 255, 0.16), rgba(126, 200, 255, 0.12));
+  border-color: rgba(43, 111, 255, 0.35) !important;
+  box-shadow: 0 1px 8px rgba(43, 111, 255, 0.08) inset;
+}
+
+.dark .selected-row {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(43, 111, 255, 0.14));
+  border-color: rgba(99, 102, 241, 0.35) !important;
 }
 
 /* 歌词高亮发光动画 - 新版光晕效果 */

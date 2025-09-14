@@ -173,6 +173,19 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
   // 收缩状态切换
   const toggleCollapse = () => {
     const newCollapsedState = !isCollapsed;
+    
+    // 添加动画类来优化性能
+    if (sidebarRef.current) {
+      sidebarRef.current.classList.add('animating');
+      
+      // 动画完成后移除优化类
+      setTimeout(() => {
+        if (sidebarRef.current) {
+          sidebarRef.current.classList.remove('animating');
+        }
+      }, 700); // 与动画时长一致
+    }
+    
     setIsCollapsed(newCollapsedState);
     onCollapseChange?.(newCollapsedState);
   };
@@ -246,18 +259,14 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
   return (
     <aside 
       ref={sidebarRef} 
-      className={`app-sidebar flex flex-col relative transition-all duration-700 ${
+      className={`app-sidebar flex flex-col relative dark:bg-dark-100/95 dark:border-dark-500/30 ${
         isCollapsed ? 'app-sidebar-collapsed' : ''
       }`}
-      style={{
-        width: isCollapsed ? '80px' : '240px',
-        transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
-      }}
       onMouseLeave={handleSidebarMouseLeave}
     >
       {/* 全局激活状态指示器 */}
       <div
-        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 shadow-md pointer-events-none z-10 bounce-indicator transition-all duration-700 ${
+        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-300/50 dark:to-dark-200/50 border border-blue-200/50 dark:border-glass-dark-border shadow-md pointer-events-none z-10 bounce-indicator transition-opacity duration-700 ${
           isCollapsed ? 'left-3 right-3' : 'left-6 right-6'
         }`}
         style={{
@@ -265,13 +274,15 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           height: activeIndicatorStyle.height,
           opacity: activeIndicatorStyle.opacity,
           transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+          transitionProperty: 'transform, opacity',
+          willChange: 'transform, opacity'
         }}
       />
       
       {/* 全局悬停状态指示器 */}
       {hoveredItem && hoveredItem !== currentPage && (
         <div
-          className={`absolute rounded-xl bg-white/40 backdrop-blur-sm border border-white/30 shadow-sm pointer-events-none z-10 transition-all duration-700 ${
+          className={`absolute rounded-xl bg-white/40 dark:bg-glass-dark-bg backdrop-blur-sm border border-white/30 dark:border-glass-dark-border shadow-sm pointer-events-none z-10 ${
             isCollapsed ? 'left-3 right-3' : 'left-6 right-6'
           }`}
           style={{
@@ -279,16 +290,20 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
             height: hoverIndicatorStyle.height,
             opacity: hoverIndicatorStyle.opacity,
             transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+            transitionProperty: 'transform, opacity',
+            transitionDuration: '0.7s',
+            willChange: 'transform, opacity'
           }}
         />
       )}
 
       {/* 导航菜单 */}
-      <nav className={`flex-1 overflow-y-auto py-6 transition-all duration-700 ${
+      <nav className={`flex-1 overflow-y-auto py-6 transition-padding duration-700 ${
         isCollapsed ? 'px-2' : 'px-6'
       }`}
       style={{
-        transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+        transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        transitionProperty: 'padding'
       }}>
         <div ref={navRef} className="space-y-2 relative">
           
@@ -301,27 +316,32 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               onMouseLeave={handleMouseLeave}
               className={`
                 sidebar-button w-full flex items-center rounded-xl relative z-10
-                group transform-gpu transition-all duration-700 py-3
+                group transform-gpu py-3
                 ${isCollapsed ? 'px-2 justify-center' : 'px-4'}
                 ${currentPage === item.id
-                  ? `text-slate-900 font-semibold ${hoveredItem === item.id ? 'text-blue-800' : ''}`
-                  : 'text-slate-700 hover:text-slate-900 font-medium'
+                  ? `text-slate-900 dark:text-dark-900 font-semibold ${hoveredItem === item.id ? 'text-blue-800 dark:text-blue-300' : ''}`
+                  : 'text-slate-700 dark:text-dark-700 hover:text-slate-900 dark:hover:text-dark-900 font-medium'
                 }
               `}
               style={{
                 transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                transitionProperty: 'transform, color',
+                transitionDuration: '0.7s',
                 transform: hoveredItem === item.id ? 'scale(1.02)' : 'scale(1)',
+                willChange: 'transform'
               }}
             >
               <span className="flex items-center justify-center flex-shrink-0">{item.icon}</span>
               <div 
-                className={`transition-all duration-700 overflow-hidden ${
+                className={`overflow-hidden ${
                   isCollapsed 
                     ? 'max-w-0 opacity-0 ml-0' 
                     : 'max-w-[200px] opacity-100 ml-3'
                 }`}
                 style={{
-                  transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                  transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  transitionProperty: 'max-width, opacity, margin-left',
+                  transitionDuration: '0.7s'
                 }}
               >
                 <span className="text-sm leading-tight whitespace-nowrap block">
@@ -345,7 +365,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           <div className="mb-4">
             {!isCollapsed && (
               <div className="flex items-center justify-between mb-3 px-4">
-                <h3 className="text-sm font-bold text-slate-800">我的歌单</h3>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-dark-800">我的歌单</h3>
                 <button
                   onClick={() => setShowCreatePlaylist(true)}
                   className="w-7 h-7 rounded-lg bg-brand-500 hover:bg-brand-600
@@ -380,19 +400,23 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               {playlists.map((playlist) => (
                 <div
                   key={playlist.id}
-                  className={`group relative transition-all duration-700 cursor-pointer rounded-xl py-3 flex items-center
+                  className={`group relative cursor-pointer rounded-xl py-3 flex items-center
                             ${isCollapsed ? 'px-2 justify-center' : 'px-4'}`}
                   style={{
-                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    transitionProperty: 'padding',
+                    transitionDuration: '0.7s'
                   }}
                   onClick={() => console.log('打开歌单:', playlist.name)}
                 >
                   {/* 歌单图标 */}
                   <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${playlist.color} 
                                 flex items-center justify-center text-white text-xs 
-                                shadow-sm flex-shrink-0 transition-all duration-700`}
+                                shadow-sm flex-shrink-0`}
                        style={{
-                         transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                         transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                         transitionProperty: 'transform',
+                         transitionDuration: '0.7s'
                        }}>
                     {playlist.icon}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 
@@ -407,19 +431,21 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                   
                   {/* 歌单信息容器 */}
                   <div 
-                    className={`overflow-hidden transition-all duration-700 ${
+                    className={`overflow-hidden ${
                       isCollapsed 
                         ? 'max-w-0 opacity-0 ml-0' 
                         : 'max-w-[200px] opacity-100 ml-3 flex-1'
                     }`}
                     style={{
-                      transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                      transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      transitionProperty: 'max-width, opacity, margin-left',
+                      transitionDuration: '0.7s'
                     }}
                   >
                     <div className="min-w-0 flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h4 className="font-medium text-slate-800 text-sm truncate leading-tight whitespace-nowrap">
+                          <h4 className="font-medium text-slate-800 dark:text-dark-800 text-sm truncate leading-tight whitespace-nowrap">
                             {playlist.name}
                           </h4>
                           {playlist.isPrivate && (
@@ -428,7 +454,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                             </svg>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 leading-tight whitespace-nowrap">
+                        <p className="text-xs text-slate-500 dark:text-dark-600 leading-tight whitespace-nowrap">
                           {playlist.trackCount} 首
                         </p>
                       </div>
@@ -458,23 +484,29 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
 
       
       {/* 底部工具栏 */}
-      <div className={`absolute bottom-4 transition-all duration-700 ${
+      <div className={`absolute bottom-4 ${
         isCollapsed ? 'left-4' : 'left-6 right-6'
       }`}
       style={{
         transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        transitionProperty: 'left, right',
+        transitionDuration: '0.7s'
       }}>
         <div className={`flex items-center gap-2 p-2 rounded-full
                         glass-surface backdrop-blur-md border border-white/30 shadow-lg
-                        transition-all duration-700 ${
-                          isCollapsed ? 'w-12 justify-center' : 'w-auto justify-center'
-                        }`}>
+                        ${isCollapsed ? 'w-12 justify-center' : 'w-auto justify-center'
+                        }`}
+                        style={{
+                          transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                          transitionProperty: 'width',
+                          transitionDuration: '0.7s'
+                        }}>
           
           {/* 收缩/展开按钮 */}
           <button
             onClick={toggleCollapse}
             className="w-8 h-8 rounded-full flex items-center justify-center
-                     text-slate-600 hover:text-slate-800 hover:bg-white/50
+                     text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
                      transition-all duration-300 group"
             title={isCollapsed ? '展开侧边栏' : '收缩侧边栏'}
           >
@@ -503,8 +535,8 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                 className={`w-8 h-8 rounded-full flex items-center justify-center
                          transition-all duration-300
                          ${currentPage === 'settings'
-                           ? 'text-brand-600 bg-brand-100'
-                           : 'text-slate-600 hover:text-slate-800 hover:bg-white/50'
+                           ? 'text-brand-600 bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400'
+                           : 'text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg'
                          }`}
                 title="设置"
               >
@@ -517,7 +549,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               {/* 搜索按钮 */}
               <button
                 className="w-8 h-8 rounded-full flex items-center justify-center
-                         text-slate-600 hover:text-slate-800 hover:bg-white/50
+                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
                          transition-all duration-300"
                 title="搜索歌单"
               >
@@ -529,7 +561,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               {/* 更多操作按钮 */}
               <button
                 className="w-8 h-8 rounded-full flex items-center justify-center
-                         text-slate-600 hover:text-slate-800 hover:bg-white/50
+                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
                          transition-all duration-300"
                 title="更多操作"
               >

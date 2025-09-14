@@ -18,11 +18,13 @@ interface FavoritesViewProps {
     intensity: number;
     radius: number;
   };
+  selectedTrackId?: number;
 }
 
 export default function FavoritesView({ 
   onTrackSelect, 
-  membraneSettings = { enabled: true, intensity: 1, radius: 1 } 
+  membraneSettings = { enabled: true, intensity: 1, radius: 1 },
+  selectedTrackId
 }: FavoritesViewProps) {
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -237,6 +239,7 @@ export default function FavoritesView({
         tracks={favorites}
         onTrackSelect={onTrackSelect}
         isLoading={isLoading}
+        selectedTrackId={selectedTrackId}
         blurBackdropSettings={{
           enabled: membraneSettings.enabled,
           intensity: membraneSettings.intensity === 1 ? 'medium' : membraneSettings.intensity > 1 ? 'high' : 'low',

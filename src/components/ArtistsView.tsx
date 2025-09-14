@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 interface Track {
   id: number;
@@ -22,6 +22,33 @@ interface ArtistsViewProps {
 }
 
 export default function ArtistsView({ tracks, onTrackSelect, isLoading }: ArtistsViewProps) {
+  // 自适应密度：控制卡片间距、头像尺寸与字号
+  const [avatarSize, setAvatarSize] = useState<number>(56);
+  const [cardPadding, setCardPadding] = useState<number>(16);
+  const [titleSize, setTitleSize] = useState<number>(14);
+  const [subSize, setSubSize] = useState<number>(12);
+
+  const computeDensity = () => {
+    const vh = window.innerHeight || 900;
+    const dpr = window.devicePixelRatio || 1;
+    const eff = vh * dpr;
+    if (eff >= 3000) {
+      setAvatarSize(48); setCardPadding(12); setTitleSize(13); setSubSize(11);
+    } else if (eff >= 2200) {
+      setAvatarSize(52); setCardPadding(14); setTitleSize(13); setSubSize(11);
+    } else if (eff >= 1600) {
+      setAvatarSize(56); setCardPadding(16); setTitleSize(14); setSubSize(12);
+    } else {
+      setAvatarSize(60); setCardPadding(18); setTitleSize(14); setSubSize(12);
+    }
+  };
+
+  useEffect(() => {
+    computeDensity();
+    const onResize = () => computeDensity();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const artists = useMemo(() => {
     const artistMap = new Map<string, Artist>();
 
@@ -126,31 +153,37 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
   const [expandedArtist, setExpandedArtist] = useState<string | null>(null);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div
+      className="grid gap-4"
+      style={{
+        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))'
+      }}
+    >
       {artists.map((artist) => (
-        <div key={artist.name} className="glass-surface rounded-2xl p-6 glass-interactive hover:shadow-lg transition-all duration-300">
+        <div key={artist.name} className="glass-surface rounded-2xl glass-interactive hover:shadow-lg transition-all duration-300"
+             style={{ padding: cardPadding }}>
           
           {/* 艺术家头像区域 */}
           <div className="text-center mb-6">
-            <div className="w-20 h-20 rounded-full mx-auto mb-4 overflow-hidden shadow-lg">
+            <div className="rounded-full mx-auto mb-3 overflow-hidden shadow-lg" style={{ width: avatarSize, height: avatarSize }}>
               <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 flex items-center justify-center relative">
                 {/* 艺术家首字母 */}
-                <span className="text-white text-2xl font-bold">
+                <span className="text-white font-bold" style={{ fontSize: Math.max(avatarSize * 0.38, 16) }}>
                   {artist.name.charAt(0).toUpperCase()}
                 </span>
                 {/* 音乐图标装饰 */}
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300">
-                  <svg className="w-8 h-8 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="text-white/80" style={{ width: avatarSize * 0.35, height: avatarSize * 0.35 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
               </div>
             </div>
             
-            <h3 className="text-lg font-bold text-contrast-primary mb-2 truncate" title={artist.name}>
+            <h3 className="font-bold text-contrast-primary mb-1 truncate" style={{ fontSize: titleSize }} title={artist.name}>
               {artist.name}
             </h3>
-            <p className="text-sm text-contrast-secondary flex items-center justify-center gap-1">
+            <p className="text-contrast-secondary flex items-center justify-center gap-1" style={{ fontSize: subSize }}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
@@ -159,7 +192,7 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
           </div>
 
           {/* 操作按钮区域 */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {/* 播放全部按钮 */}
             <button
               onClick={() => {
@@ -168,18 +201,18 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
                   onTrackSelect(artist.tracks[0]); // 播放第一首歌
                 }
               }}
-              className="w-full glass-interactive flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 transition-all duration-300"
+              className="w-full glass-interactive flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/10 transition-all duration-300"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
-              <span className="font-medium text-contrast-primary">播放全部</span>
+              <span className="font-medium text-contrast-primary" style={{ fontSize: subSize }}>播放全部</span>
             </button>
 
             {/* 展开/收起歌曲列表按钮 */}
             <button
               onClick={() => setExpandedArtist(expandedArtist === artist.name ? null : artist.name)}
-              className="w-full glass-interactive flex items-center justify-center gap-2 py-2 px-4 rounded-xl hover:bg-white/5 border border-white/5 transition-all duration-300"
+              className="w-full glass-interactive flex items-center justify-center gap-2 py-2 px-3 rounded-xl hover:bg-white/5 border border-white/5 transition-all duration-300"
             >
               <span className="text-sm text-contrast-secondary">歌曲列表</span>
               <svg 
@@ -197,13 +230,13 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
 
           {/* 可展开的歌曲列表 */}
           {expandedArtist === artist.name && (
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
                 {artist.tracks.map((track, index) => (
                   <button
                     key={track.id}
                     type="button"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass-interactive text-left hover:bg-white/5 group transition-all duration-200"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg glass-interactive text-left hover:bg-white/5 group transition-all duration-200"
                     onClick={() => {
                       console.log('🎵 ArtistsView - 播放曲目:', track);
                       onTrackSelect(track);
@@ -211,25 +244,25 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
                     title={track.title || '未知标题'}
                   >
                     {/* 序号 */}
-                    <span className="text-xs text-contrast-secondary min-w-[20px] text-center group-hover:text-contrast-primary transition-colors">
+                    <span className="text-[11px] text-contrast-secondary min-w-[18px] text-center group-hover:text-contrast-primary transition-colors">
                       {(index + 1).toString().padStart(2, '0')}
                     </span>
                     
                     {/* 播放图标 */}
-                    <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500/20 transition-all duration-200">
-                      <svg className="w-3 h-3 text-contrast-secondary group-hover:text-blue-400 transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                    <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500/20 transition-all duration-200">
+                      <svg className="w-2.5 h-2.5 text-contrast-secondary group-hover:text-blue-400 transition-colors" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </div>
                     
                     {/* 歌曲标题 */}
-                    <span className="truncate text-sm text-contrast-primary font-medium flex-1">
+                    <span className="truncate text-[13px] text-contrast-primary font-medium flex-1">
                       {track.title || '未知标题'}
                     </span>
                     
                     {/* 时长 */}
                     {track.duration_ms && (
-                      <span className="text-xs text-contrast-secondary whitespace-nowrap">
+                      <span className="text-[11px] text-contrast-secondary whitespace-nowrap">
                         {Math.floor(track.duration_ms / 60000)}:{String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
                       </span>
                     )}

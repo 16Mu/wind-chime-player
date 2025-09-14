@@ -33,6 +33,14 @@ interface LibraryPageProps {
     intensity: number;
     radius: number;
   };
+  // 当前选中的曲目，用于列表高亮
+  selectedTrackId?: number;
+  // 悬停动画设置
+  hoverAnimationSettings?: {
+    enabled: boolean;
+    range: number;
+    displacement: number;
+  };
 }
 
 export default function LibraryPage({ 
@@ -44,7 +52,9 @@ export default function LibraryPage({
   isCached,
   onSearch,
   onRefresh,
-  membraneSettings = { enabled: true, intensity: 1, radius: 1 }
+  membraneSettings = { enabled: true, intensity: 1, radius: 1 },
+  selectedTrackId,
+  hoverAnimationSettings = { enabled: true, range: 2, displacement: 8 }
 }: LibraryPageProps) {
   const [isScanning, setIsScanning] = useState(false);  // 是否正在扫描
   const [scanProgress, setScanProgress] = useState<{
@@ -370,12 +380,14 @@ export default function LibraryPage({
                   tracks={tracks} 
                   onTrackSelect={onTrackSelect} 
                   isLoading={isLoading && !isCached}
+                  selectedTrackId={selectedTrackId}
                   showFavoriteButtons={true}
                   blurBackdropSettings={{
                     enabled: membraneSettings.enabled,
                     intensity: membraneSettings.intensity === 1 ? 'medium' : membraneSettings.intensity > 1 ? 'high' : 'low',
                     opacity: 0.8
                   }}
+                  hoverAnimationSettings={hoverAnimationSettings}
                 />
               )}
               {activeTab === 'artists' && (

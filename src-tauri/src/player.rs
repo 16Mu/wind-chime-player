@@ -417,10 +417,11 @@ impl Player {
                     Ok(sink) => {
                         log::info!("✅ Successfully created sink with reinitialized audio system");
                         
-                        // 这里有一个架构问题：新的stream无法存储在self中
-                        // 作为紧急修复，我们暂时泄漏这个stream的内存来保持其存活
+                        // 警告：这是一个临时的内存泄漏解决方案
+                        // 在程序正常关闭时，操作系统会回收这些资源
+                        // 但这可能导致异常退出代码，需要后续架构改进
                         std::mem::forget(fresh_stream);
-                        log::warn!("Leaking OutputStream memory to keep audio alive - needs architectural fix");
+                        log::warn!("临时泄漏 OutputStream 内存以保持音频可用 - 可能影响程序退出代码");
                         
                         return Ok(sink);
                     }
@@ -929,13 +930,17 @@ impl Player {
     }
 
     fn stop(&self) -> Result<()> {
-        log::info!("Stopping playback");
+        log::info!("正在停止播放...");
         
-        // Stop the audio sink
+        // Stop the audio sink with proper cleanup
         {
             let mut sink = self.sink.lock().unwrap();
             if let Some(current_sink) = sink.take() {
+                // 先暂停，然后停止，确保音频资源正确释放
+                current_sink.pause();
+                std::thread::sleep(std::time::Duration::from_millis(10));
                 current_sink.stop();
+                log::info!("音频sink已停止");
             }
         }
 
@@ -954,6 +959,7 @@ impl Player {
         
         let _ = self.event_tx.send(PlayerEvent::StateChanged(state_clone));
         let _ = self.event_tx.send(PlayerEvent::TrackChanged(None));
+        log::info!("播放器已完全停止");
         Ok(())
     }
 

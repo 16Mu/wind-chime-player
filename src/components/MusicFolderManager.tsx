@@ -172,19 +172,24 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
     <div className={`glass-surface rounded-lg overflow-hidden ${className}`}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 active:scale-[0.98] transition-all duration-200 group"
+        className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 dark:hover:bg-dark-200/50 group"
         style={{
+          transitionProperty: 'background-color, transform',
+          transitionDuration: '0.2s',
           transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
         }}
+        onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
+        onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
       >
-        <div className="text-left">
-          <div className="font-semibold text-slate-900 mb-1 flex items-center gap-3">
+        <div className="text-left flex-1 min-w-0">
+          <div className="font-semibold text-slate-900 dark:text-dark-900 mb-1 flex items-center gap-3 truncate">
             <svg className="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
             音乐库管理
           </div>
-          <div className="text-sm text-slate-600">
+          <div className="text-sm text-slate-600 dark:text-dark-700 line-clamp-2">
             {isLoading ? '加载中...' : (
               isScanning ? '正在扫描文件夹...' : (
                 hasFolders ? 
@@ -198,16 +203,19 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {/* 状态指示 */}
           <div 
             className={`
-              px-2 py-1 rounded-full text-xs font-medium transition-all duration-300
+              px-2 py-1 rounded-full text-xs font-medium
               ${isScanning
-                ? 'bg-blue-100 text-blue-700 scale-100'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : hasFolders 
-                ? 'bg-green-100 text-green-700 scale-100' 
-                : 'bg-slate-100 text-slate-600 scale-95'
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+                : 'bg-slate-100 dark:bg-dark-200 text-slate-600 dark:text-dark-600'
               }
             `}
             style={{
-              transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+              transitionProperty: 'background-color, color, transform',
+              transitionDuration: '0.3s',
+              transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+              transform: (isScanning || hasFolders) ? 'scale(1)' : 'scale(0.95)'
             }}
           >
             {isLoading ? '...' : (
@@ -225,10 +233,12 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {/* 展开/收起箭头 */}
           <div 
             className={`
-              transition-all duration-300 text-slate-400
+              text-slate-400 dark:text-dark-600
               ${isExpanded ? 'rotate-180' : 'group-hover:text-brand-500'}
             `}
             style={{
+              transitionProperty: 'transform, color',
+              transitionDuration: '0.3s',
               transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
             }}
           >
@@ -241,26 +251,28 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
 
       {/* 展开的内容区域 */}
       <div 
-        className={`
-          transition-all duration-300 overflow-hidden
-          ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}
-        `}
+        className={`overflow-hidden`}
         style={{
-          transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+          transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+          transitionProperty: 'max-height, opacity',
+          transitionDuration: '0.4s',
+          maxHeight: isExpanded ? '600px' : '0px',
+          opacity: isExpanded ? 1 : 0,
+          willChange: 'max-height, opacity'
         }}
       >
         <div className="px-4 pb-4 space-y-3">
-          <div className="h-px bg-slate-200"></div>
+          <div className="h-px bg-slate-200 dark:bg-dark-500"></div>
           
           {/* 无文件夹状态 */}
           {!hasFolders && !isLoading && (
             <div className="text-center py-6">
-              <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-dark-200 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-slate-400 dark:text-dark-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
               </div>
-              <p className="text-sm text-slate-600 mb-4">还未添加任何音乐文件夹</p>
+              <p className="text-sm text-slate-600 dark:text-dark-600 mb-4">还未添加任何音乐文件夹</p>
               <button
                 onClick={handleFolderSelect}
                 disabled={isScanning}
@@ -289,22 +301,22 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {/* 有文件夹状态 */}
           {hasFolders && !isLoading && (
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700 mb-3">已导入的文件路径：</div>
+              <div className="text-sm font-medium text-slate-700 dark:text-dark-700 mb-3">已导入的文件路径：</div>
               
               {/* 文件夹路径列表 */}
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {musicFolders.map((folder, index) => (
                   <div
                     key={index}
-                    className="group relative flex items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors duration-200"
+                    className="group relative flex items-center gap-3 p-3 bg-slate-50 dark:bg-dark-200 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-300 transition-colors duration-200"
                   >
-                    <div className="w-8 h-8 bg-brand-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900 truncate" title={folder}>
+                      <div className="text-sm font-medium text-slate-900 dark:text-dark-900 truncate" title={folder}>
                         {folder}
                       </div>
                     </div>
@@ -331,14 +343,14 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
               </div>
               
               {/* 添加文件夹按钮 */}
-              <div className="pt-2 border-t border-slate-200">
+              <div className="pt-2 border-t border-slate-200 dark:border-dark-500">
                 <button
                   onClick={handleFolderSelect}
                   disabled={isScanning}
                   className={`w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg transition-all duration-200 ${
                     isScanning 
-                      ? 'border-slate-200 text-slate-400 cursor-not-allowed opacity-50' 
-                      : 'border-slate-300 text-slate-600 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50/50'
+                      ? 'border-slate-200 dark:border-dark-500 text-slate-400 dark:text-dark-600 cursor-not-allowed opacity-50' 
+                      : 'border-slate-300 dark:border-dark-500 text-slate-600 dark:text-dark-600 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 hover:bg-brand-50/50 dark:hover:bg-brand-900/20'
                   }`}
                   title={isScanning ? '正在扫描中，请稍候...' : '添加新的音乐文件夹'}
                 >
@@ -365,12 +377,12 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {/* 加载状态 */}
           {isLoading && (
             <div className="text-center py-6">
-              <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-slate-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-dark-200 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-slate-400 dark:text-dark-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </div>
-              <p className="text-sm text-slate-600">加载音乐文件夹列表...</p>
+              <p className="text-sm text-slate-600 dark:text-dark-600">加载音乐文件夹列表...</p>
             </div>
           )}
         </div>

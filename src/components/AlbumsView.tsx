@@ -25,6 +25,33 @@ interface AlbumsViewProps {
 }
 
 export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsViewProps) {
+  // 自适应密度：专辑卡片更紧凑
+  const [coverSize, setCoverSize] = useState<number>(64);
+  const [cardPadding, setCardPadding] = useState<number>(16);
+  const [titleSize, setTitleSize] = useState<number>(14);
+  const [subSize, setSubSize] = useState<number>(12);
+
+  const computeDensity = () => {
+    const vh = window.innerHeight || 900;
+    const dpr = window.devicePixelRatio || 1;
+    const eff = vh * dpr;
+    if (eff >= 3000) {
+      setCoverSize(56); setCardPadding(12); setTitleSize(13); setSubSize(11);
+    } else if (eff >= 2200) {
+      setCoverSize(60); setCardPadding(14); setTitleSize(13); setSubSize(11);
+    } else if (eff >= 1600) {
+      setCoverSize(64); setCardPadding(16); setTitleSize(14); setSubSize(12);
+    } else {
+      setCoverSize(68); setCardPadding(18); setTitleSize(14); setSubSize(12);
+    }
+  };
+
+  useEffect(() => {
+    computeDensity();
+    const onResize = () => computeDensity();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [albumCovers, setAlbumCovers] = useState<Map<string, string>>(new Map());
   // 封面刷新触发器
   const [coverRefreshTrigger, setCoverRefreshTrigger] = useState(0);
@@ -187,11 +214,16 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div
+      className="grid gap-4"
+      style={{
+        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))'
+      }}
+    >
       {albums.map((album) => (
-        <div key={`${album.name}::${album.artist}`} className="glass-surface rounded-2xl p-6 glass-interactive hover:shadow-lg transition-all duration-300">
+        <div key={`${album.name}::${album.artist}`} className="glass-surface rounded-2xl glass-interactive hover:shadow-lg transition-all duration-300" style={{ padding: cardPadding }}>
           <div className="text-center mb-4">
-            <div className="w-20 h-20 rounded-xl mx-auto mb-4 overflow-hidden shadow-lg">
+            <div className="rounded-xl mx-auto mb-3 overflow-hidden shadow-lg" style={{ width: coverSize, height: coverSize }}>
               {albumCovers.get(`${album.name}::${album.artist}`) ? (
                 <img 
                   src={albumCovers.get(`${album.name}::${album.artist}`)}
@@ -213,33 +245,33 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
                 </svg>
               </div>
             </div>
-            <h3 className="text-lg font-bold text-contrast-primary mb-1 truncate" title={album.name}>
+            <h3 className="font-bold text-contrast-primary mb-1 truncate" style={{ fontSize: titleSize }} title={album.name}>
               {album.name}
             </h3>
-            <p className="text-sm text-contrast-secondary truncate mb-2" title={album.artist}>
+            <p className="text-contrast-secondary truncate mb-2" style={{ fontSize: subSize }} title={album.artist}>
               {album.artist}
             </p>
-            <p className="text-xs text-contrast-tertiary">
+            <p className="text-contrast-tertiary" style={{ fontSize: Math.max(subSize - 1, 10) }}>
               {album.trackCount} 首歌曲
             </p>
           </div>
 
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+          <div className="space-y-1.5 max-h-44 overflow-y-auto">
             {album.tracks.slice(0, 5).map((track) => (
               <div
                 key={track.id}
-                className="flex items-center justify-between p-3 rounded-lg glass-surface-subtle glass-interactive cursor-pointer hover:bg-surface-secondary transition-colors group"
+                className="flex items-center justify-between p-2.5 rounded-lg glass-surface-subtle glass-interactive cursor-pointer hover:bg-surface-secondary transition-colors group"
                 onClick={() => {
                   console.log('🎵 AlbumsView - 播放曲目:', track);
                   onTrackSelect(track);
                 }}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <svg className="w-4 h-4 text-slate-400 group-hover:text-purple-600 transition-colors flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600 transition-colors flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-contrast-primary text-sm truncate group-hover:text-purple-600 transition-colors">
+                    <p className="font-medium text-contrast-primary text-[13px] truncate group-hover:text-purple-600 transition-colors">
                       {track.title || '未知标题'}
                     </p>
                   </div>
@@ -249,7 +281,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
             
             {album.tracks.length > 5 && (
               <div className="text-center py-2">
-                <span className="text-xs text-contrast-secondary">
+                <span className="text-[11px] text-contrast-secondary">
                   还有 {album.tracks.length - 5} 首歌曲...
                 </span>
               </div>
