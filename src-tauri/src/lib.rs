@@ -3,15 +3,26 @@ use std::sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}};
 use tauri::{AppHandle, Emitter, Manager, State};
 use anyhow::Result;
 
-mod player;
+mod player; // 新的模块化player（已完成重构）
+mod player_adapter; // PlayerCore适配器
 mod library;
 mod db;
 mod lyrics;
+mod music_source; // 新增：音乐源抽象层
+mod webdav; // 新增：WebDAV客户端模块
+mod ftp; // 新增：FTP客户端模块
+mod config; // 新增：配置管理模块
 
-use player::{Player, PlayerCommand, PlayerEvent, Track, RepeatMode};
+// 使用新的PlayerCore（通过适配器）
+use player::{PlayerCommand, PlayerEvent, Track, RepeatMode};
+use player_adapter::PlayerAdapter;
 use library::{Library, LibraryCommand, LibraryEvent};
 use db::{Database, Lyrics};
 use lyrics::{LyricsParser, ParsedLyrics};
+use webdav::WebDAVClient;
+use webdav::types::{WebDAVConfig, WebDAVFileInfo};
+use ftp::FTPClient;
+use ftp::types::{FTPConfig, FTPFileInfo};
 
 // Global state
 static PLAYER_TX: OnceLock<Sender<PlayerCommand>> = OnceLock::new();
@@ -19,19 +30,37 @@ static LIBRARY_TX: OnceLock<Sender<LibraryCommand>> = OnceLock::new();
 static SHUTDOWN_SIGNAL: AtomicBool = AtomicBool::new(false);
 
 struct AppState {
-    player_tx: Sender<PlayerCommand>,
-    library_tx: Sender<LibraryCommand>,
     player_rx: Arc<Mutex<Receiver<PlayerEvent>>>,
     library_rx: Arc<Mutex<Receiver<LibraryEvent>>>,
     db: Arc<Mutex<Database>>,
+    player_adapter: Arc<PlayerAdapter>,
 }
 
 // Tauri Commands
 #[tauri::command]
 async fn player_play(track_id: i64) -> Result<(), String> {
-    let tx = PLAYER_TX.get().ok_or("Player not initialized")?;
+    println!("🎵 [COMMAND] player_play 被调用: track_id={}", track_id);
+    log::info!("🎵 [COMMAND] player_play 被调用: track_id={}", track_id);
+    
+    let tx = PLAYER_TX.get().ok_or_else(|| {
+        println!("❌ [COMMAND] PLAYER_TX 未初始化！");
+        log::error!("❌ [COMMAND] PLAYER_TX 未初始化！");
+        "Player not initialized".to_string()
+    })?;
+    
+    println!("📤 [COMMAND] 发送 Play 命令到 PlayerAdapter...");
+    log::info!("📤 [COMMAND] 发送 Play 命令到 PlayerAdapter...");
+    
     tx.send(PlayerCommand::Play(track_id))
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            println!("❌ [COMMAND] 发送命令失败: {}", e);
+            log::error!("❌ [COMMAND] 发送命令失败: {}", e);
+            e.to_string()
+        })?;
+    
+    println!("✅ [COMMAND] Play 命令已发送");
+    log::info!("✅ [COMMAND] Play 命令已发送");
+    Ok(())
 }
 
 #[tauri::command]
@@ -99,6 +128,151 @@ async fn player_load_playlist(tracks: Vec<Track>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+// 🎵 音质增强命令
+// TODO: 需要先定义 AudioEnhancementSettings 类型
+/*
+#[tauri::command]
+async fn get_audio_enhancement_settings() -> Result<AudioEnhancementSettings, String> {
+    // TODO: 实现获取音质增强设置
+    Ok(AudioEnhancementSettings::default())
+}
+
+#[tauri::command]
+async fn set_audio_enhancement_settings(settings: AudioEnhancementSettings) -> Result<(), String> {
+    // TODO: 实现设置音质增强
+    log::info!("🎵 收到音质增强设置更新: enabled={}", settings.enabled);
+    Ok(())
+}
+*/
+
+// 🔧 音频设备诊断和修复命令
+
+#[tauri::command]
+async fn diagnose_audio_system() -> Result<String, String> {
+    use std::process::Command;
+    
+    let mut diagnostics = Vec::new();
+    diagnostics.push("=== WindChime Player 音频系统诊断 ===".to_string());
+    
+    // 1. 检查Windows音频服务状态
+    if let Ok(output) = Command::new("sc")
+        .args(&["query", "audiosrv"])
+        .output()
+    {
+        let status = String::from_utf8_lossy(&output.stdout);
+        if status.contains("RUNNING") {
+            diagnostics.push("✅ Windows Audio服务运行正常".to_string());
+        } else {
+            diagnostics.push("❌ Windows Audio服务未运行".to_string());
+        }
+    }
+    
+    // 2. 检查音频进程
+    if let Ok(output) = Command::new("tasklist")
+        .args(&["/FI", "IMAGENAME eq audiodg.exe"])
+        .output()
+    {
+        let processes = String::from_utf8_lossy(&output.stdout);
+        if processes.contains("audiodg.exe") {
+            diagnostics.push("✅ Windows音频引擎进程运行正常".to_string());
+        } else {
+            diagnostics.push("❌ Windows音频引擎进程未找到".to_string());
+        }
+    }
+    
+    // 3. 检查可能冲突的音频应用
+    let audio_apps = ["spotify.exe", "chrome.exe", "firefox.exe", "vlc.exe", "wmplayer.exe"];
+    for app in &audio_apps {
+        if let Ok(output) = Command::new("tasklist")
+            .args(&["/FI", &format!("IMAGENAME eq {}", app)])
+            .output()
+        {
+            let processes = String::from_utf8_lossy(&output.stdout);
+            if processes.contains(app) {
+                diagnostics.push(format!("⚠️ 发现可能冲突的应用: {}", app));
+            }
+        }
+    }
+    
+    // 4. 检查Senary音频应用
+    if let Ok(output) = Command::new("tasklist")
+        .args(&["/FI", "IMAGENAME eq SenaryAudioApp*"])
+        .output()
+    {
+        let processes = String::from_utf8_lossy(&output.stdout);
+        if processes.contains("SenaryAudioApp") {
+            diagnostics.push("⚠️ 检测到Senary音频增强软件，可能造成设备独占".to_string());
+        }
+    }
+    
+    diagnostics.push("".to_string());
+    diagnostics.push("=== 建议的解决方案 ===".to_string());
+    diagnostics.push("1. 关闭其他音频应用".to_string());
+    diagnostics.push("2. 重新插拔耳机设备".to_string());
+    diagnostics.push("3. 在Windows设置中切换默认音频设备".to_string());
+    diagnostics.push("4. 尝试重启WindChime Player".to_string());
+    diagnostics.push("5. 如果问题持续，请尝试重启计算机".to_string());
+    
+    Ok(diagnostics.join("\n"))
+}
+
+#[tauri::command]
+async fn fix_audio_system() -> Result<String, String> {
+    use std::process::Command;
+    
+    log::info!("🔧 用户请求修复音频系统");
+    
+    // 尝试重启Windows音频服务
+    let mut results = Vec::new();
+    
+    // 1. 停止音频服务
+    match Command::new("net")
+        .args(&["stop", "audiosrv"])
+        .output()
+    {
+        Ok(_) => {
+            results.push("✅ 已停止Windows Audio服务".to_string());
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+        }
+        Err(e) => {
+            results.push(format!("❌ 停止音频服务失败: {}", e));
+        }
+    }
+    
+    // 2. 启动音频服务
+    match Command::new("net")
+        .args(&["start", "audiosrv"])
+        .output()
+    {
+        Ok(_) => {
+            results.push("✅ 已启动Windows Audio服务".to_string());
+        }
+        Err(e) => {
+            results.push(format!("❌ 启动音频服务失败: {}", e));
+        }
+    }
+    
+    // 3. 等待服务稳定
+    std::thread::sleep(std::time::Duration::from_millis(3000));
+    results.push("⏱️ 等待音频服务稳定...".to_string());
+    
+    results.push("".to_string());
+    results.push("🎵 音频系统修复完成！请尝试重新播放音乐。".to_string());
+    
+    Ok(results.join("\n"))
+}
+
+#[tauri::command]
+async fn reset_audio_device() -> Result<String, String> {
+    log::info!("🔧 用户请求重置音频设备");
+    
+    let tx = PLAYER_TX.get().ok_or("Player not initialized")?;
+    tx.send(PlayerCommand::ResetAudioDevice)
+        .map_err(|e| e.to_string())?;
+    
+    Ok("🎵 音频设备重置命令已发送，请稍候...".to_string())
+}
+
 #[tauri::command]
 async fn library_scan(paths: Vec<String>) -> Result<(), String> {
     let tx = LIBRARY_TX.get().ok_or("Library not initialized")?;
@@ -108,9 +282,17 @@ async fn library_scan(paths: Vec<String>) -> Result<(), String> {
 
 #[tauri::command]
 async fn library_get_tracks() -> Result<(), String> {
+    log::info!("📞 前端调用library_get_tracks命令");
     let tx = LIBRARY_TX.get().ok_or("Library not initialized")?;
-    tx.send(LibraryCommand::GetTracks)
-        .map_err(|e| e.to_string())
+    log::info!("📨 向Library发送GetTracks命令...");
+    let send_result = tx.send(LibraryCommand::GetTracks)
+        .map_err(|e| e.to_string());
+    if send_result.is_ok() {
+        log::info!("✅ GetTracks命令已发送");
+    } else {
+        log::error!("❌ GetTracks命令发送失败: {:?}", send_result);
+    }
+    send_result
 }
 
 #[tauri::command]
@@ -548,6 +730,208 @@ async fn debug_audio_system() -> Result<String, String> {
     Ok(result)
 }
 
+// ============================================================
+// WebDAV 命令
+// ============================================================
+
+/// 测试 WebDAV 连接
+#[tauri::command]
+async fn webdav_test_connection(
+    url: String,
+    username: String,
+    password: String,
+) -> Result<String, String> {
+    log::info!("测试 WebDAV 连接: {}", url);
+    
+    let config = WebDAVConfig {
+        server_id: "test".to_string(),
+        name: "测试服务器".to_string(),
+        url,
+        username,
+        password,
+        timeout_seconds: 30,
+        max_redirects: 5,
+        verify_ssl: true,
+        user_agent: "WindChimePlayer/1.0".to_string(),
+    };
+    
+    let client = WebDAVClient::new(config)
+        .map_err(|e| format!("创建 WebDAV 客户端失败: {}", e))?;
+    
+    // 测试获取根目录信息
+    match client.get_file_info("/").await {
+        Ok(file_info) => {
+            Ok(format!(
+                "✅ WebDAV 连接成功！\n服务器: {}\n类型: {}",
+                file_info.name,
+                if file_info.is_directory { "目录" } else { "文件" }
+            ))
+        }
+        Err(e) => Err(format!("❌ WebDAV 连接失败: {}", e)),
+    }
+}
+
+/// 列出 WebDAV 目录
+#[tauri::command]
+async fn webdav_list_directory(
+    url: String,
+    username: String,
+    password: String,
+    path: String,
+) -> Result<Vec<WebDAVFileInfo>, String> {
+    log::info!("列出 WebDAV 目录: {}", path);
+    
+    let config = WebDAVConfig {
+        server_id: "browse".to_string(),
+        name: "浏览服务器".to_string(),
+        url,
+        username,
+        password,
+        timeout_seconds: 30,
+        max_redirects: 5,
+        verify_ssl: true,
+        user_agent: "WindChimePlayer/1.0".to_string(),
+    };
+    
+    let client = WebDAVClient::new(config)
+        .map_err(|e| format!("创建 WebDAV 客户端失败: {}", e))?;
+    
+    match client.list_directory(&path).await {
+        Ok(listing) => Ok(listing.files),
+        Err(e) => Err(format!("列出目录失败: {}", e)),
+    }
+}
+
+/// 获取 WebDAV 文件信息
+#[tauri::command]
+async fn webdav_get_file_info(
+    url: String,
+    username: String,
+    password: String,
+    file_path: String,
+) -> Result<WebDAVFileInfo, String> {
+    log::info!("获取 WebDAV 文件信息: {}", file_path);
+    
+    let config = WebDAVConfig {
+        server_id: "info".to_string(),
+        name: "信息查询".to_string(),
+        url,
+        username,
+        password,
+        timeout_seconds: 30,
+        max_redirects: 5,
+        verify_ssl: true,
+        user_agent: "WindChimePlayer/1.0".to_string(),
+    };
+    
+    let client = WebDAVClient::new(config)
+        .map_err(|e| format!("创建 WebDAV 客户端失败: {}", e))?;
+    
+    match client.get_file_info(&file_path).await {
+        Ok(file_info) => Ok(file_info),
+        Err(e) => Err(format!("获取文件信息失败: {}", e)),
+    }
+}
+
+// ============================================================
+// FTP 命令
+// ============================================================
+
+/// 测试 FTP 连接
+#[tauri::command]
+async fn ftp_test_connection(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    use_tls: bool,
+) -> Result<String, String> {
+    log::info!("测试 FTP 连接: {}:{}", host, port);
+    
+    let config = FTPConfig {
+        server_id: "test".to_string(),
+        name: "测试服务器".to_string(),
+        host,
+        port,
+        username,
+        password,
+        use_tls,
+        timeout_seconds: 30,
+    };
+    
+    let client = FTPClient::new(config)
+        .map_err(|e| format!("创建 FTP 客户端失败: {}", e))?;
+    
+    match client.test_connection().await {
+        Ok(result) => Ok(result),
+        Err(e) => Err(format!("❌ FTP 连接失败: {}", e)),
+    }
+}
+
+/// 列出 FTP 目录
+#[tauri::command]
+async fn ftp_list_directory(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    use_tls: bool,
+    path: String,
+) -> Result<Vec<FTPFileInfo>, String> {
+    log::info!("列出 FTP 目录: {}", path);
+    
+    let config = FTPConfig {
+        server_id: "browse".to_string(),
+        name: "浏览服务器".to_string(),
+        host,
+        port,
+        username,
+        password,
+        use_tls,
+        timeout_seconds: 30,
+    };
+    
+    let client = FTPClient::new(config)
+        .map_err(|e| format!("创建 FTP 客户端失败: {}", e))?;
+    
+    match client.list_directory(&path).await {
+        Ok(listing) => Ok(listing.files),
+        Err(e) => Err(format!("列出目录失败: {}", e)),
+    }
+}
+
+/// 获取 FTP 文件信息
+#[tauri::command]
+async fn ftp_get_file_info(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    use_tls: bool,
+    file_path: String,
+) -> Result<FTPFileInfo, String> {
+    log::info!("获取 FTP 文件信息: {}", file_path);
+    
+    let config = FTPConfig {
+        server_id: "info".to_string(),
+        name: "信息查询".to_string(),
+        host,
+        port,
+        username,
+        password,
+        use_tls,
+        timeout_seconds: 30,
+    };
+    
+    let client = FTPClient::new(config)
+        .map_err(|e| format!("创建 FTP 客户端失败: {}", e))?;
+    
+    match client.get_file_info(&file_path).await {
+        Ok(file_info) => Ok(file_info),
+        Err(e) => Err(format!("获取文件信息失败: {}", e)),
+    }
+}
+
 // 测试命令：直接检查库统计数据
 #[tauri::command]
 async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String> {
@@ -586,6 +970,7 @@ async fn test_library_stats(state: State<'_, AppState>) -> Result<String, String
 }
 
 // 测试命令：直接检查音频文件封面
+#[allow(dead_code)]
 #[tauri::command]
 async fn test_audio_cover(file_path: String) -> Result<String, String> {
     use lofty::{probe::Probe, prelude::*};
@@ -631,13 +1016,47 @@ async fn test_audio_cover(file_path: String) -> Result<String, String> {
     }
 }
 
-// Initialize the application
+// Initialize the application - 异步初始化避免阻塞UI
 fn init_app(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logger
     env_logger::init();
-    log::info!("Initializing WindChime Player");
+    println!("🚀 [INIT] WindChime Player 启动中...");
+    log::info!("🚀 WindChime Player 启动中...");
 
+    let app_handle_clone = app_handle.clone();
+    
+    // 🔥 关键优化：在后台线程异步初始化，避免阻塞主线程和UI
+    tauri::async_runtime::spawn(async move {
+        println!("📦 [INIT] 进入异步初始化函数...");
+        match init_app_async(&app_handle_clone).await {
+            Ok(_) => {
+                println!("✅ [INIT] WindChime Player 初始化完成");
+                log::info!("✅ WindChime Player 初始化完成");
+                // 通知前端初始化完成
+                let _ = app_handle_clone.emit("app-ready", ());
+                println!("📤 [INIT] 已发送 app-ready 事件");
+            }
+            Err(e) => {
+                println!("❌ [INIT] WindChime Player 初始化失败: {}", e);
+                log::error!("❌ WindChime Player 初始化失败: {}", e);
+                // 通知前端初始化失败
+                let _ = app_handle_clone.emit("app-init-error", e.to_string());
+            }
+        }
+    });
+
+    println!("✅ [INIT] UI 线程已就绪，后台初始化进行中...");
+    log::info!("✅ UI 线程已就绪，后台初始化进行中...");
+    Ok(())
+}
+
+// 异步初始化函数 - 在后台执行耗时操作
+async fn init_app_async(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    println!("📦 [INIT] 开始后台初始化...");
+    log::info!("📦 开始后台初始化...");
+    
     // Get app data directory
+    println!("📁 [INIT] 获取应用数据目录...");
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
@@ -645,21 +1064,45 @@ fn init_app(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     // Create app data directory if it doesn't exist
     std::fs::create_dir_all(&app_data_dir)?;
+    println!("✅ [INIT] 应用数据目录已创建");
 
     // Initialize database
+    println!("💾 [INIT] 初始化数据库...");
+    log::info!("💾 初始化数据库...");
     let db_path = app_data_dir.join("windchime.db");
     let db = Arc::new(Mutex::new(Database::new(db_path)?));
-    log::info!("Database initialized");
+    println!("✅ [INIT] 数据库初始化完成");
+    log::info!("✅ 数据库初始化完成");
 
     // Initialize library
+    println!("📚 [INIT] 初始化音乐库...");
+    log::info!("📚 初始化音乐库...");
     let (library, library_tx, library_rx) = Library::new(Arc::clone(&db))?;
     library.run();
-    log::info!("Library initialized");
+    println!("✅ [INIT] 音乐库初始化完成");
+    log::info!("✅ 音乐库初始化完成");
 
-    // Initialize player
-    let (player, player_tx, player_rx, _output_stream) = Player::new()?;
-    player.run();
-    log::info!("Player initialized");
+    // Initialize player（使用新的PlayerCore）
+    println!("🎵 [INIT] 初始化播放器（使用PlayerCore架构）...");
+    log::info!("🎵 [INIT] 初始化播放器（使用PlayerCore架构）...");
+    let player_adapter = PlayerAdapter::new().await
+        .map_err(|e| {
+            println!("❌ [INIT] 播放器初始化失败: {}", e);
+            log::error!("❌ [INIT] 播放器初始化失败: {}", e);
+            format!("播放器初始化失败: {}", e)
+        })?;
+    
+    println!("🎵 [INIT] 获取播放器通道...");
+    let player_tx = player_adapter.command_sender();
+    let player_rx = player_adapter.event_receiver();
+    
+    println!("✅ [INIT] 播放器初始化完成（懒加载，无阻塞）");
+    log::info!("✅ 播放器初始化完成（懒加载，无阻塞）");
+    
+    // 🔧 添加：等待一小段时间确保异步任务启动
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    println!("✅ [INIT] 播放器异步任务已启动");
+    log::info!("✅ 播放器异步任务已启动");
 
     // Store senders in global state
     PLAYER_TX.set(player_tx.clone()).map_err(|_| "Failed to set player sender")?;
@@ -667,18 +1110,17 @@ fn init_app(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     // Store state in Tauri
     let state = AppState {
-        player_tx,
-        library_tx,
         player_rx: Arc::new(Mutex::new(player_rx)),
         library_rx: Arc::new(Mutex::new(library_rx)),
         db,
+        player_adapter: Arc::new(player_adapter),
     };
     app_handle.manage(state);
 
     // Start event listeners
     start_event_listeners(app_handle.clone());
 
-    log::info!("WindChime Player initialization complete");
+    log::info!("🎉 WindChime Player 完全就绪");
     Ok(())
 }
 
@@ -725,6 +1167,28 @@ fn start_event_listeners(app_handle: AppHandle) {
                     PlayerEvent::PlaylistCompleted => {
                         let _ = app_handle_clone.emit("playlist-completed", &());
                     }
+                    PlayerEvent::SeekStarted(position) => {
+                        let _ = app_handle_clone.emit("seek-started", position);
+                    }
+                    PlayerEvent::SeekCompleted { position, elapsed_ms } => {
+                        let _ = app_handle_clone.emit("seek-completed", serde_json::json!({"position": position, "elapsed": elapsed_ms}));
+                    }
+                    PlayerEvent::SeekFailed { position, error } => {
+                        let _ = app_handle_clone.emit("seek-failed", serde_json::json!({"position": position, "error": error}));
+                    }
+                    PlayerEvent::AudioDeviceReady => {
+                        log::info!("🎵 音频设备就绪");
+                        let _ = app_handle_clone.emit("audio-device-ready", ());
+                    }
+                    PlayerEvent::AudioDeviceFailed { error, recoverable } => {
+                        log::error!("❌ 音频设备失败: {} (可恢复: {})", error, recoverable);
+                        let _ = app_handle_clone.emit("audio-device-failed", serde_json::json!({"error": error, "recoverable": recoverable}));
+                    }
+                    PlayerEvent::PreloadCompleted { track_id } => {
+                        log::debug!("🔄 预加载完成: track_id={}", track_id);
+                        // 可选：向前端发送事件，用于显示缓存状态
+                        let _ = app_handle_clone.emit("preload-completed", serde_json::json!({"track_id": track_id}));
+                    }
                 }
             } else {
                 // No events available, sleep briefly
@@ -766,7 +1230,13 @@ fn start_event_listeners(app_handle: AppHandle) {
                         let _ = app_handle.emit("library-scan-complete", &event);
                     }
                     LibraryEvent::TracksLoaded(tracks) => {
-                        let _ = app_handle.emit("library-tracks-loaded", tracks);
+                        log::info!("🔔 后端收到TracksLoaded事件，曲目数: {}", tracks.len());
+                        let emit_result = app_handle.emit("library-tracks-loaded", tracks);
+                        if emit_result.is_ok() {
+                            log::info!("✅ 已向前端发送library-tracks-loaded事件");
+                        } else {
+                            log::error!("❌ 向前端发送library-tracks-loaded事件失败: {:?}", emit_result);
+                        }
                     }
                     LibraryEvent::SearchResults(tracks) => {
                         let _ = app_handle.emit("library-search-results", tracks);
@@ -859,6 +1329,22 @@ pub fn run() {
             debug_audio_system,
             // Album cover commands
             get_album_cover,
+            // Audio enhancement commands
+            // TODO: 取消注释当 AudioEnhancementSettings 类型定义后
+            // get_audio_enhancement_settings,
+            // set_audio_enhancement_settings,
+            // Audio diagnostic commands
+            diagnose_audio_system,
+            fix_audio_system,
+            reset_audio_device,
+            // WebDAV commands
+            webdav_test_connection,
+            webdav_list_directory,
+            webdav_get_file_info,
+            // FTP commands
+            ftp_test_connection,
+            ftp_list_directory,
+            ftp_get_file_info,
             // Test commands
             test_library_stats,
         ])
@@ -872,7 +1358,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 log::info!("程序正在关闭，开始清理资源...");
                 cleanup_resources();

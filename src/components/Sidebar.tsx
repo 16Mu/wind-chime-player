@@ -266,7 +266,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
     >
       {/* 全局激活状态指示器 */}
       <div
-        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-300/50 dark:to-dark-200/50 border border-blue-200/50 dark:border-glass-dark-border shadow-md pointer-events-none z-10 bounce-indicator transition-opacity duration-700 ${
+        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-300/50 dark:to-dark-200/50 border border-blue-200/50 dark:border-card-dark-border shadow-md pointer-events-none z-10 bounce-indicator transition-opacity duration-700 ${
           isCollapsed ? 'left-3 right-3' : 'left-6 right-6'
         }`}
         style={{
@@ -282,7 +282,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
       {/* 全局悬停状态指示器 */}
       {hoveredItem && hoveredItem !== currentPage && (
         <div
-          className={`absolute rounded-xl bg-white/40 dark:bg-glass-dark-bg backdrop-blur-sm border border-white/30 dark:border-glass-dark-border shadow-sm pointer-events-none z-10 ${
+          className={`absolute rounded-xl bg-white/40 dark:bg-card-dark-bg backdrop-blur-sm border border-white/30 dark:border-card-dark-border shadow-sm pointer-events-none z-10 ${
             isCollapsed ? 'left-3 right-3' : 'left-6 right-6'
           }`}
           style={{
@@ -319,8 +319,10 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                 group transform-gpu py-3
                 ${isCollapsed ? 'px-2 justify-center' : 'px-4'}
                 ${currentPage === item.id
-                  ? `text-slate-900 dark:text-dark-900 font-semibold ${hoveredItem === item.id ? 'text-blue-800 dark:text-blue-300' : ''}`
-                  : 'text-slate-700 dark:text-dark-700 hover:text-slate-900 dark:hover:text-dark-900 font-medium'
+                  ? 'text-slate-900 dark:text-dark-900 font-semibold'
+                  : hoveredItem === item.id
+                    ? 'text-blue-600 dark:text-blue-400 font-medium'
+                    : 'text-slate-700 dark:text-dark-700 font-medium'
                 }
               `}
               style={{
@@ -412,7 +414,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                   {/* 歌单图标 */}
                   <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${playlist.color} 
                                 flex items-center justify-center text-white text-xs 
-                                shadow-sm flex-shrink-0`}
+                                shadow-sm flex-shrink-0 group-hover:playlist-icon-hover`}
                        style={{
                          transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
                          transitionProperty: 'transform',
@@ -493,7 +495,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
         transitionDuration: '0.7s'
       }}>
         <div className={`flex items-center gap-2 p-2 rounded-full
-                        glass-surface backdrop-blur-md border border-white/30 shadow-lg
+                        card-surface backdrop-blur-md border border-white/30 shadow-lg
                         ${isCollapsed ? 'w-12 justify-center' : 'w-auto justify-center'
                         }`}
                         style={{
@@ -506,7 +508,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           <button
             onClick={toggleCollapse}
             className="w-8 h-8 rounded-full flex items-center justify-center
-                     text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
+                     text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-card-dark-bg
                      transition-all duration-300 group"
             title={isCollapsed ? '展开侧边栏' : '收缩侧边栏'}
           >
@@ -536,7 +538,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                          transition-all duration-300
                          ${currentPage === 'settings'
                            ? 'text-brand-600 bg-brand-100 dark:bg-brand-900/30 dark:text-brand-400'
-                           : 'text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg'
+                           : 'text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-card-dark-bg'
                          }`}
                 title="设置"
               >
@@ -549,7 +551,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               {/* 搜索按钮 */}
               <button
                 className="w-8 h-8 rounded-full flex items-center justify-center
-                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
+                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-card-dark-bg
                          transition-all duration-300"
                 title="搜索歌单"
               >
@@ -561,7 +563,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
               {/* 更多操作按钮 */}
               <button
                 className="w-8 h-8 rounded-full flex items-center justify-center
-                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-glass-dark-bg
+                         text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/50 dark:hover:bg-card-dark-bg
                          transition-all duration-300"
                 title="更多操作"
               >
@@ -588,9 +590,9 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           />
           
           {/* 弹窗内容 */}
-          <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-xl rounded-2xl 
-                         shadow-2xl border border-white/30 overflow-hidden
-                         animate-in fade-in zoom-in duration-300">
+          <div className="relative w-full max-w-sm bg-white/95 dark:bg-dark-100/95 backdrop-blur-xl rounded-2xl 
+                         shadow-2xl border border-white/30 dark:border-dark-400/30 overflow-hidden
+                         modal-dramatic">
             
             {/* 标题栏 */}
             <div className="flex items-center justify-between p-6 pb-4">

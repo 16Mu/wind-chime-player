@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import ImmersiveLyricsView from './ImmersiveLyricsView';
 import LyricsManager from './LyricsManager';
+import { useToast } from '../contexts/ToastContext';
+import { usePlaybackState, usePlaybackPosition } from '../contexts/PlaybackContext';
 
 interface Track {
   id: number;
@@ -13,28 +15,29 @@ interface Track {
   duration_ms?: number;
 }
 
-interface PlayerState {
-  is_playing: boolean;
-  current_track?: Track;
-  position_ms: number;
-  volume: number;
-  repeat_mode: 'Off' | 'All' | 'One';
-  shuffle: boolean;
-}
+// ✅ PlayerState已迁移到PlaybackContext，不再需要本地定义
 
 interface PlaylistPlayerProps {
   currentTrack: Track | null;
 }
 
 export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
-  const [playerState, setPlayerState] = useState<PlayerState>({
-    is_playing: false,
-    position_ms: 0,
-    volume: 1.0,
-    repeat_mode: 'Off',
-    shuffle: false,
-    current_track: undefined,
-  });
+  const toast = useToast();
+  
+  // ✅ 使用PlaybackContext代替本地state
+  const playbackState = usePlaybackState();
+  const getPosition = usePlaybackPosition();
+  
+  // ✅ 完整的播放器状态现在由PlaybackContext统一管理
+  // 播放器状态完全从Rust端同步，通过'player-state-changed'事件
+  const playerState = {
+    current_track: playbackState.track,
+    is_playing: playbackState.isPlaying,
+    position_ms: getPosition(),
+    volume: playbackState.volume,
+    repeat_mode: playbackState.repeatMode,
+    shuffle: playbackState.shuffle,
+  };
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragPosition, setDragPosition] = useState(0);
@@ -42,12 +45,21 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   
   const transportControlsRef = useRef<HTMLDivElement>(null);
   
+  // 🔊 音量控制状态
+  const [volume, setVolume] = useState(1); // 0-1 范围
+  const [isMuted, setIsMuted] = useState(false);
+  const [previousVolume, setPreviousVolume] = useState(1); // 保存静音前的音量
+  const [isVolumeDragging, setIsVolumeDragging] = useState(false);
+  const volumeSliderRef = useRef<HTMLDivElement>(null);
+  
   
   // 简化状态管理
   
   // 歌词相关状态
   const [showLyrics, setShowLyrics] = useState(false);
   const [showLyricsManager, setShowLyricsManager] = useState(false);
+  const [currentLyric, setCurrentLyric] = useState<string>('');
+  const [lyrics, setLyrics] = useState<Array<{ time: number; text: string }>>([]);
   
   const albumThumbnailRef = useRef<HTMLDivElement>(null);
   
@@ -61,34 +73,39 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 收藏状态
   const [isFavorite, setIsFavorite] = useState(false);
   
-  // 简化布局，移除复杂动画状态
+  // 后端就绪状态
+  const [isAppReady, setIsAppReady] = useState(false);
+  
+  // 动画状态
+  const [shuffleAnimating, setShuffleAnimating] = useState(false);
+  const [repeatAnimating, setRepeatAnimating] = useState(false);
+  const [progressRipples, setProgressRipples] = useState<{x: number; key: number}[]>([]);
+
+  // 等待后端就绪
+  useEffect(() => {
+    if (typeof listen === 'undefined') return;
+
+    const setupReadyListener = async () => {
+      const unlistenAppReady = await listen('app-ready', () => {
+        console.log('✅ PlaylistPlayer：后端就绪');
+        setIsAppReady(true);
+      });
+
+      return () => {
+        if (typeof unlistenAppReady === 'function') unlistenAppReady();
+      };
+    };
+
+    const cleanup = setupReadyListener();
+    return () => {
+      cleanup.then(fn => fn && fn());
+    };
+  }, []);
 
   useEffect(() => {
-    // 设置播放器事件监听器
-    const unlistenStateChanged = listen('player-state-changed', (event: any) => {
-      console.log('🎵 收到播放器状态变化:', event.payload);
-      if (event.payload && typeof event.payload === 'object') {
-        setPlayerState(event.payload);
-      }
-    });
-
-    const unlistenTrackChanged = listen('player-track-changed', (event: any) => {
-      console.log('🎵 收到曲目变化:', event.payload);
-      // 注意：现在event.payload直接是track对象，不需要再访问.payload
-      setPlayerState(prev => ({
-        ...prev,
-        current_track: event.payload,
-      }));
-    });
-
-    const unlistenPositionChanged = listen('player-position-changed', (event: any) => {
-      // 注意：现在event.payload直接是position数字
-      setPlayerState(prev => ({
-        ...prev,
-        position_ms: event.payload,
-      }));
-    });
-
+    // ✅ 移除重复的事件监听 - PlaybackContext已经处理了player-state/track/position-changed
+    // 只保留UI专属的错误处理监听
+    
     const unlistenPlayerError = listen('player-error', (event: any) => {
       console.error('🎵 播放器错误:', event.payload);
       
@@ -107,9 +124,15 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     });
 
     // 监听歌曲完成事件
-    const unlistenTrackCompleted = listen('track-completed', (event: any) => {
+    const unlistenTrackCompleted = listen('track-completed', async (event: any) => {
       console.log('🎵 歌曲播放完成:', event.payload);
-      // 可以在这里添加歌曲完成的UI反馈
+      // 🎵 自动播放下一曲
+      try {
+        await invoke('player_next');
+        console.log('🎵 自动切换到下一曲');
+      } catch (error) {
+        console.error('🎵 自动切换下一曲失败:', error);
+      }
     });
 
     // 监听播放列表完成事件
@@ -120,17 +143,17 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     });
 
     return () => {
-      unlistenStateChanged.then(fn => fn());
-      unlistenTrackChanged.then(fn => fn());
-      unlistenPositionChanged.then(fn => fn());
+      // ✅ 只清理本组件专属的监听器
       unlistenPlayerError.then(fn => fn());
       unlistenTrackCompleted.then(fn => fn());
       unlistenPlaylistCompleted.then(fn => fn());
     };
   }, []);
 
-  // 初始化播放列表
+  // 初始化播放列表（等待后端就绪）
   useEffect(() => {
+    if (!isAppReady) return;
+
     const initializePlaylist = async () => {
       try {
         console.log('🎵 初始化播放列表');
@@ -141,10 +164,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     };
 
     // 延迟初始化，让其他组件先完成加载
-    const timer = setTimeout(initializePlaylist, 1000);
+    const timer = setTimeout(initializePlaylist, 500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAppReady]);
 
   const handlePlay = async () => {
     try {
@@ -226,10 +249,20 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   };
 
 
+  // 🔧 修复：稳定歌词视图的回调函数引用
+  const handleLyricsClose = useCallback(() => {
+    setShowLyrics(false);
+  }, []);
+
+  const handleLyricsError = useCallback((error: string) => {
+    console.error('歌词显示错误:', error);
+  }, []);
+
   const handleSeek = async (positionMs: number) => {
     console.log('🎵 开始跳转到位置:', positionMs, 'ms');
     try {
-      await invoke('player_seek', { positionMs });
+      // 确保传递整数给Rust后端
+      await invoke('player_seek', { positionMs: Math.floor(positionMs) });
       console.log('🎵 跳转命令发送成功');
       
       // If it was playing, ensure it resumes after seek
@@ -243,6 +276,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   };
 
   const handleSetShuffle = async (shuffle: boolean) => {
+    // 触发动画
+    setShuffleAnimating(true);
+    setTimeout(() => setShuffleAnimating(false), 400);
+    
     try {
       await invoke('player_set_shuffle', { shuffle });
       
@@ -256,6 +293,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   };
 
   const handleCycleRepeat = async () => {
+    // 触发动画
+    setRepeatAnimating(true);
+    setTimeout(() => setRepeatAnimating(false), 500);
+    
     try {
       let nextMode: 'Off' | 'All' | 'One';
       switch (playerState.repeat_mode) {
@@ -277,6 +318,55 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     }
   };
 
+  // 🔊 音量控制函数
+  const handleVolumeChange = async (newVolume: number) => {
+    const clampedVolume = Math.max(0, Math.min(1, newVolume));
+    setVolume(clampedVolume);
+    
+    // 如果调整音量且音量大于0，自动取消静音
+    if (clampedVolume > 0 && isMuted) {
+      setIsMuted(false);
+    }
+    
+    // 同步到后端
+    try {
+      await invoke('player_set_volume', { volume: clampedVolume });
+    } catch (error) {
+      console.error('设置音量失败:', error);
+    }
+  };
+
+  // 静音切换
+  const handleToggleMute = () => {
+    if (isMuted) {
+      // 取消静音，恢复之前的音量
+      setIsMuted(false);
+      handleVolumeChange(previousVolume);
+    } else {
+      // 静音，保存当前音量
+      setPreviousVolume(volume);
+      setIsMuted(true);
+      handleVolumeChange(0);
+    }
+  };
+
+  // 音量条点击
+  const handleVolumeClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!volumeSliderRef.current) return;
+    
+    const rect = volumeSliderRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+    
+    handleVolumeChange(percentage);
+  };
+
+  // 音量条拖拽开始
+  const handleVolumeMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsVolumeDragging(true);
+    handleVolumeClick(e); // 立即更新到点击位置
+  };
+
   const getRepeatModeTitle = () => {
     switch (playerState.repeat_mode) {
       case 'Off':
@@ -293,13 +383,13 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const checkAudioDevices = async () => {
     try {
       const result = await invoke('check_audio_devices') as string;
-      alert(`音频设备检测成功: ${result}`);
+      toast.success(`音频设备检测成功: ${result}`);
       setAudioDeviceError(null);
       setShowAudioTroubleshooter(false);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setAudioDeviceError(errorMessage);
-      alert(`音频设备检测失败: ${errorMessage}`);
+      toast.error(`音频设备检测失败: ${errorMessage}`);
     }
   };
 
@@ -373,10 +463,105 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     if (track?.id) {
       loadAlbumCover(track.id);
       checkFavoriteStatus(track.id);
+      loadLyrics(track.id);
     } else {
       setIsFavorite(false);
+      setLyrics([]);
+      setCurrentLyric('');
     }
   }, [playerState.current_track?.id, currentTrack?.id]);
+
+  // 🎵 获取歌词
+  const loadLyrics = async (trackId: number) => {
+    try {
+      console.log('🎵 正在加载歌词，trackId:', trackId);
+      // lyrics_get 返回 Option<Lyrics>，Lyrics 包含 content 字段
+      const lyricsResponse = await invoke('lyrics_get', { 
+        trackId: trackId 
+      }) as { content: string; format: string; source: string } | null;
+      
+      console.log('🎵 歌词响应:', lyricsResponse);
+      
+      if (lyricsResponse && lyricsResponse.content) {
+        // 解析LRC格式歌词
+        const parsedLyrics = parseLrc(lyricsResponse.content);
+        console.log('🎵 歌词加载成功，共', parsedLyrics.length, '行');
+        if (parsedLyrics.length > 0) {
+          console.log('🎵 前3条歌词:', parsedLyrics.slice(0, 3));
+        }
+        setLyrics(parsedLyrics);
+      } else {
+        console.log('🎵 未找到歌词数据');
+        setLyrics([]);
+        setCurrentLyric('');
+      }
+    } catch (error) {
+      console.error('🎵 获取歌词失败:', error);
+      setLyrics([]);
+      setCurrentLyric('');
+    }
+  };
+
+  // 解析LRC格式歌词
+  const parseLrc = (lrc: string): Array<{ time: number; text: string }> => {
+    const lines = lrc.split('\n');
+    const result: Array<{ time: number; text: string }> = [];
+    
+    for (const line of lines) {
+      // 🔧 修复：支持1-2位数的分钟，毫秒可选
+      const match = line.match(/\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)/);
+      if (match) {
+        const minutes = parseInt(match[1]);
+        const seconds = parseInt(match[2]);
+        const milliseconds = match[3] ? parseInt(match[3].padEnd(3, '0')) : 0;
+        const time = (minutes * 60 + seconds) * 1000 + milliseconds;
+        const text = match[4].trim();
+        
+        if (text) {
+          result.push({ time, text });
+        }
+      }
+    }
+    
+    return result.sort((a, b) => a.time - b.time);
+  };
+
+  // 🎵 根据当前播放位置更新显示的歌词
+  useEffect(() => {
+    if (lyrics.length === 0) {
+      setCurrentLyric('');
+      return;
+    }
+
+    // 使用定时器持续更新歌词
+    const updateLyric = () => {
+      const currentPosition = getCurrentPosition();
+      
+      // 找到当前应该显示的歌词
+      let currentIndex = -1;
+      for (let i = 0; i < lyrics.length; i++) {
+        if (lyrics[i].time <= currentPosition) {
+          currentIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      if (currentIndex >= 0) {
+        setCurrentLyric(lyrics[currentIndex].text);
+      } else {
+        setCurrentLyric('');
+      }
+    };
+
+    // 立即更新一次
+    updateLyric();
+
+    // 每100ms更新一次歌词
+    const interval = setInterval(updateLyric, 100);
+
+    return () => clearInterval(interval);
+  }, [lyrics, playerState.is_playing, isDragging, dragPosition]);
 
   // 🧹 组件卸载时清理所有URL
   useEffect(() => {
@@ -410,6 +595,14 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
     const newPosition = percentage * displayTrack.duration_ms;
     
+    // 添加波纹效果
+    const rippleX = (clickX / rect.width) * 100;
+    const ripple = { x: rippleX, key: Date.now() };
+    setProgressRipples(prev => [...prev, ripple]);
+    setTimeout(() => {
+      setProgressRipples(prev => prev.filter(r => r.key !== ripple.key));
+    }, 600);
+    
     console.log('🎵 进度条点击计算:', {
       clickX,
       width: rect.width,
@@ -431,6 +624,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     setDragPosition(percentage * displayTrack.duration_ms);
   };
 
+  // 进度条拖拽
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging || !progressBarRef.current || !displayTrack?.duration_ms) return;
@@ -459,6 +653,35 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     };
   }, [isDragging, dragPosition, playerState.current_track, currentTrack]);
 
+  // 🔊 音量条拖拽
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isVolumeDragging || !volumeSliderRef.current) return;
+      
+      const rect = volumeSliderRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
+      
+      handleVolumeChange(percentage);
+    };
+
+    const handleMouseUp = () => {
+      if (isVolumeDragging) {
+        setIsVolumeDragging(false);
+      }
+    };
+
+    if (isVolumeDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isVolumeDragging]);
+
   const formatTime = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -471,8 +694,11 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     setShowLyrics(true);
   };
 
-  // 优先显示播放器状态中的当前曲目，确保与实际播放保持同步
-  const displayTrack = playerState.current_track || currentTrack;
+  // 🔧 修复：使用useMemo稳定displayTrack引用，避免ImmersiveLyricsView无限重渲染
+  // 只在track.id变化时才更新引用，避免对象引用变化导致的闪烁
+  const displayTrack = useMemo(() => {
+    return playerState.current_track || currentTrack;
+  }, [playerState.current_track?.id, currentTrack?.id]);
 
   const getCurrentPosition = () => {
     const position = isDragging ? dragPosition : playerState.position_ms;
@@ -482,10 +708,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   return (
     <>
       <div className="modern-player">
-        {/* 严格按照图片的左中右三栏布局 */}
+        {/* 上行：主控制区 */}
         <div className="player-container">
           
-          {/* 左侧：专辑信息区 */}
+          {/* 左侧区域 - 水平布局：封面 + 信息区 */}
           <div className="player-left-section">
             {/* 专辑缩略图 */}
             <div 
@@ -495,7 +721,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               title="点击查看歌词"
             >
               <div className="album-cover-container">
-                {/* 专辑封面 */}
                 {albumCoverUrl ? (
                   <img 
                     src={albumCoverUrl} 
@@ -505,7 +730,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                   />
                 ) : (
                   <div className="album-placeholder">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-slate-400 dark:text-dark-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                     </svg>
                   </div>
@@ -513,34 +738,66 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               </div>
             </div>
 
-            {/* 双行文字栈 */}
-            <div className="track-text-stack">
-              <div className="track-info-content">
-                <div className="track-title">
-                  {displayTrack?.title || 'Drank In My Cup'}
+            {/* 信息区：垂直堆叠 */}
+            <div className="left-info-wrapper">
+              {/* 第一行：歌名 - 歌手 */}
+              <div className="left-top-area">
+                <div className="left-song-info">
+                  <span className="track-title">
+                    {displayTrack?.title || '如果当时'}
+                  </span>
+                  <span className="track-artist">
+                    - {displayTrack?.artist || '许嵩'}
+                  </span>
                 </div>
-                <div className="track-artist">
-                  {displayTrack?.artist || 'Kirko Bangz'}
-                </div>
+              </div>
+
+              {/* 第二行：当前歌词 */}
+              <div className={`current-lyric-display ${!currentLyric ? 'empty' : ''}`}>
+                {currentLyric || (lyrics.length > 0 ? '♪' : '暂无歌词')}
+              </div>
+
+              {/* 第三行：按钮组（与歌词容器重叠） */}
+              <div className="left-bottom-buttons">
+                {/* 收藏 */}
+                <button 
+                  className={`function-square-btn ${isFavorite ? 'active' : ''}`} 
+                  onClick={toggleFavorite}
+                  title={isFavorite ? '取消收藏' : '收藏'}
+                >
+                  <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </button>
+
+                {/* 评论 */}
+                <button className="function-square-btn" title="评论">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </button>
+
+                {/* 更多 */}
+                <button className="function-square-btn" title="更多">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* 中轴区：传输控制与进度条 - 新设计 */}
+          {/* 中间区域 - 垂直布局：上层播放控制 + 下层进度条 */}
           <div className="transport-area">
-            {/* 上行：传输控制 - 5格栅格布局 */}
+            {/* 上层：播放控制 */}
             <div 
               ref={transportControlsRef}
               className="transport-controls"
             >
-              {/* 左侧小键：随机播放 */}
-              <button
-                onClick={() => handleSetShuffle(!playerState.shuffle)}
-                className={`control-small-btn ${playerState.shuffle ? 'active' : ''}`}
-                title={playerState.shuffle ? '关闭随机播放' : '开启随机播放'}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6m12 0l-3-3m3 3l-3 3M6 6l3 3 3-3M6 18l3-3 3 3" />
+              {/* 投屏 */}
+              <button className="control-small-btn" title="投屏">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </button>
 
@@ -555,19 +812,19 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 </svg>
               </button>
 
-              {/* 播放/暂停 - 中心主键 */}
+              {/* 播放/暂停 */}
               <button
                 onClick={playerState.is_playing ? handlePause : (displayTrack ? handlePlay : handleResume)}
                 className="control-main-btn"
                 title={playerState.is_playing ? '暂停' : '播放'}
               >
                 {playerState.is_playing ? (
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <rect width="4" height="16" x="6" y="4"></rect>
-                    <rect width="4" height="16" x="14" y="4"></rect>
+                  <svg className="w-6 h-6 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
+                    <rect width="3.5" height="14" x="6" y="5" rx="1.5"></rect>
+                    <rect width="3.5" height="14" x="14.5" y="5" rx="1.5"></rect>
                   </svg>
                 ) : (
-                  <svg className="w-5 h-5 play-icon" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 play-icon drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z"/>
                   </svg>
                 )}
@@ -584,37 +841,20 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 </svg>
               </button>
 
-              {/* 右侧小键：循环播放 */}
-              <button
-                onClick={handleCycleRepeat}
-                className={`control-small-btn ${playerState.repeat_mode !== 'Off' ? 'active' : ''}`}
-                title={getRepeatModeTitle()}
-              >
-                {playerState.repeat_mode === 'One' ? (
-                  <div className="relative">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12v8a2 2 0 002 2h8m0-10l4-4m0 0l4 4m-4-4v8" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12v-8a2 2 0 00-2-2h-8m0 10l-4 4m0 0l-4-4m4 4v-8" />
-                    </svg>
-                    <span className="repeat-indicator">1</span>
-                  </div>
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12v8a2 2 0 002 2h8m0-10l4-4m0 0l4 4m-4-4v8" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12v-8a2 2 0 00-2-2h-8m0 10l-4 4m0 0l-4-4m4 4v-8" />
-                  </svg>
-                )}
+              {/* 音效 */}
+              <button className="control-small-btn" title="音效">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10h2a2 2 0 012 2v0a2 2 0 01-2 2H6v-4zm0 0V6a2 2 0 012-2h10a2 2 0 012 2v4m-6 4v4m-4-4v4" />
+                </svg>
               </button>
             </div>
 
-            {/* 下行：进度区 - 3格栅格布局 */}
+            {/* 下层：进度条 */}
             <div className="progress-area">
-              {/* 当前时间 */}
               <span className="time-current">
                 {formatTime(getCurrentPosition())}
               </span>
               
-              {/* 进度条容器 - 与上行同宽并中心对齐 */}
               <div 
                 ref={progressBarRef}
                 className="progress-container"
@@ -630,66 +870,85 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                       : '35%'
                   }}
                 >
-                  {/* 进度条拖拽点 */}
-                  <div className={`progress-handle ${
-                    isDragging ? 'active' : ''
-                  }`} />
+                  <div className={`progress-handle ${isDragging ? 'active' : ''}`} />
                 </div>
+                {progressRipples.map(ripple => (
+                  <div
+                    key={ripple.key}
+                    className="progress-ripple"
+                    style={{'--ripple-x': `${ripple.x}%`} as React.CSSProperties}
+                  />
+                ))}
               </div>
               
-              {/* 总时长 */}
               <span className="time-total">
                 {displayTrack?.duration_ms ? formatTime(displayTrack.duration_ms) : '2:56'}
               </span>
             </div>
           </div>
 
-          {/* 右侧：功能按钮区 */}
+          {/* 右侧：功能区 */}
           <div className="player-right-section">
-            {/* 收藏 */}
-            <button 
-              className={`function-square-btn ${isFavorite ? 'active' : ''}`} 
-              onClick={toggleFavorite}
-              title={isFavorite ? '取消收藏' : '收藏'}
-            >
-              <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </button>
+            {/* 音量控制 - 图标+横向滑块 */}
+            <div className="volume-control">
+              <button 
+                className="volume-icon-btn" 
+                onClick={handleToggleMute}
+                title={isMuted ? '取消静音' : '静音'}
+              >
+                {isMuted || volume === 0 ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                ) : volume < 0.5 ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                )}
+              </button>
+              <div 
+                ref={volumeSliderRef}
+                className="volume-slider-container"
+                onClick={handleVolumeClick}
+                onMouseDown={handleVolumeMouseDown}
+              >
+                <div className="volume-slider-fill" style={{ width: `${volume * 100}%` }}>
+                  <div className={`volume-slider-handle ${isVolumeDragging ? 'active' : ''}`} />
+                </div>
+              </div>
+            </div>
 
-            {/* 分享 */}
-            <button className="function-square-btn" title="分享">
+            {/* 均衡器 */}
+            <button className="function-square-btn" title="音效均衡器">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-              </svg>
-            </button>
-
-            {/* 音量/设备 */}
-            <button className="function-square-btn" title="音量">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 12a3 3 0 106 0 3 3 0 00-6 0z" />
-              </svg>
-            </button>
-
-            {/* 菜单/更多 */}
-            <button className="function-square-btn" title="更多选项">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
             </button>
             
-            {/* 歌词管理按钮（仅在有歌曲时显示） */}
+            {/* 歌词 */}
             {displayTrack && (
               <button
                 onClick={() => setShowLyricsManager(true)}
                 className="function-square-btn"
-                title="编辑歌词"
+                title="歌词"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </button>
             )}
+
+            {/* 更多 */}
+            <button className="function-square-btn" title="更多选项">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -697,11 +956,11 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       {/* 沉浸式歌词 */}
       {showLyrics && displayTrack && (
         <ImmersiveLyricsView
+          key={`lyrics-${displayTrack.id}`}
           track={displayTrack}
-          currentPositionMs={getCurrentPosition()}
           isPlaying={playerState.is_playing}
-          onClose={() => setShowLyrics(false)}
-          onError={(error) => console.error('歌词显示错误:', error)}
+          onClose={handleLyricsClose}
+          onError={handleLyricsError}
         />
       )}
 
@@ -735,8 +994,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">音频设备错误</h3>
-                    <p className="text-sm text-gray-600">播放器无法访问音频设备</p>
+                    <h3 className="font-semibold text-slate-800 dark:text-dark-900">音频设备错误</h3>
+                    <p className="text-sm text-slate-600 dark:text-dark-700">播放器无法访问音频设备</p>
                   </div>
                 </div>
                 <button
@@ -793,7 +1052,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               <div className="flex justify-between">
                 <button
                   onClick={() => setShowAudioTroubleshooter(false)}
-                  className="px-4 py-2 text-gray-600 liquid-glass liquid-glass-interactive hover:bg-white/30 rounded-lg transition-colors"
+                  className="px-4 py-2 text-slate-600 dark:text-dark-700 liquid-glass liquid-glass-interactive hover:bg-white/30 dark:hover:bg-white/10 rounded-lg transition-colors"
                 >
                   稍后处理
                 </button>

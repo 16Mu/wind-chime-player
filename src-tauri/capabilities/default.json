@@ -14,6 +14,9 @@
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-resizable",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm"
   ]
 }

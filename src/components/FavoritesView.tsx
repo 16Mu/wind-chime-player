@@ -13,17 +13,11 @@ interface Track {
 
 interface FavoritesViewProps {
   onTrackSelect: (track: Track) => void;
-  membraneSettings?: {
-    enabled: boolean;
-    intensity: number;
-    radius: number;
-  };
   selectedTrackId?: number;
 }
 
 export default function FavoritesView({ 
   onTrackSelect, 
-  membraneSettings = { enabled: true, intensity: 1, radius: 1 },
   selectedTrackId
 }: FavoritesViewProps) {
   const [favorites, setFavorites] = useState<Track[]>([]);
@@ -66,7 +60,7 @@ export default function FavoritesView({
       
       // 批量删除收藏
       const promises = favorites.map(track => 
-        invoke('favorites_remove', { trackId: track.id })
+        invoke('favorites_remove', { trackId: track.id, track_id: track.id })
       );
       
       await Promise.all(promises);
@@ -211,10 +205,19 @@ export default function FavoritesView({
               disabled={isLoading}
               title="刷新收藏列表"
             >
-              <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {isLoading ? '刷新中' : '刷新'}
+              {isLoading ? (
+                <>
+                  <div className="ring-loader" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                  刷新中
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  刷新
+                </>
+              )}
             </button>
             
             {favoriteCount > 0 && (
@@ -240,11 +243,6 @@ export default function FavoritesView({
         onTrackSelect={onTrackSelect}
         isLoading={isLoading}
         selectedTrackId={selectedTrackId}
-        blurBackdropSettings={{
-          enabled: membraneSettings.enabled,
-          intensity: membraneSettings.intensity === 1 ? 'medium' : membraneSettings.intensity > 1 ? 'high' : 'low',
-          opacity: 0.8
-        }}
         showFavoriteButtons={true}
         onFavoriteChange={(trackId, isFavorite) => {
           if (!isFavorite) {
@@ -258,5 +256,3 @@ export default function FavoritesView({
     </div>
   );
 }
-
-

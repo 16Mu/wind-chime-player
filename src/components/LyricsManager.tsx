@@ -30,7 +30,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
     const loadExistingLyrics = async () => {
       setIsLoading(true);
       try {
-        const lyrics = await invoke('lyrics_get', { trackId: track.id });
+        const lyrics = await invoke('lyrics_get', { trackId: track.id, track_id: track.id });
         if (lyrics && typeof lyrics === 'object' && 'content' in lyrics) {
           setLyricsContent((lyrics as any).content);
         }
@@ -74,6 +74,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
     try {
       await invoke('lyrics_save', {
         trackId: track.id,
+        track_id: track.id,
         content: lyricsContent,
         format: 'lrc',
         source: 'manual'
@@ -98,7 +99,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
     setError(null);
 
     try {
-      await invoke('lyrics_delete', { trackId: track.id });
+      await invoke('lyrics_delete', { trackId: track.id, track_id: track.id });
       onSave?.();
       onClose();
     } catch (err) {
@@ -179,8 +180,8 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
         <div className="liquid-glass-content p-6 border-b border-white/20">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">歌词管理</h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-dark-900">歌词管理</h2>
+              <p className="text-sm text-slate-600 dark:text-dark-700 mt-1">
                 {track.title} - {track.artist}
               </p>
             </div>
@@ -200,7 +201,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
           {/* 左侧：编辑区域 */}
           <div className="flex-1 flex flex-col liquid-glass-content p-6 border-r border-white/20">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-gray-800">歌词编辑</h3>
+              <h3 className="font-medium text-slate-800 dark:text-dark-800">歌词编辑</h3>
               <div className="flex gap-2">
                 <button
                   onClick={handleImportFile}
@@ -241,7 +242,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
 
           {/* 右侧：预览区域 */}
           <div className="w-80 p-6 liquid-glass-content bg-gradient-to-br from-white/30 to-white/10">
-            <h3 className="font-medium text-gray-800 mb-4">预览</h3>
+            <h3 className="font-medium text-slate-800 dark:text-dark-800 mb-4">预览</h3>
             
             {previewMode && parsedLyrics ? (
               <div className="space-y-2">
@@ -249,7 +250,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
                 {parsedLyrics.metadata && Object.keys(parsedLyrics.metadata).length > 0 && (
                   <div className="mb-4 p-3 bg-white rounded-lg border">
                     {Object.entries(parsedLyrics.metadata).map(([key, value]) => (
-                      <div key={key} className="text-xs text-gray-600">
+                      <div key={key} className="text-xs text-slate-600 dark:text-dark-700">
                         <span className="font-medium">{key}:</span> {value}
                       </div>
                     ))}
@@ -260,20 +261,20 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
                 <div className="max-h-64 overflow-y-auto space-y-1">
                   {parsedLyrics.lines.map((line, index) => (
                     <div key={index} className="flex items-start gap-2 text-sm">
-                      <span className="text-xs text-gray-400 font-mono w-12 flex-shrink-0 pt-0.5">
+                      <span className="text-xs text-slate-400 dark:text-dark-600 font-mono w-12 flex-shrink-0 pt-0.5">
                         {formatTime(line.timestamp_ms)}
                       </span>
-                      <span className="text-gray-700">{line.text || '♪'}</span>
+                      <span className="text-slate-700 dark:text-dark-800">{line.text || '♪'}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-3 text-xs text-gray-500">
+                <div className="mt-3 text-xs text-slate-500 dark:text-dark-700">
                   共 {parsedLyrics.lines.length} 行歌词
                 </div>
               </div>
             ) : (
-              <div className="text-center text-gray-500 py-8">
+              <div className="text-center text-slate-500 dark:text-dark-700 py-8">
                 <div className="text-4xl mb-3">👀</div>
                 <p className="text-sm">点击"预览"查看解析结果</p>
               </div>
@@ -296,7 +297,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
               <button
                 onClick={onClose}
                 disabled={isSaving}
-                className="px-4 py-2 text-gray-600 liquid-glass liquid-glass-interactive hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-slate-600 dark:text-dark-700 liquid-glass liquid-glass-interactive hover:bg-white/30 dark:hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
               >
                 取消
               </button>

@@ -2,8 +2,131 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use anyhow::Result;
+// 🔧 性能优化：添加缓存支持
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
+// 使用新的PlayerCore的Track类型
 use crate::player::Track;
+
+// 🔧 性能优化：缓存条目结构
+#[derive(Debug, Clone)]
+struct CacheEntry<T> {
+    data: T,
+    created_at: Instant,
+    ttl: Duration,
+}
+
+impl<T> CacheEntry<T> {
+    fn new(data: T, ttl: Duration) -> Self {
+        Self {
+            data,
+            created_at: Instant::now(),
+            ttl,
+        }
+    }
+    
+    fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > self.ttl
+    }
+}
+
+// 🔧 性能优化：数据库查询缓存
+#[derive(Debug)]
+struct QueryCache {
+    // 统计缓存 - 5分钟TTL
+    track_count: Option<CacheEntry<i64>>,
+    artist_count: Option<CacheEntry<i64>>,
+    album_count: Option<CacheEntry<i64>>,
+    favorites_count: Option<CacheEntry<i64>>,
+    
+    // 轨道列表缓存 - 10分钟TTL
+    all_tracks: Option<CacheEntry<Vec<Track>>>,
+    
+    // 搜索结果缓存 - 5分钟TTL，最多缓存50个搜索结果
+    search_results: HashMap<String, CacheEntry<Vec<Track>>>,
+}
+
+impl QueryCache {
+    fn new() -> Self {
+        Self {
+            track_count: None,
+            artist_count: None,
+            album_count: None,
+            favorites_count: None,
+            all_tracks: None,
+            search_results: HashMap::new(),
+        }
+    }
+    
+    // 清理过期的搜索缓存
+    fn cleanup_search_cache(&mut self) {
+        self.search_results.retain(|_, entry| !entry.is_expired());
+        
+        // 限制搜索缓存大小
+        if self.search_results.len() > 50 {
+            let keys_to_remove: Vec<String> = self.search_results
+                .iter()
+                .map(|(k, v)| (k.clone(), v.created_at))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|(k, _)| k)
+                .take(self.search_results.len() - 40)
+                .collect();
+            
+            for key in keys_to_remove {
+                self.search_results.remove(&key);
+            }
+        }
+    }
+    
+    // 清理所有过期缓存
+    fn cleanup_expired(&mut self) {
+        if let Some(ref entry) = self.track_count {
+            if entry.is_expired() {
+                self.track_count = None;
+            }
+        }
+        if let Some(ref entry) = self.artist_count {
+            if entry.is_expired() {
+                self.artist_count = None;
+            }
+        }
+        if let Some(ref entry) = self.album_count {
+            if entry.is_expired() {
+                self.album_count = None;
+            }
+        }
+        if let Some(ref entry) = self.favorites_count {
+            if entry.is_expired() {
+                self.favorites_count = None;
+            }
+        }
+        if let Some(ref entry) = self.all_tracks {
+            if entry.is_expired() {
+                self.all_tracks = None;
+            }
+        }
+        
+        self.cleanup_search_cache();
+    }
+    
+    // 清空与tracks表相关的缓存（当数据发生变化时调用）
+    fn invalidate_track_related(&mut self) {
+        self.track_count = None;
+        self.artist_count = None;
+        self.album_count = None;
+        self.all_tracks = None;
+        self.search_results.clear();
+    }
+    
+    // 清空与favorites表相关的缓存
+    #[allow(dead_code)]
+    fn invalidate_favorites_related(&mut self) {
+        self.favorites_count = None;
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
@@ -45,18 +168,24 @@ pub struct Favorite {
 
 pub struct Database {
     conn: Connection,
+    // 🔧 性能优化：线程安全的查询缓存
+    cache: Arc<Mutex<QueryCache>>,
 }
 
 impl Database {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        let db = Database { conn };
+        let db = Database { 
+            conn,
+            // 🔧 性能优化：初始化查询缓存
+            cache: Arc::new(Mutex::new(QueryCache::new())),
+        };
         db.init_schema()?;
         Ok(db)
     }
 
     fn init_schema(&self) -> Result<()> {
-        // Create tracks table
+        // Create tracks table - 扩展支持多种音乐源
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY,
@@ -72,13 +201,24 @@ impl Database {
                 fingerprint TEXT,
                 album_cover_data BLOB,
                 album_cover_mime TEXT,
-                created_at INTEGER DEFAULT (strftime('%s', 'now'))
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                -- WebDAV和同步支持的新字段
+                source_type TEXT DEFAULT 'local' CHECK(source_type IN ('local', 'webdav', 'cached')),
+                source_config TEXT, -- JSON格式存储源配置
+                sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'remote_only', 'synced', 'conflict', 'syncing', 'sync_error')),
+                cache_status TEXT DEFAULT 'none' CHECK(cache_status IN ('none', 'partial', 'cached', 'expired', 'updating')),
+                remote_modified INTEGER,
+                last_sync INTEGER,
+                server_id TEXT -- 关联的WebDAV服务器ID
             )",
             [],
         )?;
 
         // Migrate existing schema: Add album cover columns if they don't exist
         self.migrate_album_cover_columns()?;
+        
+        // Migrate existing schema: Add WebDAV and sync support columns
+        self.migrate_webdav_support_columns()?;
 
         // Create playlists table
         self.conn.execute(
@@ -138,9 +278,162 @@ impl Database {
             [],
         )?;
 
-        // Create indexes
+        // Create WebDAV servers table - 单一职责：管理WebDAV服务器配置
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS webdav_servers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL UNIQUE,
+                username TEXT,
+                password_encrypted TEXT, -- 加密存储的密码
+                enabled BOOLEAN DEFAULT 1,
+                auto_sync BOOLEAN DEFAULT 0,
+                sync_direction TEXT DEFAULT 'bidirectional' CHECK(sync_direction IN ('bidirectional', 'local_to_remote', 'remote_to_local')),
+                connection_timeout_seconds INTEGER DEFAULT 30,
+                verify_ssl BOOLEAN DEFAULT 1,
+                max_retries INTEGER DEFAULT 3,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+                last_connected_at INTEGER,
+                connection_status TEXT DEFAULT 'disconnected'
+            )",
+            [],
+        )?;
+
+        // Create sync queue table - 单一职责：管理同步任务队列
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sync_queue (
+                id INTEGER PRIMARY KEY,
+                task_type TEXT NOT NULL CHECK(task_type IN ('upload', 'download', 'delete', 'metadata_sync')),
+                track_id INTEGER,
+                source_path TEXT NOT NULL,
+                target_path TEXT,
+                server_id TEXT NOT NULL,
+                priority INTEGER DEFAULT 0 CHECK(priority IN (0, 1, 2)), -- 0=低, 1=中, 2=高
+                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+                progress_percent INTEGER DEFAULT 0 CHECK(progress_percent BETWEEN 0 AND 100),
+                error_message TEXT,
+                retry_count INTEGER DEFAULT 0,
+                max_retries INTEGER DEFAULT 3,
+                file_size INTEGER,
+                bytes_transferred INTEGER DEFAULT 0,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                started_at INTEGER,
+                completed_at INTEGER,
+                FOREIGN KEY (server_id) REFERENCES webdav_servers (id) ON DELETE CASCADE,
+                FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create sync conflicts table - 单一职责：管理同步冲突
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sync_conflicts (
+                id INTEGER PRIMARY KEY,
+                track_id INTEGER NOT NULL,
+                server_id TEXT NOT NULL,
+                conflict_type TEXT NOT NULL CHECK(conflict_type IN ('modified_both', 'local_deleted_remote_modified', 'local_modified_remote_deleted', 'different_size', 'different_hash')),
+                local_path TEXT,
+                remote_path TEXT,
+                local_size INTEGER,
+                remote_size INTEGER,
+                local_modified INTEGER,
+                remote_modified INTEGER,
+                local_hash TEXT,
+                remote_hash TEXT,
+                resolution_strategy TEXT CHECK(resolution_strategy IN ('prefer_local', 'prefer_remote', 'prefer_newer', 'manual')),
+                resolved BOOLEAN DEFAULT 0,
+                resolved_at INTEGER,
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE,
+                FOREIGN KEY (server_id) REFERENCES webdav_servers (id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create sync statistics table - 单一职责：记录同步统计信息
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sync_statistics (
+                id INTEGER PRIMARY KEY,
+                server_id TEXT NOT NULL,
+                sync_session_id TEXT NOT NULL,
+                started_at INTEGER NOT NULL,
+                completed_at INTEGER,
+                total_files INTEGER DEFAULT 0,
+                files_uploaded INTEGER DEFAULT 0,
+                files_downloaded INTEGER DEFAULT 0,
+                files_deleted INTEGER DEFAULT 0,
+                files_skipped INTEGER DEFAULT 0,
+                bytes_uploaded INTEGER DEFAULT 0,
+                bytes_downloaded INTEGER DEFAULT 0,
+                conflicts_detected INTEGER DEFAULT 0,
+                conflicts_resolved INTEGER DEFAULT 0,
+                errors_count INTEGER DEFAULT 0,
+                success BOOLEAN DEFAULT 0,
+                error_message TEXT,
+                FOREIGN KEY (server_id) REFERENCES webdav_servers (id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create cache metadata table - 单一职责：管理缓存元数据
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS cache_metadata (
+                id INTEGER PRIMARY KEY,
+                track_id INTEGER NOT NULL,
+                original_source_type TEXT NOT NULL,
+                original_path TEXT NOT NULL,
+                cache_path TEXT NOT NULL UNIQUE,
+                cache_size INTEGER,
+                cached_at INTEGER DEFAULT (strftime('%s', 'now')),
+                expires_at INTEGER,
+                access_count INTEGER DEFAULT 0,
+                last_accessed INTEGER DEFAULT (strftime('%s', 'now')),
+                is_complete BOOLEAN DEFAULT 1,
+                cache_quality TEXT DEFAULT 'full' CHECK(cache_quality IN ('full', 'partial', 'preview')),
+                FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create indexes for performance - 低耦合：优化查询性能
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks(path)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tracks_source_type ON tracks(source_type)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tracks_server_id ON tracks(server_id)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tracks_sync_status ON tracks(sync_status)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, priority)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_queue_server ON sync_queue(server_id, status)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_resolved ON sync_conflicts(resolved, created_at)",
+            [],
+        )?;
+        
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_metadata_expires ON cache_metadata(expires_at)",
             [],
         )?;
 
@@ -223,6 +516,82 @@ impl Database {
         
         Ok(())
     }
+    
+    /// 迁移WebDAV和同步支持字段到现有数据库
+    fn migrate_webdav_support_columns(&self) -> Result<()> {
+        // 检查并添加source_type字段
+        let source_type_exists = self.conn.prepare("SELECT source_type FROM tracks LIMIT 1");
+        if source_type_exists.is_err() {
+            log::info!("添加source_type字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN source_type TEXT DEFAULT 'local' CHECK(source_type IN ('local', 'webdav', 'cached'))",
+                []
+            )?;
+        }
+        
+        // 检查并添加source_config字段
+        let source_config_exists = self.conn.prepare("SELECT source_config FROM tracks LIMIT 1");
+        if source_config_exists.is_err() {
+            log::info!("添加source_config字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN source_config TEXT",
+                []
+            )?;
+        }
+        
+        // 检查并添加sync_status字段
+        let sync_status_exists = self.conn.prepare("SELECT sync_status FROM tracks LIMIT 1");
+        if sync_status_exists.is_err() {
+            log::info!("添加sync_status字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN sync_status TEXT DEFAULT 'local_only' CHECK(sync_status IN ('local_only', 'remote_only', 'synced', 'conflict', 'syncing', 'sync_error'))",
+                []
+            )?;
+        }
+        
+        // 检查并添加cache_status字段
+        let cache_status_exists = self.conn.prepare("SELECT cache_status FROM tracks LIMIT 1");
+        if cache_status_exists.is_err() {
+            log::info!("添加cache_status字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN cache_status TEXT DEFAULT 'none' CHECK(cache_status IN ('none', 'partial', 'cached', 'expired', 'updating'))",
+                []
+            )?;
+        }
+        
+        // 检查并添加remote_modified字段
+        let remote_modified_exists = self.conn.prepare("SELECT remote_modified FROM tracks LIMIT 1");
+        if remote_modified_exists.is_err() {
+            log::info!("添加remote_modified字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN remote_modified INTEGER",
+                []
+            )?;
+        }
+        
+        // 检查并添加last_sync字段
+        let last_sync_exists = self.conn.prepare("SELECT last_sync FROM tracks LIMIT 1");
+        if last_sync_exists.is_err() {
+            log::info!("添加last_sync字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN last_sync INTEGER",
+                []
+            )?;
+        }
+        
+        // 检查并添加server_id字段
+        let server_id_exists = self.conn.prepare("SELECT server_id FROM tracks LIMIT 1");
+        if server_id_exists.is_err() {
+            log::info!("添加server_id字段到tracks表");
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN server_id TEXT",
+                []
+            )?;
+        }
+        
+        log::info!("WebDAV支持字段迁移完成");
+        Ok(())
+    }
 
     pub fn insert_track(&self, track: &Track) -> Result<i64> {
         let mut stmt = self.conn.prepare(
@@ -253,6 +622,11 @@ impl Database {
             track.album_cover_mime,
             last_modified
         ])?;
+
+        // 🔧 性能优化：失效与tracks表相关的缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.invalidate_track_related();
+        }
 
         Ok(self.conn.last_insert_rowid())
     }
@@ -547,29 +921,83 @@ impl Database {
     }
 
     pub fn get_track_count(&self) -> Result<i64> {
+        // 🔧 性能优化：检查缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.cleanup_expired();
+            
+            if let Some(ref entry) = cache.track_count {
+                if !entry.is_expired() {
+                    return Ok(entry.data);
+                }
+            }
+        }
+        
+        // 缓存未命中，执行查询
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM tracks",
             [],
             |row| row.get(0),
         )?;
+        
+        // 🔧 性能优化：更新缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.track_count = Some(CacheEntry::new(count, Duration::from_secs(300))); // 5分钟TTL
+        }
+        
         Ok(count)
     }
 
     pub fn get_artist_count(&self) -> Result<i64> {
+        // 🔧 性能优化：检查缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.cleanup_expired();
+            
+            if let Some(ref entry) = cache.artist_count {
+                if !entry.is_expired() {
+                    return Ok(entry.data);
+                }
+            }
+        }
+        
+        // 缓存未命中，执行查询
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(DISTINCT artist) FROM tracks WHERE artist IS NOT NULL AND artist != ''",
             [],
             |row| row.get(0),
         )?;
+        
+        // 🔧 性能优化：更新缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.artist_count = Some(CacheEntry::new(count, Duration::from_secs(300))); // 5分钟TTL
+        }
+        
         Ok(count)
     }
 
     pub fn get_album_count(&self) -> Result<i64> {
+        // 🔧 性能优化：检查缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.cleanup_expired();
+            
+            if let Some(ref entry) = cache.album_count {
+                if !entry.is_expired() {
+                    return Ok(entry.data);
+                }
+            }
+        }
+        
+        // 缓存未命中，执行查询
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(DISTINCT album) FROM tracks WHERE album IS NOT NULL AND album != ''",
             [],
             |row| row.get(0),
         )?;
+        
+        // 🔧 性能优化：更新缓存
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.album_count = Some(CacheEntry::new(count, Duration::from_secs(300))); // 5分钟TTL
+        }
+        
         Ok(count)
     }
 
@@ -688,6 +1116,13 @@ impl Database {
         for track_id in tracks_to_delete {
             let mut delete_stmt = self.conn.prepare("DELETE FROM tracks WHERE id = ?1")?;
             delete_stmt.execute([track_id])?;
+        }
+        
+        // 🔧 性能优化：删除后失效缓存
+        if deleted_count > 0 {
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.invalidate_track_related();
+            }
         }
 
         log::info!("删除了文件夹 '{}' 下的 {} 首曲目", folder_path, deleted_count);

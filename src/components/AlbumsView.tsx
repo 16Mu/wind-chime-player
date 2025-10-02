@@ -25,33 +25,6 @@ interface AlbumsViewProps {
 }
 
 export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsViewProps) {
-  // 自适应密度：专辑卡片更紧凑
-  const [coverSize, setCoverSize] = useState<number>(64);
-  const [cardPadding, setCardPadding] = useState<number>(16);
-  const [titleSize, setTitleSize] = useState<number>(14);
-  const [subSize, setSubSize] = useState<number>(12);
-
-  const computeDensity = () => {
-    const vh = window.innerHeight || 900;
-    const dpr = window.devicePixelRatio || 1;
-    const eff = vh * dpr;
-    if (eff >= 3000) {
-      setCoverSize(56); setCardPadding(12); setTitleSize(13); setSubSize(11);
-    } else if (eff >= 2200) {
-      setCoverSize(60); setCardPadding(14); setTitleSize(13); setSubSize(11);
-    } else if (eff >= 1600) {
-      setCoverSize(64); setCardPadding(16); setTitleSize(14); setSubSize(12);
-    } else {
-      setCoverSize(68); setCardPadding(18); setTitleSize(14); setSubSize(12);
-    }
-  };
-
-  useEffect(() => {
-    computeDensity();
-    const onResize = () => computeDensity();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
   const [albumCovers, setAlbumCovers] = useState<Map<string, string>>(new Map());
   // 封面刷新触发器
   const [coverRefreshTrigger, setCoverRefreshTrigger] = useState(0);
@@ -137,7 +110,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
         if (firstTrack) {
           try {
             console.log(`🎨 尝试加载专辑封面: ${albumKey}, trackId: ${firstTrack.id}`);
-            const result = await invoke('get_album_cover', { trackId: firstTrack.id }) as [number[], string] | null;
+            const result = await invoke('get_album_cover', { track_id: firstTrack.id, trackId: firstTrack.id }) as [number[], string] | null;
             if (result) {
               const [imageData, mimeType] = result;
               console.log(`✅ 成功获取封面数据: ${imageData.length} 字节, MIME: ${mimeType}`);
@@ -177,17 +150,17 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center glass-card max-w-md">
-          <div className="text-slate-400 mb-6">
-            <svg className="w-16 h-16 mx-auto animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
+          <div className="flex justify-center mb-6">
+            <div className="ring-loader" style={{ width: '64px', height: '64px', borderWidth: '4px' }}></div>
           </div>
           <h3 className="text-xl font-bold text-contrast-primary mb-3">
-            正在加载专辑...
+            正在加载专辑
           </h3>
-          <p className="text-contrast-secondary mb-6 text-base font-medium">
-            请稍候，正在获取您的音乐数据
-          </p>
+          <div className="loading-dots flex justify-center" style={{ fontSize: '8px' }}>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
         </div>
       </div>
     );
@@ -213,82 +186,190 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
     );
   }
 
-  return (
-    <div
-      className="grid gap-4"
-      style={{
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))'
-      }}
-    >
-      {albums.map((album) => (
-        <div key={`${album.name}::${album.artist}`} className="glass-surface rounded-2xl glass-interactive hover:shadow-lg transition-all duration-300" style={{ padding: cardPadding }}>
-          <div className="text-center mb-4">
-            <div className="rounded-xl mx-auto mb-3 overflow-hidden shadow-lg" style={{ width: coverSize, height: coverSize }}>
-              {albumCovers.get(`${album.name}::${album.artist}`) ? (
-                <img 
-                  src={albumCovers.get(`${album.name}::${album.artist}`)}
-                  alt={`${album.name} 专辑封面`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // 加载失败时显示默认图标
-                    e.currentTarget.style.display = 'none';
-                    const nextSibling = e.currentTarget.nextElementSibling as HTMLElement;
-                    if (nextSibling) {
-                      nextSibling.style.display = 'flex';
-                    }
-                  }}
-                />
-              ) : null}
-              <div className={`w-full h-full bg-gradient-to-br from-purple-600 to-pink-400 flex items-center justify-center ${albumCovers.get(`${album.name}::${album.artist}`) ? 'hidden' : ''}`}>
-                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-            </div>
-            <h3 className="font-bold text-contrast-primary mb-1 truncate" style={{ fontSize: titleSize }} title={album.name}>
-              {album.name}
-            </h3>
-            <p className="text-contrast-secondary truncate mb-2" style={{ fontSize: subSize }} title={album.artist}>
-              {album.artist}
-            </p>
-            <p className="text-contrast-tertiary" style={{ fontSize: Math.max(subSize - 1, 10) }}>
-              {album.trackCount} 首歌曲
-            </p>
-          </div>
+  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
 
-          <div className="space-y-1.5 max-h-44 overflow-y-auto">
-            {album.tracks.slice(0, 5).map((track) => (
-              <div
-                key={track.id}
-                className="flex items-center justify-between p-2.5 rounded-lg glass-surface-subtle glass-interactive cursor-pointer hover:bg-surface-secondary transition-colors group"
-                onClick={() => {
-                  console.log('🎵 AlbumsView - 播放曲目:', track);
-                  onTrackSelect(track);
-                }}
-              >
-                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  <svg className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600 transition-colors flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+  const selectedAlbumData = selectedAlbum 
+    ? albums.find(a => `${a.name}::${a.artist}` === selectedAlbum) 
+    : null;
+
+  // ESC键关闭抽屉
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedAlbum) {
+        setSelectedAlbum(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [selectedAlbum]);
+
+  return (
+    <div className="albums-view-container">
+      {/* 专辑网格 */}
+      <div className={`albums-grid-container ${selectedAlbum ? 'has-selection' : ''}`}>
+        {albums.map((album) => {
+          const albumKey = `${album.name}::${album.artist}`;
+          const isSelected = selectedAlbum === albumKey;
+          
+          return (
+            <div 
+              key={albumKey} 
+              className={`album-card ${isSelected ? 'album-card-selected' : ''}`}
+              onClick={() => {
+                setSelectedAlbum(albumKey);
+              }}
+            >
+              {/* 封面 */}
+              <div className="album-cover">
+                {albumCovers.get(albumKey) ? (
+                  <img 
+                    src={albumCovers.get(albumKey)}
+                    alt={`${album.name} 专辑封面`}
+                    className="album-cover-img"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const nextSibling = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (nextSibling) {
+                        nextSibling.style.display = 'flex';
+                      }
+                    }}
+                  />
+                ) : null}
+                <div className={`album-cover-placeholder ${albumCovers.get(albumKey) ? 'hidden' : ''}`}>
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+
+                {/* 播放按钮（悬停显示） */}
+                <div className="album-play-overlay">
+                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-contrast-primary text-[13px] truncate group-hover:text-purple-600 transition-colors">
-                      {track.title || '未知标题'}
-                    </p>
-                  </div>
                 </div>
               </div>
-            ))}
-            
-            {album.tracks.length > 5 && (
-              <div className="text-center py-2">
-                <span className="text-[11px] text-contrast-secondary">
-                  还有 {album.tracks.length - 5} 首歌曲...
-                </span>
+
+              {/* 专辑信息 */}
+              <div className="album-info-wrapper">
+                <h3 className="album-name" title={album.name}>
+                  {album.name}
+                </h3>
+                <p className="album-artist" title={album.artist}>
+                  {album.artist}
+                </p>
+                <p className="album-track-count">
+                  {album.trackCount} 首
+                </p>
               </div>
-            )}
+
+              {/* 选中指示器 */}
+              {isSelected && (
+                <div className="album-selected-indicator">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 右侧抽屉 */}
+      {selectedAlbumData && (
+        <div className="album-drawer">
+          {/* 关闭按钮 */}
+          <button 
+            className="album-drawer-close"
+            onClick={() => setSelectedAlbum(null)}
+            title="关闭（ESC）"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          {/* 头部 - 封面和信息 */}
+          <div className="album-drawer-header">
+            <div className="album-drawer-cover">
+              {albumCovers.get(selectedAlbum!) ? (
+                <img 
+                  src={albumCovers.get(selectedAlbum!)}
+                  alt={`${selectedAlbumData.name} 专辑封面`}
+                />
+              ) : (
+                <div className="album-drawer-cover-placeholder">
+                  <svg className="w-20 h-20 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            <div className="album-drawer-info">
+              <span className="album-drawer-badge">专辑</span>
+              <h2 className="album-drawer-name">{selectedAlbumData.name}</h2>
+              <p className="album-drawer-artist">{selectedAlbumData.artist}</p>
+              <p className="album-drawer-stats">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                共 {selectedAlbumData.trackCount} 首歌曲
+              </p>
+              
+              <button 
+                className="album-drawer-play-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (selectedAlbumData.tracks.length > 0) {
+                    onTrackSelect(selectedAlbumData.tracks[0]);
+                  }
+                }}
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                播放全部
+              </button>
+            </div>
+          </div>
+
+          {/* 歌曲列表 - 表格式 */}
+          <div className="album-drawer-tracks">
+            <div className="album-drawer-tracks-header">
+              <div className="drawer-track-col-number">#</div>
+              <div className="drawer-track-col-title">标题</div>
+              <div className="drawer-track-col-artist">艺术家</div>
+              <div className="drawer-track-col-duration">时长</div>
+            </div>
+            
+            <div className="album-drawer-tracks-body">
+              {selectedAlbumData.tracks.map((track, index) => (
+                <div
+                  key={track.id}
+                  className="album-drawer-track-row"
+                  onClick={() => onTrackSelect(track)}
+                >
+                  <div className="drawer-track-col-number">
+                    <span className="drawer-track-number">{index + 1}</span>
+                    <svg className="drawer-track-play-icon w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                  <div className="drawer-track-col-title">{track.title || '未知标题'}</div>
+                  <div className="drawer-track-col-artist">{track.artist || selectedAlbumData.artist}</div>
+                  <div className="drawer-track-col-duration">
+                    {track.duration_ms 
+                      ? `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}`
+                      : '--:--'
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

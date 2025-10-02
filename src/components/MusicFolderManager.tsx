@@ -1,21 +1,55 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useToast } from '../contexts/ToastContext';
 
 interface MusicFolderManagerProps {
   className?: string;
 }
 
 export default function MusicFolderManager({ className = '' }: MusicFolderManagerProps) {
+  const toast = useToast();
+  
   const [musicFolders, setMusicFolders] = useState<string[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
 
-  // 加载已扫描的音乐文件夹路径
+  // 等待后端就绪
   useEffect(() => {
+    if (typeof listen === 'undefined') return;
+
+    const setupReadyListener = async () => {
+      const unlistenAppReady = await listen('app-ready', () => {
+        console.log('✅ 音乐文件夹管理器：后端就绪');
+        setIsAppReady(true);
+      });
+
+      // 🔥 备用机制：延迟后尝试加载（防止错过 app-ready 事件）
+      setTimeout(() => {
+        if (!isAppReady) {
+          console.log('⏰ 音乐文件夹管理器：延迟加载（可能错过了 app-ready 事件）');
+          setIsAppReady(true);
+        }
+      }, 200);
+
+      return () => {
+        if (typeof unlistenAppReady === 'function') unlistenAppReady();
+      };
+    };
+
+    const cleanup = setupReadyListener();
+    return () => {
+      cleanup.then(fn => fn && fn());
+    };
+  }, [isAppReady]);
+
+  // 加载已扫描的音乐文件夹路径（等待后端就绪）
+  useEffect(() => {
+    if (!isAppReady) return;
     loadMusicFolders();
-  }, []);
+  }, [isAppReady]);
 
   // 监听扫描事件，自动刷新文件夹列表并显示状态
   useEffect(() => {
@@ -40,19 +74,18 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           if (tracks_added === 0 && tracks_updated === 0) {
             if (errors && errors.length > 0) {
               // 有错误的情况
-              alert(`扫描完成，但遇到了一些问题：\n\n${errors.slice(0, 3).join('\n')}\n${errors.length > 3 ? `\n还有 ${errors.length - 3} 个其他错误...` : ''}`);
+              toast.error(`扫描完成，但遇到了一些问题：${errors.slice(0, 3).join(' / ')} ${errors.length > 3 ? `还有 ${errors.length - 3} 个其他错误...` : ''}`, 6000);
             } else {
               // 没有错误但也没有找到歌曲
-              alert('扫描完成，但在选择的文件夹中没有找到支持的音乐文件。\n\n支持的格式包括：MP3、FLAC、WAV、M4A、OGG 等常见音频格式。');
+              toast.warning('扫描完成，但在选择的文件夹中没有找到支持的音乐文件。支持的格式包括：MP3、FLAC、WAV、M4A、OGG 等常见音频格式。', 5000);
             }
           } else {
             // 成功找到歌曲
-            const message = `扫描完成！\n\n新增歌曲：${tracks_added} 首\n更新歌曲：${tracks_updated} 首`;
+            const message = `扫描完成！新增歌曲：${tracks_added} 首，更新歌曲：${tracks_updated} 首`;
             if (errors && errors.length > 0) {
-              alert(`${message}\n\n遇到 ${errors.length} 个文件处理问题（可能是不支持的格式或损坏的文件）`);
+              toast.warning(`${message}。遇到 ${errors.length} 个文件处理问题`, 5000);
             } else {
-              // 可以考虑用更轻量的提示替代 alert
-              console.log('✅ ' + message);
+              toast.success(message, 4000);
             }
           }
         }
@@ -88,7 +121,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
   const handleFolderSelect = async () => {
     // 检查是否正在扫描
     if (isScanning) {
-      alert('正在扫描中，请等待当前扫描完成后再添加新文件夹');
+      toast.warning('正在扫描中，请等待当前扫描完成后再添加新文件夹');
       return;
     }
 
@@ -105,7 +138,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
         
         // 检查是否已经添加过该文件夹
         if (musicFolders.includes(selectedPath as string)) {
-          alert('该文件夹已经添加过了！');
+          toast.info('该文件夹已经添加过了！');
           return;
         }
         
@@ -134,7 +167,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
         errorMessage += ': 未知错误';
       }
       
-      alert(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -157,10 +190,10 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
       await loadMusicFolders();
       
       // 显示成功消息
-      alert(`成功删除了 ${deletedCount} 首曲目`);
+      toast.success(`成功删除了 ${deletedCount} 首曲目`);
     } catch (error) {
       console.error('删除文件夹失败:', error);
-      alert('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
+      toast.error('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
     } finally {
       setIsLoading(false);
     }
@@ -220,10 +253,8 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           >
             {isLoading ? '...' : (
               isScanning ? (
-                <div className="flex items-center gap-1">
-                  <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                <div className="flex items-center gap-1 scanning-pulse">
+                  <div className="ring-loader" style={{ width: '12px', height: '12px', borderWidth: '2px' }}></div>
                   扫描中
                 </div>
               ) : (hasFolders ? '已配置' : '未配置')
@@ -281,9 +312,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
               >
                 {isScanning ? (
                   <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
+                    <div className="ring-loader" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
                     扫描中...
                   </>
                 ) : (
@@ -308,7 +337,8 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                 {musicFolders.map((folder, index) => (
                   <div
                     key={index}
-                    className="group relative flex items-center gap-3 p-3 bg-slate-50 dark:bg-dark-200 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-300 transition-colors duration-200"
+                    className="group relative flex items-center gap-3 p-3 bg-slate-50 dark:bg-dark-200 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-300 transition-colors duration-200 folder-item-enter"
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
                       <svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -356,9 +386,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                 >
                   {isScanning ? (
                     <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
+                      <div className="ring-loader" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
                       扫描中...
                     </>
                   ) : (
@@ -378,9 +406,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {isLoading && (
             <div className="text-center py-6">
               <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-dark-200 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-slate-400 dark:text-dark-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <div className="ring-loader" style={{ width: '24px', height: '24px', borderWidth: '3px' }}></div>
               </div>
               <p className="text-sm text-slate-600 dark:text-dark-600">加载音乐文件夹列表...</p>
             </div>

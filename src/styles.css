@@ -2,10 +2,1296 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===================================
+   音乐库简洁主题样式 (温柔米白主题)
+   =================================== */
+
+.library-simple {
+  padding: 24px 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部标题区 */
+.library-header {
+  margin-bottom: 16px;
+  padding: 0 40px;
+}
+
+.library-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px 0;
+  letter-spacing: 0.01em;
+}
+
+/* 统计栏 */
+.library-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-label {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.stat-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.stat-divider {
+  color: var(--border-primary);
+  opacity: 0.6;
+}
+
+.stat-item.search-result {
+  color: var(--brand-600);
+  font-weight: 500;
+}
+
+/* 操作栏 */
+.library-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 0 40px 14px 40px;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.4);
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(217, 214, 208, 0.5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-productive);
+  position: relative;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(217, 214, 208, 0.7);
+  transform: translateY(-1px);
+}
+
+/* 🔄 动画按钮通用样式 */
+.animated-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(248, 247, 244, 0.7));
+  border: 1px solid rgba(217, 214, 208, 0.4);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition-duration: 0.3s;
+  overflow: hidden;
+  position: relative;
+}
+
+.animated-button .svgIcon {
+  width: 14px;
+  transition-duration: 0.3s;
+}
+
+.animated-button:hover {
+  width: 100px;
+  border-radius: 25px;
+  transition-duration: 0.3s;
+  box-shadow: 0 4px 16px rgba(43, 111, 255, 0.25);
+  align-items: center;
+}
+
+.animated-button:hover .svgIcon {
+  width: 18px;
+  transition-duration: 0.3s;
+  transform: translateY(60%);
+}
+
+.animated-button::before {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: white;
+  transition-duration: 0.3s;
+  font-size: 2px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.animated-button:hover::before {
+  font-size: 13px;
+  opacity: 1;
+  transform: translateY(30px);
+  transition-duration: 0.3s;
+}
+
+.animated-button:active {
+  transform: scale(0.95);
+}
+
+/* 禁用状态 */
+.animated-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.animated-button:disabled:hover {
+  width: 40px;
+  border-radius: 50%;
+  transform: none;
+}
+
+/* 刷新按钮 */
+.refresh-button:hover {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+.refresh-button::before {
+  content: "刷新";
+}
+
+.refresh-button:hover .svgIcon {
+  transform: translateY(60%) rotate(180deg);
+}
+
+.refresh-button:active .svgIcon {
+  animation: refreshSpin 0.5s ease-in-out;
+}
+
+@keyframes refreshSpin {
+  0% { transform: translateY(60%) rotate(180deg); }
+  100% { transform: translateY(60%) rotate(540deg); }
+}
+
+/* 播放全部按钮 */
+.play-all-button:hover {
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+  border-color: var(--brand-600);
+  width: 110px;
+}
+
+.play-all-button::before {
+  content: "播放全部";
+}
+
+.play-all-button:active .svgIcon {
+  animation: playPulse 0.4s ease-in-out;
+}
+
+@keyframes playPulse {
+  0%, 100% { transform: translateY(60%) scale(1); }
+  50% { transform: translateY(60%) scale(1.3); }
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action-btn-primary {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: white;
+}
+
+.action-btn-primary:hover {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  box-shadow: 0 4px 12px rgba(43, 111, 255, 0.2);
+}
+
+/* 视图切换标签 */
+.view-tabs {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+  background: rgba(217, 214, 208, 0.15);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  position: relative;
+}
+
+/* 滑动指示器 */
+.view-tabs-slider {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc((100% - 12px) / 3);
+  height: calc(100% - 6px);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(43, 111, 255, 0.12);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+}
+
+.view-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  text-align: center;
+}
+
+.view-tab:hover {
+  color: var(--text-secondary);
+}
+
+.view-tab.active {
+  color: var(--brand-600);
+}
+
+/* 错误提示 */
+.library-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  color: #991B1B;
+  font-size: 14px;
+}
+
+.library-error button {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: #991B1B;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.library-error button:hover {
+  opacity: 1;
+}
+
+/* 扫描进度 */
+.library-scanning {
+  padding: 16px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.scanning-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1E40AF;
+}
+
+.scanning-progress {
+  font-size: 13px;
+  color: #2563EB;
+}
+
+.progress-bar {
+  height: 4px;
+  background: #DBEAFE;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563EB 0%, #60A5FA 100%);
+  transition: width 0.3s ease;
+}
+
+.scanning-file {
+  font-size: 12px;
+  color: #6B7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 主内容区 */
+.library-content {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 加载状态 */
+.library-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 16px;
+}
+
+.library-loading .ring-loader {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(217, 214, 208, 0.3);
+  border-top-color: var(--brand-600);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.library-loading p {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 空状态 */
+.library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  color: rgba(217, 214, 208, 0.6);
+  margin-bottom: 16px;
+}
+
+.library-empty h3 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+}
+
+.library-empty p {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 400px;
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .library-header {
+    padding: 0 32px;
+  }
+  
+  .library-actions {
+    flex-wrap: wrap;
+    padding: 0 32px 14px 32px;
+  }
+  
+  .view-tabs {
+    margin-left: 0;
+    width: 100%;
+    justify-content: stretch;
+  }
+  
+  .view-tab {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .library-header {
+    padding: 0 20px;
+  }
+  
+  .library-actions {
+    padding: 0 20px 14px 20px;
+  }
+  
+  .library-title {
+    font-size: 24px;
+  }
+  
+  .library-stats-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* 歌曲行样式 - 悬停效果由全局跟随指示器提供 */
+tbody tr {
+  transition: all 0.2s ease-out;
+}
+
+/* 深色模式适配 */
+[data-theme="dark"] .library-simple {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .library-title {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .stat-label {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .stat-value {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .action-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .view-tabs {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .view-tabs-slider {
+  background: var(--brand-600);
+  box-shadow: 0 2px 8px rgba(43, 111, 255, 0.3);
+}
+
+[data-theme="dark"] .view-tab {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .view-tab:hover {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .view-tab.active {
+  color: white;
+}
+
+[data-theme="dark"] .library-content {
+  background: transparent;
+  border: none;
+}
+
+[data-theme="dark"] .library-empty h3 {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .library-empty p {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .empty-icon {
+  color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .library-loading .ring-loader {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--brand-600);
+}
+
+[data-theme="dark"] .animated-button {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .animated-button .svgIcon {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .refresh-button:hover,
+[data-theme="dark"] .play-all-button:hover {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+[data-theme="dark"] .play-all-button:hover {
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
+}
+
+/* ============================================
+   歌手视图样式 - 现代横向卡片布局
+   ============================================ */
+
+.artists-modern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 4px;
+}
+
+.artist-card-modern {
+  background: white;
+  border: 1px solid rgba(217, 214, 208, 0.25);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.artist-card-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.35);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(243, 244, 246, 0.8) 100%);
+}
+
+.artist-avatar-modern {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.artist-card-modern:hover .artist-avatar-modern {
+  transform: scale(1.08);
+  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.45);
+}
+
+.artist-initial-modern {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  user-select: none;
+  transition: opacity 0.3s ease;
+}
+
+.artist-play-btn-modern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.artist-card-modern:hover .artist-play-btn-modern {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.artist-card-modern:hover .artist-initial-modern {
+  opacity: 0;
+}
+
+.artist-info-modern {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.artist-name-modern {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.artist-meta-modern {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.artist-dot {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ============================================
+   专辑视图样式 - 网格卡片 + 右侧抽屉
+   ============================================ */
+
+.albums-view-container {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  height: calc(100vh - 200px);
+  overflow: hidden;
+  max-height: calc(100vh - 200px);
+}
+
+.albums-grid-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-items: start;
+  grid-auto-rows: min-content;
+  height: 100%;
+  max-height: 100%;
+}
+
+/* 有选中时，收缩成单列 */
+.albums-grid-container.has-selection {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-right: 1px solid rgba(217, 214, 208, 0.2);
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  max-height: 100%;
+  background: transparent;
+}
+
+.album-card {
+  background: white;
+  border: 1px solid rgba(217, 214, 208, 0.25);
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.album-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+/* 收缩模式下的卡片样式（列表样式，无卡片效果） */
+.albums-grid-container.has-selection .album-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+  transform: none;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.15);
+  min-height: 68px;
+  height: 68px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.albums-grid-container.has-selection .album-card:hover {
+  transform: none;
+  background: rgba(168, 85, 247, 0.04) !important;
+  box-shadow: none !important;
+}
+
+.albums-grid-container.has-selection .album-cover {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.album-info-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.albums-grid-container.has-selection .album-info-wrapper {
+  flex: 1;
+}
+
+.albums-grid-container.has-selection .album-name,
+.albums-grid-container.has-selection .album-artist,
+.albums-grid-container.has-selection .album-track-count {
+  text-align: left;
+  margin: 0;
+}
+
+.albums-grid-container.has-selection .album-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.albums-grid-container.has-selection .album-artist {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.albums-grid-container.has-selection .album-track-count {
+  font-size: 10px;
+}
+
+.albums-grid-container.has-selection .album-selected-indicator {
+  display: none;
+}
+
+.albums-grid-container.has-selection .album-play-overlay {
+  display: none;
+}
+
+/* 选中状态 */
+.album-card-selected {
+  border-color: rgba(168, 85, 247, 0.5) !important;
+  border-width: 2px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(236, 72, 153, 0.08) 100%) !important;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25) !important;
+}
+
+/* 列表模式下的选中状态 */
+.albums-grid-container.has-selection .album-card-selected {
+  background: rgba(168, 85, 247, 0.08) !important;
+  border: none !important;
+  border-left: 3px solid #a855f7 !important;
+  box-shadow: none !important;
+  padding-left: 9px !important;
+}
+
+.album-cover {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #f5f3f0 0%, #e8e5e1 100%);
+}
+
+.album-card:hover .album-cover {
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.25);
+}
+
+.album-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.album-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  color: white;
+  backdrop-filter: blur(4px);
+}
+
+.album-card:hover .album-play-overlay {
+  opacity: 1;
+}
+
+.album-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 3px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.album-artist {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.album-track-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.album-selected-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+  animation: scaleIn 0.3s ease;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 遮罩层 - 隐藏不用 */
+.album-drawer-overlay {
+  display: none;
+}
+
+/* 右侧详情面板 */
+.album-drawer {
+  flex: 1;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 16px 24px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.album-drawer-close {
+  display: none;
+}
+
+/* 抽屉头部 */
+.album-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.15);
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.album-drawer-cover {
+  width: 120px;
+  height: 120px;
+  margin: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.album-drawer-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-drawer-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.album-drawer-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.album-drawer-badge {
+  display: none;
+}
+
+.album-drawer-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-drawer-artist {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 6px 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-drawer-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.album-drawer-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  border: none;
+  border-radius: 20px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+}
+
+.album-drawer-play-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+}
+
+.album-drawer-play-btn:active {
+  transform: translateY(0);
+}
+
+/* 抽屉歌曲列表 - 表格式 */
+.album-drawer-tracks {
+  flex: 1;
+  min-height: 0;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.album-drawer-tracks-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 1fr 80px;
+  gap: 16px;
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.15);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.album-drawer-tracks-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.album-drawer-track-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 1fr 80px;
+  gap: 16px;
+  padding: 10px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.06);
+}
+
+.album-drawer-track-row:hover {
+  background: rgba(168, 85, 247, 0.04);
+}
+
+.drawer-track-col-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.drawer-track-number {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.drawer-track-play-icon {
+  position: absolute;
+  color: #a855f7;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+}
+
+.album-drawer-track-row:hover .drawer-track-number {
+  opacity: 0;
+}
+
+.album-drawer-track-row:hover .drawer-track-play-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.drawer-track-col-title {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-track-col-artist {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-track-col-duration {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================
+   深色模式适配 - 歌手和专辑视图
+   ============================================ */
+
+[data-theme="dark"] .artist-card-modern,
+[data-theme="dark"] .album-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .artist-card-modern:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border-color: rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="dark"] .album-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .albums-grid-container.has-selection {
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .album-card-selected {
+  border-color: rgba(168, 85, 247, 0.6) !important;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(236, 72, 153, 0.12) 100%) !important;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3) !important;
+}
+
+[data-theme="dark"] .artist-name-modern,
+[data-theme="dark"] .album-name {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .artist-meta-modern,
+[data-theme="dark"] .album-artist {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .album-track-count {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .album-drawer {
+  background: rgba(20, 20, 20, 0.98);
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .album-drawer-close {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="dark"] .album-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .album-drawer-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .album-drawer-name {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="dark"] .album-drawer-artist {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .album-drawer-stats {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .album-drawer-tracks-header {
+  background: rgba(20, 20, 20, 0.98);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="dark"] .album-drawer-track-row:hover {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.12) 50%, rgba(168, 85, 247, 0.08) 100%);
+}
+
+[data-theme="dark"] .drawer-track-col-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+[data-theme="dark"] .drawer-track-number,
+[data-theme="dark"] .drawer-track-col-duration {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+
+
 :root {
-  /* 🎨 玻璃化蓝色主题设计令牌 */
+  /* 🎨 简约温柔米白主题设计令牌 */
   
   /* 主色系统 - 蓝色品牌轴 */
+  --brand-700: #1E56E0;                 /* 深品牌蓝（渐变终点） */
   --brand-600: #2B6FFF;                 /* 主品牌蓝 */
   --brand-500: #4D86FF;                 /* 中等品牌蓝 */
   --brand-400: #7FB0FF;                 /* 浅品牌蓝 */
@@ -48,6 +1334,9 @@
   --text-xs: 0.8125rem;      /* 13px */
   --text-sm: 0.875rem;       /* 14px */
   --text-base: 0.9375rem;    /* 15px - 提升基础字号 */
+  
+  /* 性能优化 - 歌词滚动 */
+  --lyrics-scroll-optimization: contain layout paint; /* CSS containment */
   --text-lg: 1rem;           /* 16px */
   --text-xl: 1.125rem;       /* 18px */
   --text-2xl: 1.25rem;       /* 20px */
@@ -63,19 +1352,12 @@
   --warning: #FDBA4D;
   --danger: #F05252;
   
-  /* 🔮 玻璃材质系统 */
-  --glass-bg: rgba(255, 255, 255, 0.15);      /* 基础玻璃背景 - 增加不透明度 */
-  --glass-bg-strong: rgba(255, 255, 255, 0.25); /* 强调玻璃背景 - 增加不透明度 */
-  --glass-bg-overlay: rgba(255, 255, 255, 0.35); /* 浮层玻璃背景 - 增加不透明度 */
-  --glass-border: rgba(255, 255, 255, 0.4);     /* 玻璃内描边 - 增加不透明度 */
-  --glass-border-outer: rgba(43, 111, 255, 0.15); /* 玻璃外描边 */
-  --glass-blur: 8px;                             /* 减少模糊程度 */
   
-  /* 🌈 背景系统 - 简化背景色彩 */
+  /* 🌈 背景系统 - 温柔米白渐变 */
   --bg-app: linear-gradient(135deg, 
-    #FAFBFF 0%,                        /* 极浅蓝白 - 更淡 */
-    #F5F8FF 50%,                       /* 中性浅蓝 */
-    #F0F4FF 100%);                     /* 淡蓝白 - 更淡 */
+    #FDFDFB 0%,                        /* 温柔米白 */
+    #F8F7F4 50%,                       /* 淡米灰白 */
+    #F2F1ED 100%);                     /* 浅米灰 */
   --bg-noise: none;                    /* 移除噪点纹理 */
   
   /* 📐 间距与尺寸系统 */
@@ -121,7 +1403,6 @@
   /* 🎵 渐变系统 */
   --gradient-brand: linear-gradient(135deg, var(--brand-600) 0%, var(--sky-400) 100%);
   --gradient-brand-soft: linear-gradient(135deg, var(--brand-500) 0%, var(--sky-400) 100%);
-  --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
 }
 
 /* =================================
@@ -148,13 +1429,14 @@
   --border-secondary: rgba(100, 116, 139, 0.15); /* 次要边框 - 更淡 */
   --border-focus: #6366F1;                     /* 焦点边框 - 亮蓝紫 */
   
-  /* 🔮 深色玻璃材质系统 - 精细调整 */
-  --glass-bg: rgba(15, 23, 42, 0.15);         /* 基础玻璃背景 - 更透明，减少粗糙感 */
-  --glass-bg-strong: rgba(15, 23, 42, 0.25);  /* 强调玻璃背景 - 适中透明度 */
-  --glass-bg-overlay: rgba(15, 23, 42, 0.4);  /* 浮层玻璃背景 - 中等不透明 */
-  --glass-border: rgba(255, 255, 255, 0.06);  /* 玻璃内描边 - 更柔和 */
-  --glass-border-outer: rgba(99, 102, 241, 0.2); /* 玻璃外描边 - 更淡 */
-  --glass-blur: 16px;                          /* 增加模糊程度，提升质感 */
+  /* 🎴 简约卡片系统（深色模式适配） */
+  --card-bg: #0F172A;                          /* 卡片背景 - 深灰蓝 */
+  --card-bg-secondary: #111827;                /* 次要卡片 - 暖深灰 */
+  --card-border: rgba(148, 163, 184, 0.15);    /* 卡片边框 - 柔和 */
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2); /* 深色阴影 */
+  --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.2); /* 悬停阴影 */
+  --card-radius: 12px;                         /* 圆角 */
+  
   
   /* 🌈 深色背景系统 */
   --bg-app: linear-gradient(135deg, 
@@ -169,8 +1451,6 @@
   --shadow-deep: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 24px rgba(99, 102, 241, 0.15);
   --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.4), 0 0 48px rgba(99, 102, 241, 0.2);
   
-  /* 深色渐变系统 */
-  --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
   
   /* 状态色系统 - 深色适配 */
   --success: #22C55E;
@@ -199,11 +1479,13 @@
     --border-secondary: rgba(100, 116, 139, 0.15);
     --border-focus: #6366F1;
     
-    --glass-bg: rgba(15, 23, 42, 0.15);
-    --glass-bg-strong: rgba(15, 23, 42, 0.25);
-    --glass-bg-overlay: rgba(15, 23, 42, 0.4);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --glass-border-outer: rgba(99, 102, 241, 0.2);
+    /* 卡片系统 */
+    --card-bg: #0F172A;
+    --card-bg-secondary: #111827;
+    --card-border: rgba(148, 163, 184, 0.15);
+    --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.2);
+    --card-radius: 12px;
     
     --bg-app: linear-gradient(135deg, #020617 0%, #0F172A 50%, #1E293B 100%);
     
@@ -211,8 +1493,6 @@
     --shadow-medium: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 16px rgba(99, 102, 241, 0.12);
     --shadow-deep: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 24px rgba(99, 102, 241, 0.15);
     --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.4), 0 0 48px rgba(99, 102, 241, 0.2);
-    
-    --gradient-glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
   }
 }
 
@@ -223,17 +1503,6 @@
   --slate-700: var(--text-secondary);
   --slate-500: var(--text-muted);
   
-  /* 覆盖背景色 */
-  --glass-bg: var(--surface-overlay);
-  --glass-bg-strong: var(--surface-primary);
-  --glass-bg-overlay: var(--surface-primary);
-  
-  /* 覆盖边框色 */
-  --glass-border: var(--border-primary);
-  --glass-border-outer: var(--border-focus);
-  
-  /* 减弱模糊效果 */
-  --glass-blur: 0px;
   
   /* 使用清晰阴影 */
   --shadow-soft: var(--shadow-subtle);
@@ -247,12 +1516,13 @@
     --slate-900: var(--text-primary);
     --slate-700: var(--text-secondary);
     --slate-500: var(--text-muted);
-    --glass-bg: var(--surface-overlay);
-    --glass-bg-strong: var(--surface-primary);
-    --glass-bg-overlay: var(--surface-primary);
-    --glass-border: var(--border-primary);
-    --glass-border-outer: var(--border-focus);
-    --glass-blur: 0px;
+    /* 玻璃变量兼容层 */
+    --card-bg: var(--card-bg-secondary);
+    --card-bg-strong: var(--card-bg);
+    --card-bg-overlay: var(--card-bg);
+    --card-border: var(--card-border);
+    --card-border-outer: var(--border-focus);
+    --card-blur: 0px;
     --shadow-soft: var(--shadow-subtle);
     --shadow-medium: var(--shadow-moderate);
     --shadow-deep: var(--shadow-prominent);
@@ -309,16 +1579,16 @@
   border-color: var(--border-secondary);
 }
 
-.dark\:bg-glass-dark-bg {
-  background-color: var(--glass-bg);
+.dark\:bg-card-bg {
+  background-color: var(--card-bg-secondary);
 }
 
-.dark\:bg-glass-dark-bg-strong {
-  background-color: var(--glass-bg-strong);
+.dark\:bg-card-bg-strong {
+  background-color: var(--card-bg);
 }
 
-.dark\:border-glass-dark-border {
-  border-color: var(--glass-border);
+.dark\:border-card-border {
+  border-color: var(--card-border);
 }
 
 .dark\:hover\:bg-dark-200\/50:hover {
@@ -424,128 +1694,56 @@
   }
   
   ::-webkit-scrollbar-thumb {
-    background: var(--glass-bg-strong);
+    background: var(--surface-tertiary);
     border-radius: var(--radius-lg);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--card-border);
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--glass-bg-overlay);
+    background: var(--border-primary);
   }
 }
 
 @layer components {
-  /* 🔮 玻璃材质基础类 */
-  .glass-surface {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    backdrop-filter: blur(var(--glass-blur)) saturate(110%);
-    box-shadow: var(--shadow-soft);
-    position: relative;
-    overflow: hidden;
+  /* 🎴 简约卡片基础类 */
+  .card-surface {
+    background: var(--surface-secondary);
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
   }
   
-  .glass-surface::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--gradient-glass-highlight);
-    opacity: 0.8;
+  .card-surface-strong {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
   }
   
-  .glass-surface-strong {
-    background: var(--glass-bg-strong);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    backdrop-filter: blur(var(--glass-blur)) saturate(105%);
-    box-shadow: var(--shadow-medium);
-    position: relative;
-    overflow: hidden;
+  .card-overlay {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow-hover);
   }
   
-  .glass-surface-strong::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--gradient-glass-highlight);
-    opacity: 1;
+  /* 🎵 音乐库专用简约卡片 */
+  .card-music-library {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
   }
   
-  .glass-overlay {
-    background: var(--glass-bg-overlay);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-2xl);
-    backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(130%);
-    box-shadow: var(--shadow-deep);
-    position: relative;
-    overflow: hidden;
-  }
-  
-  /* 🎵 音乐库专用玻璃效果 - 增强层级感 */
-  .glass-music-library {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-xl);
-    backdrop-filter: blur(var(--glass-blur)) saturate(115%);
-    box-shadow: var(--shadow-soft);
-    position: relative;
-    overflow: hidden;
-  }
-  
-  /* 深色模式下的音乐库增强效果 */
-  [data-theme="dark"] .glass-music-library {
-    background: rgba(15, 23, 42, 0.25); /* 比默认稍微不透明 */
-    border: 1px solid rgba(255, 255, 255, 0.08); /* 增强边框可见度 */
-    box-shadow: 
-      0 8px 24px rgba(0, 0, 0, 0.4),
-      0 0 12px rgba(99, 102, 241, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08); /* 内发光效果 */
-  }
-  
-  .glass-music-library::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, 
-      transparent 0%, 
-      rgba(255, 255, 255, 0.1) 50%, 
-      transparent 100%);
-    opacity: 0.6;
-  }
-  
-  /* 深色模式下的增强高光 */
-  [data-theme="dark"] .glass-music-library::before {
-    background: linear-gradient(90deg, 
-      transparent 0%, 
-      rgba(255, 255, 255, 0.15) 50%, 
-      transparent 100%);
-    opacity: 0.8;
-  }
-  
-  .glass-overlay::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--gradient-glass-highlight);
-    opacity: 1;
+  /* 深色模式下的音乐库卡片 */
+  [data-theme="dark"] .card-music-library {
+    background: var(--surface-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
   
   /* 🎯 交互状态 */
-  .glass-interactive {
+  .card-interactive {
     transition: transform var(--dur-normal) var(--ease-productive),
                 box-shadow var(--dur-normal) var(--ease-productive),
                 border-color var(--dur-normal) var(--ease-productive);
@@ -554,13 +1752,13 @@
     transform: translateZ(0); /* 强制GPU合成 */
   }
   
-  .glass-interactive:hover {
+  .card-interactive:hover {
     transform: translateY(-1px) scale(1.01) translateZ(0);
     box-shadow: var(--shadow-medium);
-    border-color: var(--glass-border-outer);
+    border-color: var(--border-focus);
   }
   
-  .glass-interactive:active {
+  .card-interactive:active {
     transform: translateY(0) scale(0.99) translateZ(0);
     transition: transform var(--dur-fast) var(--ease-productive);
   }
@@ -621,19 +1819,18 @@
   .btn-secondary {
     background: transparent;
     color: var(--brand-600);
-    border: 1px solid var(--glass-border-outer);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
     padding: var(--space-3) var(--space-6);
     font-weight: 500;
     font-size: 14px;
     line-height: 1.4;
-    backdrop-filter: blur(var(--glass-blur));
     transition: all var(--dur-normal) var(--ease-productive);
     cursor: pointer;
   }
   
   .btn-secondary:hover {
-    background: var(--glass-bg);
+    background: var(--card-bg);
     border-color: var(--brand-400);
     transform: translateY(-1px);
     box-shadow: var(--shadow-soft);
@@ -645,11 +1842,10 @@
   }
   
   /* 🔍 输入框和搜索 */
-  .glass-input {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
+  .card-input {
+    background: var(--surface-secondary);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(var(--glass-blur));
     padding: var(--space-3) var(--space-4);
     color: var(--slate-900);
     font-size: 14px;
@@ -657,28 +1853,27 @@
     outline: none;
   }
   
-  .glass-input::placeholder {
+  .card-input::placeholder {
     color: var(--slate-500);
   }
   
-  .glass-input:focus {
+  .card-input:focus {
     border-color: var(--brand-400);
-    background: var(--glass-bg-strong);
+    background: var(--card-bg);
     box-shadow: 0 0 0 3px rgba(43, 111, 255, 0.1), var(--shadow-soft);
   }
   
   /* 📊 标签页系统 */
-  .glass-tabs {
+  .card-tabs {
     display: inline-flex;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
+    background: var(--surface-secondary);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius-2xl);
     padding: var(--space-1);
-    backdrop-filter: blur(var(--glass-blur));
     position: relative;
   }
   
-  .glass-tab {
+  .card-tab {
     position: relative;
     padding: var(--space-3) var(--space-6);
     border-radius: var(--radius-xl);
@@ -692,15 +1887,15 @@
     background: transparent;
   }
   
-  .glass-tab.active {
+  .card-tab.active {
     color: var(--text-primary);
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
-  .glass-tab:not(.active):hover {
+  .card-tab:not(.active):hover {
     color: var(--brand-600);
-    background: var(--glass-bg);
+    background: var(--surface-secondary);
   }
   
   /* 滑动指示器 */
@@ -711,21 +1906,21 @@
     box-shadow: var(--shadow-soft);
     transition: all 0.7s var(--ease-bounce-out);
     z-index: 1;
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--card-border);
   }
   
   /* 🎵 进度条 */
-  .glass-progress {
+  .card-progress {
     width: 100%;
     height: 6px;
-    background: var(--glass-bg);
+    background: var(--card-bg);
     border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
+    border: 1px solid var(--card-border);
     overflow: hidden;
     position: relative;
   }
   
-  .glass-progress-fill {
+  .card-progress-fill {
     height: 100%;
     background: var(--gradient-brand);
     border-radius: var(--radius-sm);
@@ -733,7 +1928,7 @@
     position: relative;
   }
   
-  .glass-progress-fill::after {
+  .card-progress-fill::after {
     content: '';
     position: absolute;
     top: 0;
@@ -744,81 +1939,68 @@
   }
   
   /* 🏷️ 徽章和标签 */
-  .glass-badge {
+  .card-badge {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    background: var(--glass-bg-strong);
-    border: 1px solid var(--glass-border);
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-primary);
     border-radius: var(--radius-lg);
-    backdrop-filter: blur(var(--glass-blur));
     font-size: 12px;
     font-weight: 500;
-    color: var(--slate-700);
+    color: var(--text-secondary);
   }
   
-  .glass-badge.brand {
+  .card-badge.brand {
     background: var(--gradient-brand);
     color: white;
     border-color: rgba(255, 255, 255, 0.2);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
-  .glass-badge.success {
+  .card-badge.success {
     background: var(--success);
     color: white;
     border-color: rgba(255, 255, 255, 0.2);
   }
   
-  .glass-badge.warning {
+  .card-badge.warning {
     background: var(--warning);
     color: white;
     border-color: rgba(255, 255, 255, 0.2);
   }
   
-  .glass-badge.danger {
+  .card-badge.danger {
     background: var(--danger);
     color: white;
     border-color: rgba(255, 255, 255, 0.2);
   }
   
   /* 🎶 卡片和容器 */
-  .glass-card {
-    background: var(--glass-bg-strong);
-    border: 1px solid var(--glass-border);
+  .card-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(217, 214, 208, 0.5);
     border-radius: var(--radius-xl);
-    backdrop-filter: blur(var(--glass-blur)) saturate(105%);
     padding: var(--space-6);
-    box-shadow: var(--shadow-soft);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
     position: relative;
     overflow: hidden;
   }
   
-  .glass-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--gradient-glass-highlight);
-    opacity: 0.8;
-  }
-  
-  .glass-card-compact {
+  .card-card-compact {
     padding: var(--space-4);
   }
   
-  .glass-card-interactive {
+  .card-card-interactive {
     cursor: pointer;
     transition: all var(--dur-normal) var(--ease-productive);
   }
   
-  .glass-card-interactive:hover {
+  .card-card-interactive:hover {
     transform: translateY(-2px) scale(1.01);
     box-shadow: var(--shadow-medium);
-    border-color: var(--glass-border-outer);
+    border-color: var(--card-border-outer);
   }
   
   /* 🎯 应用布局 */
@@ -834,28 +2016,15 @@
     position: sticky;
     top: 0;
     z-index: 50;
-    /* 完全复制播放器效果，但透明度更高 */
-    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-    color: #fff;
+    background: rgba(255,255,255,0.95);
+    border-bottom: 1px solid rgba(217, 214, 208, 0.5);
+    color: var(--text-primary);
     overflow: hidden;
     box-shadow: 
-      0 4px 32px rgba(0,0,0,0.04),
-      0 1px 8px rgba(0,0,0,0.02);
+      0 2px 8px rgba(0,0,0,0.04),
+      0 1px 3px rgba(0,0,0,0.02);
     transform: none;
     opacity: 1;
-  }
-
-  .app-header::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    /* 完全复制播放器的径向渐变效果 */
-    background: radial-gradient(120% 100% at 50% 0%, rgba(2,6,23,0.08) 0%, rgba(2,6,23,0.04) 40%, transparent 70%);
-    z-index: -1;
   }
   
   .app-main {
@@ -872,30 +2041,23 @@
   }
   
   .app-sidebar {
-    background: var(--glass-bg-strong);
-    border-right: 1px solid var(--glass-border);
-    backdrop-filter: blur(var(--glass-blur)) saturate(110%);
+    background: #FAFAF8;
+    border-right: 1px solid rgba(217, 214, 208, 0.5);
     position: relative;
     overflow-y: auto; /* 启用垂直滚动 */
     overflow-x: hidden; /* 隐藏水平滚动 */
     height: 100%; /* 占满父容器高度 */
     width: 100%; /* 占满grid列宽度 */
+    /* 增强视觉分隔 - 添加右侧阴影 */
+    box-shadow: 1px 0 4px rgba(0, 0, 0, 0.04);
   }
   
-  /* 动画期间减少backdrop-filter */
-  .app-sidebar.animating {
-    backdrop-filter: blur(4px) saturate(100%);
-    transition: backdrop-filter 0.1s ease;
-  }
-  
-  /* 通用动画优化类 - 减少昂贵效果 */
-  .animating .glass-surface {
-    backdrop-filter: blur(4px) saturate(100%) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-  }
-  
-  .animating .backdrop-blur-md {
-    backdrop-filter: blur(4px) !important;
+  /* 深色模式下增强侧边栏分隔 */
+  [data-theme="dark"] .app-sidebar,
+  .dark .app-sidebar {
+    background: #111827;
+    border-right-color: rgba(148, 163, 184, 0.15);
+    box-shadow: 1px 0 8px rgba(0, 0, 0, 0.3);
   }
   
   .animating .shadow-lg {
@@ -921,9 +2083,7 @@
   
   .app-sidebar::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    backdrop-filter: blur(4px);
-  }
+    border-radius: 3px;  }
   
   .app-sidebar::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.4);
@@ -954,9 +2114,7 @@
   
   .app-content::-webkit-scrollbar-thumb {
     background: var(--brand-400);
-    border-radius: 4px;
-    backdrop-filter: blur(4px);
-    transition: background-color 0.2s ease;
+    border-radius: 4px;    transition: background-color 0.2s ease;
   }
   
   .app-content::-webkit-scrollbar-thumb:hover {
@@ -973,13 +2131,56 @@
     position: sticky;
     bottom: 0;
     z-index: 50;
-    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
-    background: var(--glass-bg-strong);
-    border-top: 1px solid var(--glass-border);
+    background: #FFFFFF;
+    border-top: 1px solid rgba(217, 214, 208, 0.5);
   }
   
-  /* 🎬 玻璃化动画效果 */
-  @keyframes glass-float {
+  /* 🎴 简约卡片样式 - 替代玻璃效果 */
+  .glass-surface,
+  .glass-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(217, 214, 208, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+
+  .glass-music-library {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .glass-interactive {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .glass-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  }
+
+  /* 深色模式适配 */
+  [data-theme="dark"] .glass-surface,
+  [data-theme="dark"] .glass-card {
+    background: #0F172A;
+    border-color: rgba(148, 163, 184, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  [data-theme="dark"] .glass-music-library {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  [data-theme="dark"] .glass-interactive:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 🎬 动画效果 */
+  @keyframes card-float {
     0%, 100% {
       transform: translateY(0);
     }
@@ -988,7 +2189,7 @@
     }
   }
   
-  @keyframes glass-glow {
+  @keyframes card-glow {
     0%, 100% {
       box-shadow: var(--shadow-soft);
     }
@@ -996,8 +2197,302 @@
       box-shadow: var(--shadow-glow), var(--shadow-medium);
     }
   }
+
+  /* 🎊 Toast通知动画 */
+  @keyframes toast-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes toast-slide-out {
+    from {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(100%) scale(0.9);
+    }
+  }
+
+  .animate-toast-slide-in {
+    animation: toast-slide-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .animate-toast-slide-out {
+    animation: toast-slide-out 0.3s cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  /* 📊 性能监控数据刷新动画 */
+  @keyframes metric-refresh {
+    0%, 100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: rgba(59, 130, 246, 0.08);
+    }
+  }
+
+  .metric-refreshing {
+    animation: metric-refresh 0.6s ease-out;
+  }
+
+  /* 🎚️ 音频增强面板交互动画 */
+  @keyframes eq-slider-active {
+    0%, 100% {
+      background-color: rgba(99, 102, 241, 0.1);
+    }
+    50% {
+      background-color: rgba(99, 102, 241, 0.2);
+    }
+  }
+
+  .eq-slider-active {
+    animation: eq-slider-active 0.3s ease-out;
+  }
+
+  @keyframes toggle-switch {
+    0% {
+      transform: scale(0.95);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .toggle-switch-animate {
+    animation: toggle-switch 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes preset-select {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.02);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .preset-select-animate {
+    animation: preset-select 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 📁 文件夹列表动画 */
+  @keyframes folder-item-enter {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes folder-item-exit {
+    from {
+      opacity: 1;
+      transform: scale(1);
+      max-height: 100px;
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.8);
+      max-height: 0;
+    }
+  }
+
+  .folder-item-enter {
+    animation: folder-item-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .folder-item-exit {
+    animation: folder-item-exit 0.3s cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  @keyframes scanning-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .scanning-pulse {
+    animation: scanning-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* 💀 骨架屏加载动画 */
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-box {
+    background: linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.1) 0%,
+      rgba(148, 163, 184, 0.2) 50%,
+      rgba(148, 163, 184, 0.1) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
+  .dark .skeleton-box {
+    background: linear-gradient(
+      90deg,
+      rgba(71, 85, 105, 0.1) 0%,
+      rgba(71, 85, 105, 0.2) 50%,
+      rgba(71, 85, 105, 0.1) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* 🎵 音乐库歌曲行悬停动画 */
   
-  @keyframes glass-shimmer {
+  /* 1. 背景高亮动画 */
+  @keyframes track-row-highlight {
+    from {
+      background-color: transparent;
+    }
+    to {
+      background: linear-gradient(
+        90deg,
+        rgba(77, 134, 255, 0.03) 0%,
+        rgba(77, 134, 255, 0.06) 50%,
+        rgba(77, 134, 255, 0.03) 100%
+      );
+    }
+  }
+
+  .track-row-hover {
+    animation: track-row-highlight 0.2s ease-out forwards;
+  }
+
+  /* 2. 封面旋转进入动画 */
+  @keyframes album-cover-pop {
+    0% {
+      transform: scale(1) rotate(0deg);
+    }
+    50% {
+      transform: scale(1.08) rotate(2deg);
+    }
+    100% {
+      transform: scale(1.05) rotate(0deg);
+    }
+  }
+
+  .album-cover-hover {
+    animation: album-cover-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 3. 操作按钮滑入动画 */
+  @keyframes action-button-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .action-button-enter {
+    animation: action-button-slide-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 4. 音符图标脉动 */
+  @keyframes music-note-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+
+  .music-note-pulse {
+    animation: music-note-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* 5. 时长数字跳动 */
+  @keyframes duration-bounce {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  .duration-bounce {
+    animation: duration-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 6. 波纹扩散效果 */
+  @keyframes ripple-effect {
+    0% {
+      box-shadow: 0 0 0 0 rgba(77, 134, 255, 0.2);
+    }
+    100% {
+      box-shadow: 0 0 0 8px rgba(77, 134, 255, 0);
+    }
+  }
+
+  .ripple-active {
+    animation: ripple-effect 0.6s ease-out;
+  }
+
+  /* 7. 收藏按钮心跳动画 */
+  @keyframes favorite-heartbeat {
+    0%, 100% {
+      transform: scale(1);
+    }
+    10%, 30% {
+      transform: scale(1.2);
+    }
+    20%, 40% {
+      transform: scale(1.1);
+    }
+  }
+
+  .favorite-heartbeat {
+    animation: favorite-heartbeat 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 8. 相邻行联动效果 */
+  .track-row-neighbor-1 {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-delay: 50ms;
+  }
+
+  .track-row-neighbor-2 {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition-delay: 100ms;
+  }
+  
+  @keyframes card-shimmer {
     0% {
       background-position: -200% 0;
     }
@@ -1006,20 +2501,20 @@
     }
   }
   
-  .glass-float:hover {
-    animation: glass-float 2s ease-in-out infinite;
+  .card-float:hover {
+    animation: card-float 2s ease-in-out infinite;
   }
   
-  .glass-glow:hover {
-    animation: glass-glow 2s ease-in-out infinite;
+  .card-glow:hover {
+    animation: card-glow 2s ease-in-out infinite;
   }
   
-  .glass-shimmer {
+  .card-shimmer {
     position: relative;
     overflow: hidden;
   }
   
-  .glass-shimmer::after {
+  .card-shimmer::after {
     content: '';
     position: absolute;
     top: 0;
@@ -1033,7 +2528,7 @@
       transparent 100%
     );
     background-size: 200% 100%;
-    animation: glass-shimmer 3s ease-in-out infinite;
+    animation: card-shimmer 3s ease-in-out infinite;
     pointer-events: none;
   }
   
@@ -1084,6 +2579,17 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: translateX(-50%) scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(-50%) scaleX(1);
+      opacity: 1;
     }
   }
 
@@ -1406,14 +2912,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--surface-secondary);
     padding: 30px;
     border-radius: 15px;
     transition: background 0.3s ease;
-    backdrop-filter: blur(12px);
-    box-shadow: inset 1px 1px 4px rgba(255, 255, 255, 0.2),
-                inset -1px -1px 6px rgba(0, 0, 0, 0.3),
-                0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
   }
 
   .label {
@@ -1431,15 +2934,14 @@
     width: 230px;
     height: 40px;
     padding: 12px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--border-primary);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-secondary);
     font-size: 16px;
-    color: #e5e5e5;
+    color: var(--text-primary);
     outline: none;
     transition: box-shadow 0.3s ease, background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1), 0 0 5px rgba(0, 0, 0, 0.2) inset;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
   }
 
   .search-input:focus,
@@ -1546,17 +3048,14 @@
     width: 100%;
     height: 40px;
     padding: 8px 50px 8px 16px;
-    border: 2px solid rgba(124, 92, 255, 0.2); /* 使用主题色的透明边框 */
+    border: 1px solid rgba(124, 92, 255, 0.2);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.7); /* 半透明白色背景 */
+    background: #FFFFFF;
     font-size: 14px;
-    color: #374151; /* 深色文字 */
+    color: #374151;
     outline: none;
     transition: box-shadow 0.3s ease, background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 
-                inset 0 1px 3px rgba(255, 255, 255, 0.5),
-                inset 0 -1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
   }
 
   .search-input-light:focus,
@@ -1628,16 +3127,14 @@
   }
 
   /* 玻璃质感单选按钮组样式 - 适配白色背景 */
-  .glass-radio-group {
+  .card-radio-group {
     --bg: rgba(255, 255, 255, 0.08);
     --text: #374151;
 
     display: flex;
     position: relative;
     background: var(--bg);
-    border-radius: 1rem;
-    backdrop-filter: blur(16px) saturate(180%);
-    box-shadow:
+    border-radius: 1rem;    box-shadow:
       inset 0.5px 0.5px 2px rgba(255, 255, 255, 0.3),
       inset -0.5px -0.5px 2px rgba(0, 0, 0, 0.1),
       0 2px 8px rgba(0, 0, 0, 0.08);
@@ -1646,11 +3143,11 @@
     width: fit-content;
   }
 
-  .glass-radio-group input {
+  .card-radio-group input {
     display: none;
   }
 
-  .glass-radio-group label {
+  .card-radio-group label {
     flex: 1;
     display: flex;
     align-items: center;
@@ -1667,15 +3164,15 @@
     transition: color 0.3s ease-in-out;
   }
 
-  .glass-radio-group label:hover {
+  .card-radio-group label:hover {
     color: white;
   }
 
-  .glass-radio-group input:checked + label {
+  .card-radio-group input:checked + label {
     color: #fff;
   }
 
-  .glass-glider {
+  .card-glider {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -1689,7 +3186,7 @@
   }
 
   /* Silver */
-  #glass-silver:checked ~ .glass-glider {
+  #card-silver:checked ~ .card-glider {
     transform: translateX(0%);
     background: linear-gradient(135deg, #c0c0c055, #e0e0e0);
     box-shadow:
@@ -1698,7 +3195,7 @@
   }
 
   /* Gold */
-  #glass-gold:checked ~ .glass-glider {
+  #card-gold:checked ~ .card-glider {
     transform: translateX(100%);
     background: linear-gradient(135deg, #ffd70055, #ffcc00);
     box-shadow:
@@ -1707,7 +3204,7 @@
   }
 
   /* Platinum */
-  #glass-platinum:checked ~ .glass-glider {
+  #card-platinum:checked ~ .card-glider {
     transform: translateX(200%);
     background: linear-gradient(135deg, #d0e7ff55, #a0d8ff);
     box-shadow:
@@ -1729,14 +3226,11 @@
     height: 0;
     border-radius: 0.75rem;
     background: linear-gradient(135deg, 
-      rgba(124, 92, 255, 0.08), 
-      rgba(147, 51, 234, 0.06)
+      rgba(124, 92, 255, 0.05), 
+      rgba(147, 51, 234, 0.03)
     );
-    backdrop-filter: blur(12px) saturate(150%);
-    box-shadow: 
-      0 2px 16px rgba(124, 92, 255, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
-    border: 0.5px solid rgba(124, 92, 255, 0.1);
+    box-shadow: 0 1px 6px rgba(124, 92, 255, 0.04);
+    border: 0.5px solid rgba(124, 92, 255, 0.08);
     transform: translateY(-100%);
     transition: 
       transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -1939,20 +3433,11 @@
     );
   }
 
-  /* 液态玻璃效果保留给非主要内容 */
+  /* 保留装饰性液态效果（仅用于特殊场景） */
   .liquid-glass {
     position: relative;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.06) 0%,
-      rgba(199, 225, 254, 0.05) 20%,
-      rgba(147, 197, 253, 0.04) 40%,
-      rgba(59, 130, 246, 0.03) 60%,
-      rgba(147, 197, 253, 0.04) 80%,
-      rgba(255, 255, 255, 0.06) 100%
-    );
-    backdrop-filter: blur(20px) saturate(160%) brightness(1.02);
-    -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.02);
+    background: rgba(255, 255, 255, 0.8);
+    /* backdrop-filter已移除 - 改用实体背景 */
     border: 1px solid transparent;
     background-clip: padding-box;
     border-image: linear-gradient(
@@ -2033,26 +3518,22 @@
     /* 移除背景变化效果，保持原样 */
   }
 
-  /* 液态玻璃内容层 */
-  .liquid-glass-content {
+  /* 简化液态效果内容层 */
+  .liquid-card-content {
     position: relative;
     z-index: 3;
-    backdrop-filter: blur(2px);
   }
 
   /* 高级液态玻璃 - 带折射效果 */
-  .liquid-glass-advanced {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(25px) saturate(200%) brightness(1.1);
-    -webkit-backdrop-filter: blur(25px) saturate(200%) brightness(1.1);
-    border: 1px solid rgba(59, 130, 246, 0.25);
+  .liquid-card-advanced {
+    background: rgba(255, 255, 255, 0.06);    border: 1px solid rgba(59, 130, 246, 0.25);
     box-shadow: 
       0 4px 24px rgba(59, 130, 246, 0.1),
       inset 0 1px 0 rgba(255, 255, 255, 0.15),
       inset 0 -1px 0 rgba(59, 130, 246, 0.08);
   }
 
-  .liquid-glass-advanced::before {
+  .liquid-card-advanced::before {
     background: linear-gradient(
       45deg,
       rgba(255, 255, 255, 0.12) 0%,
@@ -2066,19 +3547,13 @@
   }
 
   /* 侧边栏专用液态玻璃 */
-  .liquid-glass-sidebar {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(30px) saturate(150%);
-    -webkit-backdrop-filter: blur(30px) saturate(150%);
-    border-right: 1px solid rgba(59, 130, 246, 0.15);
+  .liquid-card-sidebar {
+    background: rgba(255, 255, 255, 0.04);    border-right: 1px solid rgba(59, 130, 246, 0.15);
   }
 
   /* 顶部栏专用液态玻璃 */
-  .liquid-glass-header {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(20px) saturate(180%) brightness(1.05);
-    -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(1.05);
-    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  .liquid-card-header {
+    background: rgba(255, 255, 255, 0.1);    border-bottom: 1px solid rgba(59, 130, 246, 0.2);
     box-shadow: 0 1px 20px rgba(59, 130, 246, 0.08);
     /* 确保拖拽区域正常工作 */
     position: relative;
@@ -2106,56 +3581,228 @@
                 width 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
-  /* 🎵 现代播放器样式 - 简洁设计，微妙融色处理 */
+  /* 🎵 现代播放器样式 - 简约卡片设计 */
   .modern-player {
     position: relative;
     width: 100%;
-    height: 80px; /* 图片中的播放器高度较紧凑 */
-    /* 表面背景，微妙融色处理 */
-    background: var(--surface-primary);
-    border-top: 1px solid var(--border-secondary); /* 微妙的顶部边框 */
-    border-radius: 0; /* 保持原来的直角设计 */
+    height: 80px;
+    
+    /* 纯白实体背景 */
+    background: #FFFFFF;
+    
+    /* 简约边框 */
+    border-top: 1px solid rgba(217, 214, 208, 0.5);
+    border-bottom: 1px solid rgba(217, 214, 208, 0.3);
+    border-radius: 0;
     color: var(--text-primary);
-    overflow: hidden;
-    /* 轻微顶部阴影，融色处理 */
-    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
-    transform: none;
-    opacity: 1;
+    overflow: visible;
+    
+    /* 微妙阴影 */
+    box-shadow: 
+      0 -2px 8px rgba(0, 0, 0, 0.04),
+      0 -1px 3px rgba(0, 0, 0, 0.02);
+    
+    transition: all 0.3s ease;
   }
   
-  /* 确保深色模式下的播放器背景 */
+  /* 🌙 深色模式 - 简约卡片 */
   [data-theme="dark"] .modern-player {
-    background: var(--surface-primary);
-    border-top-color: var(--border-secondary);
-    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.2);
+    background: #0F172A;
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    box-shadow: 
+      0 -4px 12px rgba(0, 0, 0, 0.3),
+      0 -2px 6px rgba(0, 0, 0, 0.2);
   }
 
-  /* 播放器主容器 - 左中右三栏布局 */
+  /* 深色模式 - 播放按钮 */
+  [data-theme="dark"] .control-main-btn {
+    background: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-600) 100%);
+    box-shadow: 
+      0 4px 20px rgba(77, 134, 255, 0.4),
+      0 8px 32px rgba(77, 134, 255, 0.25),
+      inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  }
+
+  [data-theme="dark"] .control-main-btn:hover {
+    box-shadow: 
+      0 6px 24px rgba(77, 134, 255, 0.5),
+      0 10px 40px rgba(77, 134, 255, 0.3),
+      inset 0 1px 3px rgba(255, 255, 255, 0.3);
+  }
+
+  /* 深色模式 - 中等按钮 */
+  [data-theme="dark"] .control-medium-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  [data-theme="dark"] .control-medium-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--brand-500);
+    color: var(--brand-500);
+  }
+
+  /* 深色模式 - 小按钮 */
+  [data-theme="dark"] .control-small-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  [data-theme="dark"] .control-small-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--brand-500);
+    color: var(--brand-500);
+  }
+
+  [data-theme="dark"] .control-small-btn.active {
+    background: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-600) 100%);
+  }
+
+  /* 深色模式 - 进度条 */
+  [data-theme="dark"] .progress-track {
+    background: rgba(148, 163, 184, 0.1);
+  }
+
+  [data-theme="dark"] .progress-container:hover .progress-track {
+    background: rgba(148, 163, 184, 0.15);
+  }
+
+  [data-theme="dark"] .progress-bar {
+    background: linear-gradient(90deg, var(--brand-500) 0%, var(--brand-600) 100%);
+    box-shadow: 0 0 12px rgba(77, 134, 255, 0.25);
+  }
+
+  /* 深色模式 - 功能按钮 */
+  [data-theme="dark"] .function-square-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  [data-theme="dark"] .function-square-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--brand-500);
+    color: var(--brand-500);
+  }
+
+  /* 深色模式 - 音量控制 */
+  [data-theme="dark"] .volume-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  [data-theme="dark"] .volume-slider-container {
+    background: rgba(148, 163, 184, 0.1);
+  }
+
+  [data-theme="dark"] .volume-slider-fill {
+    background: linear-gradient(90deg, var(--brand-500) 0%, var(--brand-600) 100%);
+  }
+
+  /* 主容器 - 左中右三栏布局 */
   .player-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
     height: 100%;
-    padding: 0 20px; /* 左右内边距，与图片一致 */
-    gap: 16px; /* 三栏之间的间距更紧凑，贴近红框 */
+    padding: 0 20px;
+    gap: 24px;
   }
 
-  /* 🎯 左侧：专辑信息区 - 固定宽度防止中轴位移 */
+  /* 🎯 左侧区域 - 水平布局：封面 + 信息区 */
   .player-left-section {
     display: flex;
     align-items: center;
-    gap: 10px; /* 专辑图和文字间距更紧凑 */
+    gap: 12px;
     flex-shrink: 0;
-    width: 260px; /* 固定宽度，防止中轴区位移 */
-    min-width: 260px; /* 确保最小宽度 */
-    max-width: 260px; /* 确保最大宽度 */
+    min-width: 320px;
+    max-width: 500px;
+    padding: 8px 0;
   }
 
-  /* 专辑缩略图 - 正方形，图片中约40-48px */
+  /* 信息区：歌曲信息+歌词+按钮组 - 垂直堆叠 */
+  .left-info-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding-top: 10px;
+  }
+
+  /* 歌曲信息行：歌名 - 歌手 */
+  .left-top-area {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    overflow: hidden;
+    margin-bottom: 2px;
+  }
+
+  .left-song-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .track-title {
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .track-artist {
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  /* 当前歌词显示区域 - 纯文字 */
+  .current-lyric-display {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .current-lyric-display.empty {
+    font-style: italic;
+    opacity: 0.6;
+  }
+
+  .lyric-fade-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .lyric-fade-out {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  /* 按钮组 */
+  .left-bottom-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: -6px;
+  }
+
+  /* 专辑缩略图 - 正方形 */
   .album-thumbnail {
-    width: 48px;
-    height: 48px;
-    border-radius: 6px; /* 轻微圆角 */
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -2166,6 +3813,13 @@
     transform-origin: center;
     position: relative;
     z-index: 10;
+  }
+
+  .album-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
   .album-thumbnail:hover {
@@ -2198,88 +3852,45 @@
     background: #F3F4F6; /* 浅灰色背景 */
   }
 
-  /* 双行文字栈 - 固定宽度避免布局位移 */
-  .track-text-stack {
-    width: 202px; /* 固定宽度：260px - 48px(专辑图) - 10px(间距) */
-    min-width: 202px;
-    max-width: 202px;
-    overflow: hidden; /* 确保超长内容不会溢出 */
-  }
 
-  /* 歌曲信息内容 */
-  .track-info-content {
-    display: flex;
-    flex-direction: column;
-    gap: 2px; /* 标题和艺术家之间的小间距 */
-    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  }
 
-  /* 歌曲标题 - 加粗深色，固定宽度防溢出 */
-  .track-title {
-    font-size: 15px;
-    font-weight: 700; /* 加粗 */
-    color: var(--text-primary); /* 主文本色 */
-    line-height: 1.3;
-    margin: 0;
-    width: 100%;
-    max-width: 202px; /* 与父容器一致 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* 艺术家名称 - 次要灰色，固定宽度防溢出 */
-  .track-artist {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-muted); /* 辅助文本色 */
-    line-height: 1.3;
-    margin: 0;
-    width: 100%;
-    max-width: 202px; /* 与父容器一致 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* 🎯 中轴区：传输控制与进度条 - 新设计 */
+  /* 🎯 中间区域 - 垂直两层：上层播放控制 + 下层进度条 */
   .transport-area {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px; /* 上下两行间距 */
+    justify-content: center;
+    gap: 10px;
     flex: 1;
-    width: 400px; /* 固定宽度，便于精确对齐 */
-    max-width: 400px;
+    max-width: 600px;
   }
 
-  /* 上行：传输控制 - 5格栅格布局 */
+  /* 上层：播放控制按钮组 - 5按钮布局 */
   .transport-controls {
-    display: grid;
-    grid-template-columns: 32px 1fr auto 1fr 32px; /* 小键|弹性|主键|弹性|小键 */
+    display: flex;
     align-items: center;
-    width: 100%;
-    gap: 8px;
+    gap: 16px;
   }
 
   /* 小键：随机/循环等 */
+  /* 🔀 小按钮（随机/循环）- 轻量毛玻璃 */
   .control-small-btn {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: var(--surface-tertiary);
-    border: 1px solid var(--border-secondary);
+    background: rgba(255, 255, 255, 0.06);    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.2s ease;
-    justify-self: center; /* 栅格内居中 */
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    justify-self: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   }
 
   .control-small-btn:hover {
-    background: var(--surface-secondary);
+    background: rgba(255, 255, 255, 0.1);
     border-color: var(--brand-600);
     color: var(--brand-600);
     transform: scale(1.05);
@@ -2287,65 +3898,110 @@
 
   .control-small-btn:active {
     transform: scale(0.95);
+    transition-duration: 0.1s;
   }
 
+  /* 激活状态 - 渐变高亮 */
   .control-small-btn.active {
-    background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
-    border-color: var(--brand-600);
-    color: var(--surface-primary);
+    background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    color: white;
+    box-shadow: 
+      0 2px 12px rgba(43, 111, 255, 0.3),
+      inset 0 1px 1px rgba(255, 255, 255, 0.2);
   }
 
-  /* 中键：上一首/下一首 */
+  .control-small-btn.active:hover {
+    transform: scale(1.08);
+    box-shadow: 
+      0 3px 16px rgba(43, 111, 255, 0.4),
+      inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  }
+
+  /* 🎵 中等按钮（上一首/下一首）- 毛玻璃质感 */
   .control-medium-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: var(--surface-tertiary);
-    border: 1px solid var(--border-secondary);
+    background: rgba(255, 255, 255, 0.1);    border: 1px solid rgba(255, 255, 255, 0.18);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
+    color: var(--text-primary);
     cursor: pointer;
-    transition: all 0.2s ease;
-    justify-self: center; /* 栅格内居中 */
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    justify-self: center;
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.08),
+      inset 0 1px 1px rgba(255, 255, 255, 0.15);
   }
 
   .control-medium-btn:hover {
-    background: var(--surface-secondary);
+    background: rgba(255, 255, 255, 0.15);
     border-color: var(--brand-600);
     color: var(--brand-600);
     transform: scale(1.05);
+    box-shadow: 
+      0 4px 12px rgba(0, 0, 0, 0.12),
+      inset 0 1px 2px rgba(255, 255, 255, 0.2);
   }
 
   .control-medium-btn:active {
     transform: scale(0.95);
+    transition-duration: 0.1s;
   }
 
   /* 主键：播放/暂停 - 居中对齐 */
+  /* 🎯 播放按钮 - 视觉焦点核心 */
   .control-main-btn {
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--brand-600), var(--brand-700));
-    border: none;
+    background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-700) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--surface-primary);
+    color: white;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 16px rgba(124, 92, 255, 0.3);
-    justify-self: center; /* 栅格内居中，成为视觉中心 */
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 
+      0 3px 16px rgba(43, 111, 255, 0.35),
+      0 6px 24px rgba(43, 111, 255, 0.2),
+      inset 0 1px 2px rgba(255, 255, 255, 0.3);
+    justify-self: center;
+    position: relative;
+    overflow: hidden;
   }
 
+  /* 悬停效果：轻微放大 + 增强发光 */
   .control-main-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(124, 92, 255, 0.4);
+    transform: scale(1.08);
+    box-shadow: 
+      0 6px 24px rgba(43, 111, 255, 0.5),
+      0 10px 40px rgba(43, 111, 255, 0.3),
+      inset 0 1px 3px rgba(255, 255, 255, 0.4);
   }
 
+  /* 按下效果：轻微缩小 + Q弹反馈 */
   .control-main-btn:active {
     transform: scale(0.95);
+    transition-duration: 0.1s;
+  }
+
+  /* 内部光晕效果 */
+  .control-main-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .control-main-btn:hover::before {
+    opacity: 1;
   }
 
   .play-icon {
@@ -2367,133 +4023,245 @@
 
 
 
-  /* 下行：进度区 - 3格栅格布局 */
+  /* 下层：进度条区域 */
   .progress-area {
-    display: grid;
-    grid-template-columns: 40px 1fr 40px; /* 时间|进度条|时间 */
+    display: flex;
     align-items: center;
-    width: 100%; /* 与上行控制区同宽 */
+    width: calc(100% + 40px);
+    margin-left: -20px;
+    margin-right: -20px;
     gap: 12px;
+    padding: 0 20px;
   }
 
   /* 时间显示 - 当前时间 */
   .time-current {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--text-muted);
     font-family: 'Courier New', monospace;
-    text-align: center;
+    text-align: left;
     line-height: 1;
-    justify-self: center;
+    flex-shrink: 0;
+    min-width: 40px;
   }
 
   /* 时间显示 - 总时长 */
   .time-total {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
     color: var(--text-muted);
     font-family: 'Courier New', monospace;
-    text-align: center;
+    text-align: right;
     line-height: 1;
-    justify-self: center;
+    flex-shrink: 0;
+    min-width: 40px;
   }
 
-  /* 进度条容器 - 与主播放键中心对齐 */
+  /* 进度条容器 - 独立一行 */
   .progress-container {
-    width: 100%;
-    height: 6px;
+    flex: 1;
+    height: 4px;
     position: relative;
     cursor: pointer;
-    border-radius: 3px;
-    overflow: hidden;
-    justify-self: center;
+    border-radius: 2px;
+    overflow: visible;
   }
 
   /* 进度条轨道 */
   .progress-track {
     position: absolute;
-    inset: 0;
-    background: var(--border-secondary);
-    border-radius: 3px;
-    pointer-events: none; /* 确保点击事件传递到父容器 */
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: rgba(100, 116, 139, 0.15);
+    border-radius: 2px;
+    transition: background 0.3s ease;
+    pointer-events: none;
   }
 
-  /* 进度条填充 */
+  .progress-container:hover .progress-track {
+    background: rgba(100, 116, 139, 0.2);
+  }
+
+  /* 进度条填充 - 渐变+过渡 */
   .progress-bar {
-    position: relative;
-    height: 100%;
-    background: var(--text-primary); /* 使用主文本色 */
-    border-radius: 3px;
-    transition: width 0.2s ease;
-    pointer-events: none; /* 确保点击事件传递到父容器 */
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--brand-600) 0%, var(--brand-500) 100%);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+    pointer-events: none;
+    box-shadow: 0 0 6px rgba(43, 111, 255, 0.2);
+    z-index: 1;
   }
 
-  /* 进度条拖拽手柄 */
+  /* 拖拽手柄 - 更大更明显 */
   .progress-handle {
     position: absolute;
-    right: -6px;
+    right: -8px;
     top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    background: var(--text-primary);
-    border: 2px solid var(--surface-primary);
+    transform: translateY(-50%) scale(0);
+    width: 16px;
+    height: 16px;
+    background: white;
+    border: 3px solid var(--brand-600);
     border-radius: 50%;
     opacity: 0;
-    transform: translateY(-50%) scale(0);
-    transition: all 0.2s ease;
-    pointer-events: none; /* 确保点击事件传递到父容器 */
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    box-shadow: 
+      0 2px 8px rgba(43, 111, 255, 0.3),
+      0 4px 16px rgba(43, 111, 255, 0.15);
+    z-index: 2; /* 确保在最上层 */
   }
 
-  .progress-container:hover .progress-handle,
-  .progress-handle.active {
+  /* 悬停时显示拖拽点 */
+  .progress-container:hover .progress-handle {
     opacity: 1;
     transform: translateY(-50%) scale(1);
   }
 
+  /* 拖拽时放大拖拽点 */
   .progress-handle.active {
+    opacity: 1;
     transform: translateY(-50%) scale(1.2);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+      0 3px 12px rgba(43, 111, 255, 0.4),
+      0 6px 20px rgba(43, 111, 255, 0.2);
   }
 
-  /* 🎯 右侧：功能按钮区 */
+  /* 🎯 右侧：功能区 - 按钮组 */
   .player-right-section {
     display: flex;
     align-items: center;
-    gap: 8px; /* 按钮之间的间距 */
+    gap: 16px;
     flex-shrink: 0;
+    justify-content: flex-end;
+    min-width: 280px;
   }
 
-  /* 方形圆角功能按钮 - "幽灵"样式 */
-  .function-square-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px; /* 圆角 */
-    background: var(--surface-tertiary); /* 使用设计令牌 */
-    border: 1px solid var(--border-secondary); /* 淡描边 */
+  /* 🔊 音量控制组 - 图标+横向滑块 */
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .volume-icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted); /* 辅助文本色 */
+    color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .volume-icon-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--brand-600);
+    transform: scale(1.1);
+  }
+
+  /* 音量滑块容器 */
+  .volume-slider-container {
+    width: 80px;
+    height: 4px;
+    position: relative;
+    cursor: pointer;
+    border-radius: 2px;
+    background: rgba(100, 116, 139, 0.15);
+  }
+
+  /* 音量滑块填充 */
+  .volume-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand-600) 0%, var(--brand-500) 100%);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+    pointer-events: none;
+  }
+
+  /* 音量滑块手柄 */
+  .volume-slider-handle {
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    width: 12px;
+    height: 12px;
+    background: white;
+    border: 2px solid var(--brand-600);
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.2s;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(43, 111, 255, 0.25);
+  }
+
+  .volume-slider-container:hover .volume-slider-handle,
+  .volume-slider-handle.active {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+
+  .volume-slider-handle.active {
+    transform: translateY(-50%) scale(1.15);
+    box-shadow: 0 2px 8px rgba(43, 111, 255, 0.35);
+  }
+
+  /* 方形圆角功能按钮 - "幽灵"样式 */
+  /* ⚙️ 功能按钮 - 纯图标样式（无框架） */
+  .function-square-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%; /* 改为圆形 */
+    background: transparent; /* 透明背景 */    border: none; /* 移除边框 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: none; /* 移除阴影 */
   }
 
   .function-square-btn:hover {
-    background: var(--surface-secondary);
-    border-color: var(--brand-600); /* 悬停时主题色描边 */
+    background: rgba(0, 0, 0, 0.05); /* 轻微背景 */
     color: var(--brand-600);
-    transform: translateY(-1px) scale(1.02);
+    transform: scale(1.1);
+    box-shadow: none;
   }
 
   .function-square-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.9);
+    transition-duration: 0.1s;
   }
 
+  /* 激活状态（如收藏按钮） */
   .function-square-btn.active {
-    background: linear-gradient(135deg, #7C5CFF, #6366F1);
-    border-color: #7C5CFF;
-    color: #fff;
+    background: transparent;
+    border: none;
+    color: #FF4D6D;
+    box-shadow: none;
+  }
+
+  .function-square-btn.active:hover {
+    background: rgba(255, 77, 109, 0.1);
+    transform: scale(1.1);
+    box-shadow: none;
   }
 
   /* 重复播放指示器 */
@@ -2591,9 +4359,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    opacity: 0;
+    background: rgba(0, 0, 0, 0.4);    opacity: 0;
     transition: opacity 0.25s ease;
     border-radius: 12px;
     color: #fff;
@@ -2708,14 +4474,12 @@
   }
 
   /* 🎯 玻璃材质简约按钮样式 - 优化尺寸 */
-  .glass-action-btn {
+  .card-action-btn {
     width: 32px; /* 稍微增大 */
     height: 32px;
     border-radius: 8px;
     /* 玻璃材质背景 */
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(12px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);    border: 1px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2727,7 +4491,7 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
 
-  .glass-action-btn:hover {
+  .card-action-btn:hover {
     background: rgba(255, 255, 255, 0.18);
     border-color: rgba(124, 92, 255, 0.3);
     color: #7C5CFF;
@@ -2738,12 +4502,12 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.25);
   }
 
-  .glass-action-btn:active {
+  .card-action-btn:active {
     transform: translateY(0) scale(0.95);
     transition: all 0.15s ease;
   }
 
-  .glass-action-btn.favorite-btn.active {
+  .card-action-btn.favorite-btn.active {
     background: linear-gradient(135deg, 
       rgba(124, 92, 255, 0.9), 
       rgba(99, 102, 241, 0.8)
@@ -2754,10 +4518,10 @@
       0 4px 18px rgba(124, 92, 255, 0.25),
       0 0 16px rgba(124, 92, 255, 0.2),
       inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    animation: glass-heart-pulse 2s ease-in-out infinite;
+    animation: card-heart-pulse 2s ease-in-out infinite;
   }
 
-  .glass-action-btn.share-btn:hover {
+  .card-action-btn.share-btn:hover {
     box-shadow: 
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 20px rgba(124, 92, 255, 0.15),
@@ -2765,7 +4529,7 @@
   }
 
   /* 玻璃材质心跳动画 */
-  @keyframes glass-heart-pulse {
+  @keyframes card-heart-pulse {
     0%, 100% {
       transform: scale(1);
       box-shadow: 
@@ -3115,12 +4879,10 @@
     }
     
     .modern-player {
-      height: 70px; /* 调整移动端高度 */
-      border-radius: 0; /* 移动端也保持直角 */
-      /* 保持简洁设计 */
-      background: var(--surface-primary);
-      border-top: 1px solid var(--border-secondary);
-      box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+      height: 70px;    box-shadow: 
+        0 -1px 0 0 rgba(255, 255, 255, 0.4) inset,
+        0 -6px 24px rgba(0, 0, 0, 0.05),
+        0 -2px 8px rgba(0, 0, 0, 0.03);
     }
 
     .app-content {
@@ -3266,12 +5028,10 @@
     }
     
     .modern-player {
-      height: 60px; /* 小屏幕紧凑布局 */
-      border-radius: 0; /* 小屏幕也保持直角 */
-      /* 保持简洁设计 */
-      background: var(--surface-primary);
-      border-top: 1px solid var(--border-secondary);
-      box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+      height: 60px;    box-shadow: 
+        0 -1px 0 0 rgba(255, 255, 255, 0.3) inset,
+        0 -4px 16px rgba(0, 0, 0, 0.05),
+        0 -1px 4px rgba(0, 0, 0, 0.03);
     }
 
     .app-content {
@@ -3344,11 +5104,8 @@
   }
 
   /* 原有播放器样式保持兼容 */
-  .liquid-glass-player {
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(25px) saturate(200%);
-    -webkit-backdrop-filter: blur(25px) saturate(200%);
-    border-top: 1px solid rgba(59, 130, 246, 0.25);
+  .liquid-card-player {
+    background: rgba(255, 255, 255, 0.12);    border-top: 1px solid rgba(59, 130, 246, 0.25);
     box-shadow: 
       0 -4px 24px rgba(59, 130, 246, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -3414,19 +5171,19 @@
   }
 
   /* 环境光效果 - 根据鼠标位置变化 */
-  .liquid-glass-interactive {
+  .liquid-card-interactive {
     position: relative;
     transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     overflow: hidden;
   }
 
   /* 确保子元素在正确层级 */
-  .liquid-glass-interactive > * {
+  .liquid-card-interactive > * {
     position: relative;
     z-index: 10;
   }
 
-  .liquid-glass-interactive::before {
+  .liquid-card-interactive::before {
     content: '';
     position: absolute;
     top: 0;
@@ -3447,17 +5204,17 @@
     z-index: 1;
   }
 
-  .liquid-glass-interactive:hover {
+  .liquid-card-interactive:hover {
     /* 移除背景变化效果，保持原样 */
   }
 
-  .liquid-glass-interactive:hover::before {
+  .liquid-card-interactive:hover::before {
     /* 移除背景光效变化 */
     opacity: 0;
   }
 
   /* 涟漪动画效果 */
-  .liquid-glass-interactive::after {
+  .liquid-card-interactive::after {
     content: '';
     position: absolute;
     top: 50%;
@@ -3480,7 +5237,7 @@
     z-index: 2;
   }
 
-  .liquid-glass-interactive:hover::after {
+  .liquid-card-interactive:hover::after {
     /* 移除涟漪动画效果 */
     width: 0;
     height: 0;
@@ -3504,11 +5261,11 @@
   }
 
   /* 深度感 - 多层叠加 */
-  .liquid-glass-depth {
+  .liquid-card-depth {
     position: relative;
   }
 
-  .liquid-glass-depth::before {
+  .liquid-card-depth::before {
     content: '';
     position: absolute;
     top: 2px;
@@ -3516,12 +5273,10 @@
     right: 2px;
     bottom: 2px;
     background: rgba(59, 130, 246, 0.02);
-    border-radius: 14px;
-    backdrop-filter: blur(5px);
-    z-index: -1;
+    border-radius: 14px;    z-index: -1;
   }
 
-  .liquid-glass-depth::after {
+  .liquid-card-depth::after {
     content: '';
     position: absolute;
     top: 4px;
@@ -3529,9 +5284,7 @@
     right: 4px;
     bottom: 4px;
     background: rgba(147, 197, 253, 0.01);
-    border-radius: 12px;
-    backdrop-filter: blur(2px);
-    z-index: -2;
+    border-radius: 12px;    z-index: -2;
   }
 
   /* 统一主色按钮样式 */
@@ -3587,19 +5340,19 @@
   }
 
   /* 高对比度模式下的表格样式 */
-  [data-contrast="high"] .glass-surface table th {
+  [data-contrast="high"] .card-surface table th {
     color: var(--text-primary);
     font-weight: 700;
     background: var(--surface-secondary);
     border-bottom: 2px solid var(--border-primary);
   }
 
-  [data-contrast="high"] .glass-surface table td {
+  [data-contrast="high"] .card-surface table td {
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-secondary);
   }
 
-  [data-contrast="high"] .glass-surface table tr:hover {
+  [data-contrast="high"] .card-surface table tr:hover {
     background: var(--surface-secondary);
   }
 
@@ -3618,23 +5371,21 @@
   }
 
   /* 高对比度模式下的输入框样式 */
-  [data-contrast="high"] .glass-input {
+  [data-contrast="high"] .card-input {
     background: var(--surface-primary);
     border: 2px solid var(--border-primary);
     color: var(--text-primary);
     font-weight: 500;
   }
 
-  [data-contrast="high"] .glass-input:focus {
+  [data-contrast="high"] .card-input:focus {
     border-color: var(--border-focus);
     background: var(--surface-primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
   }
 
   /* 高对比度模式下的播放器样式 */
-  [data-contrast="high"] .player-bar {
-    backdrop-filter: blur(8px) saturate(120%);
-    background: rgba(255,255,255,0.55);
+  [data-contrast="high"] .player-bar {    background: rgba(255,255,255,0.55);
     border-top: 2px solid var(--border-primary);
   }
 
@@ -3748,6 +5499,12 @@
   }
   
   .backface-hidden {
+    backface-visibility: hidden;
+  }
+  
+  /* 🔧 歌词滚动容器优化 - 防止React重渲染覆盖transform */
+  .lyrics-scroll-container {
+    contain: layout paint;
     backface-visibility: hidden;
   }
   
@@ -4095,24 +5852,16 @@
 /* 沉浸式歌词进入/退出动画 */
 @keyframes immersive-fade-in {
   0% {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
+    opacity: 0;  }
   100% {
-    opacity: 1;
-    backdrop-filter: blur(20px);
-  }
+    opacity: 1;  }
 }
 
 @keyframes immersive-fade-out {
   0% {
-    opacity: 1;
-    backdrop-filter: blur(20px);
-  }
+    opacity: 1;  }
   100% {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
+    opacity: 0;  }
 }
 
 .immersive-enter {
@@ -4147,11 +5896,8 @@
   width: 100%;
   height: 60px;
   /* 统一品牌色调：暗色为品牌蓝/靛蓝的柔和玻璃渐变，亮色为浅品牌色 */
-  background: linear-gradient(135deg, rgba(43, 111, 255, 0.12), rgba(126, 200, 255, 0.10));
-  backdrop-filter: blur(8px) saturate(120%);
-  -webkit-backdrop-filter: blur(8px) saturate(120%);
-  border-radius: 8px;
-  border: 1px solid var(--glass-border-outer);
+  background: linear-gradient(135deg, rgba(43, 111, 255, 0.12), rgba(126, 200, 255, 0.10));    border-radius: 8px;
+  border: 1px solid var(--card-border-outer);
   box-shadow: 0 2px 16px rgba(43, 111, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   opacity: 0;
   pointer-events: none;
@@ -4167,29 +5913,38 @@
 /* Q弹动画效果 - 现在通过JavaScript直接控制 */
 
 /* 高强度模糊效果 */
-.blur-backdrop.high-intensity {
-  backdrop-filter: blur(12px) saturate(130%);
-  -webkit-backdrop-filter: blur(12px) saturate(130%);
-  background: linear-gradient(135deg, rgba(43, 111, 255, 0.18), rgba(126, 200, 255, 0.14));
+.blur-backdrop.high-intensity {    background: linear-gradient(135deg, rgba(43, 111, 255, 0.18), rgba(126, 200, 255, 0.14));
 }
 
 /* 低强度模糊效果 */
-.blur-backdrop.low-intensity {
-  backdrop-filter: blur(4px) saturate(110%);
-  -webkit-backdrop-filter: blur(4px) saturate(110%);
-  background: linear-gradient(135deg, rgba(43, 111, 255, 0.08), rgba(126, 200, 255, 0.06));
+.blur-backdrop.low-intensity {    background: linear-gradient(135deg, rgba(43, 111, 255, 0.08), rgba(126, 200, 255, 0.06));
 }
 
-/* 列表行选中样式（统一暗色与亮色的品牌高亮） */
+/* 🎵 列表行选中样式 - 简洁主题版 */
 .selected-row {
-  background: linear-gradient(135deg, rgba(43, 111, 255, 0.16), rgba(126, 200, 255, 0.12));
-  border-color: rgba(43, 111, 255, 0.35) !important;
-  box-shadow: 0 1px 8px rgba(43, 111, 255, 0.08) inset;
+  background: rgba(43, 111, 255, 0.06) !important;
+  border-left: 3px solid var(--brand-600) !important;
 }
 
+/* 暗色模式 */
 .dark .selected-row {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(43, 111, 255, 0.14));
-  border-color: rgba(99, 102, 241, 0.35) !important;
+  background: rgba(43, 111, 255, 0.12) !important;
+  border-left: 3px solid var(--brand-500) !important;
+}
+
+/* 确保td背景透明，显示tr的背景 */
+.selected-row td {
+  background: transparent !important;
+}
+
+/* 第一列需要补偿边框宽度 */
+.selected-row td:first-child {
+  padding-left: calc(1.5rem - 3px) !important;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
 
 /* 歌词高亮发光动画 - 新版光晕效果 */
@@ -4260,13 +6015,9 @@
 
 /* 背景模糊脉动效果 */
 @keyframes background-blur-pulse {
-  0%, 100% {
-    backdrop-filter: blur(0.5px);
-    filter: blur(1px) brightness(0.7);
+  0%, 100% {    filter: blur(1px) brightness(0.7);
   }
-  50% {
-    backdrop-filter: blur(1px);
-    filter: blur(1.5px) brightness(0.6);
+  50% {    filter: blur(1.5px) brightness(0.6);
   }
 }
 
@@ -4372,14 +6123,11 @@
    ================================= */
 
 /* 液态玻璃按钮基础样式 */
-.liquid-glass-btn {
+.liquid-card-btn {
   position: relative;
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(15px) saturate(200%) brightness(1.2);
-  -webkit-backdrop-filter: blur(15px) saturate(200%) brightness(1.2);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+    rgba(255, 255, 255, 0.05) 100%);    border: 1px solid rgba(255, 255, 255, 0.2);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   overflow: hidden;
@@ -4392,7 +6140,7 @@
 }
 
 /* 液态玻璃按钮内部光效 */
-.liquid-glass-btn::before {
+.liquid-card-btn::before {
   content: '';
   position: absolute;
   top: 0;
@@ -4408,7 +6156,7 @@
 }
 
 /* 液态玻璃按钮流动光效 */
-.liquid-glass-btn::after {
+.liquid-card-btn::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -4421,7 +6169,7 @@
 }
 
 /* 悬停状态 */
-.liquid-glass-btn:hover {
+.liquid-card-btn:hover {
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.15) 0%,
     rgba(255, 255, 255, 0.08) 100%);
@@ -4436,16 +6184,16 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.liquid-glass-btn:hover::before {
+.liquid-card-btn:hover::before {
   left: 100%;
 }
 
-.liquid-glass-btn:hover::after {
+.liquid-card-btn:hover::after {
   opacity: 1;
 }
 
 /* 按下状态 */
-.liquid-glass-btn:active {
+.liquid-card-btn:active {
   transform: translateY(0) scale(0.98);
   transition: all 0.15s ease;
   box-shadow: 
@@ -4455,7 +6203,7 @@
 }
 
 /* 活跃状态（如播放中） */
-.liquid-glass-btn.active {
+.liquid-card-btn.active {
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.2) 0%,
     rgba(255, 255, 255, 0.1) 100%);
@@ -4466,11 +6214,11 @@
     0 0 30px rgba(255, 255, 255, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 -1px 0 rgba(255, 255, 255, 0.2);
-  animation: liquid-glass-pulse 2s ease-in-out infinite;
+  animation: liquid-card-pulse 2s ease-in-out infinite;
 }
 
 /* 液态玻璃脉动动画 */
-@keyframes liquid-glass-pulse {
+@keyframes liquid-card-pulse {
   0%, 100% {
     box-shadow: 
       0 6px 20px rgba(0, 0, 0, 0.15),
@@ -4488,7 +6236,7 @@
 }
 
 /* 液态玻璃涟漪效果 */
-.liquid-glass-btn:active::before {
+.liquid-card-btn:active::before {
   left: 0;
   transition: none;
   background: radial-gradient(circle, 
@@ -4506,4 +6254,539 @@
     transform: scale(4);
     opacity: 0;
   }
+}
+
+/* 设置页面柔和淡入动画 */
+@keyframes fade-slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-tab-content {
+  will-change: transform, opacity;
+}
+
+.animate-fade-slide-up {
+  animation: fade-slide-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* =================================
+   播放器控件增强动画
+   ================================= */
+
+/* 播放/暂停图标切换动画 */
+@keyframes icon-morph-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-90deg);
+  }
+  60% {
+    transform: scale(1.1) rotate(0deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.control-main-btn svg {
+  animation: icon-morph-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 收藏按钮心跳效果 */
+@keyframes favorite-heartbeat-player {
+  0%, 100% {
+    transform: scale(1);
+  }
+  10%, 30% {
+    transform: scale(1.2);
+  }
+  20%, 40% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  60% {
+    transform: scale(1);
+  }
+}
+
+.function-square-btn.active svg {
+  animation: favorite-heartbeat-player 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 循环按钮旋转动画 */
+@keyframes repeat-mode-rotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.15);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.control-small-btn.repeat-mode-change svg {
+  animation: repeat-mode-rotate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 随机播放激活动画 */
+@keyframes shuffle-activate {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.control-small-btn.shuffle-activate svg {
+  animation: shuffle-activate 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =================================
+   进度条交互增强
+   ================================= */
+
+/* 拖拽时的脉动效果 */
+@keyframes progress-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(124, 92, 255, 0);
+  }
+}
+
+.progress-handle.active {
+  animation: progress-pulse 1.5s ease-out infinite;
+}
+
+/* 点击进度条的波纹效果 */
+@keyframes progress-ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.progress-ripple {
+  position: absolute;
+  top: 50%;
+  left: var(--ripple-x, 50%);
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 92, 255, 0.6) 0%, rgba(124, 92, 255, 0.2) 70%, transparent 100%);
+  pointer-events: none;
+  animation: progress-ripple 0.6s ease-out;
+}
+
+/* 悬停时进度条轨道高亮 */
+.progress-container:hover .progress-track {
+  background: linear-gradient(to right, 
+    rgba(124, 92, 255, 0.15) 0%,
+    rgba(124, 92, 255, 0.08) 100%);
+  transition: background 0.3s ease;
+}
+
+/* =================================
+   空状态动画
+   ================================= */
+
+/* 图标悬浮呼吸 */
+@keyframes empty-state-float {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+
+.empty-state-icon {
+  animation: empty-state-float 3s ease-in-out infinite;
+}
+
+/* 文字淡入淡出 */
+@keyframes text-fade-pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.empty-state-text {
+  animation: text-fade-pulse 2s ease-in-out infinite;
+}
+
+/* =================================
+   加载指示器优化
+   ================================= */
+
+/* 自定义三点跳跃加载 */
+@keyframes dot-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.7;
+  }
+  40% {
+    transform: translateY(-12px) scale(1.2);
+    opacity: 1;
+  }
+}
+
+.loading-dots span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 3px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: dot-bounce 1.4s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* 环形加载器 */
+@keyframes ring-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.ring-loader {
+  border: 3px solid rgba(124, 92, 255, 0.2);
+  border-top-color: var(--brand-600);
+  border-radius: 50%;
+  animation: ring-spin 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+}
+
+/* =================================
+   选项卡切换动画
+   ================================= */
+
+/* 选项卡下划线滑动（用于其他页面，不影响音乐库） */
+.settings-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(to right, var(--brand-600), var(--brand-500));
+  border-radius: 3px 3px 0 0;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 -2px 8px rgba(124, 92, 255, 0.3);
+}
+
+/* 选项卡内容淡入 */
+@keyframes tab-content-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-content-active {
+  animation: tab-content-fade-in 0.3s ease-out;
+}
+
+/* 激活选项卡的强调动画 */
+@keyframes tab-activate {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.tab-button.active {
+  animation: tab-activate 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =================================
+   侧边栏增强动画
+   ================================= */
+
+/* 歌单图标弹跳 */
+@keyframes playlist-icon-bounce {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.15) rotate(-5deg);
+  }
+  75% {
+    transform: scale(1.15) rotate(5deg);
+  }
+}
+
+.playlist-icon-hover {
+  animation: playlist-icon-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 创建歌单弹窗戏剧性入场 */
+@keyframes modal-dramatic-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(-50px) rotateX(20deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.05) translateY(0) rotateX(-5deg);
+  }
+  100% {
+    transform: scale(1) translateY(0) rotateX(0deg);
+  }
+}
+
+.modal-dramatic {
+  animation: modal-dramatic-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-style: preserve-3d;
+}
+
+/* =================================
+   Toast通知增强
+   ================================= */
+
+/* Toast进度条 */
+@keyframes toast-progress {
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
+}
+
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(to right, currentColor, transparent);
+  animation: toast-progress var(--duration, 3s) linear;
+}
+
+/* 成功Toast弹跳入场 */
+@keyframes toast-success-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-10px) scale(1.05);
+  }
+  100% {
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 错误Toast震动入场 */
+@keyframes toast-error-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-5px);
+  }
+  60% {
+    transform: translateX(5px);
+  }
+  70% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* 警告Toast脉冲入场 */
+@keyframes toast-warning-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(0) scale(1.08);
+  }
+  75% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.toast-success {
+  animation: toast-success-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast-error {
+  animation: toast-error-enter 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast-warning {
+  animation: toast-warning-enter 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Toast关闭按钮旋转 */
+.toast-close-btn:hover {
+  transform: rotate(90deg);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* =================================
+   光泽效果基础样式
+   ================================= */
+
+/* 光泽层容器 */
+.mouse-gloss-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.mouse-gloss-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+/* 为按钮和卡片添加光泽支持 */
+.control-main-btn,
+.control-medium-btn,
+.control-small-btn,
+.function-square-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 3D卡片倾斜效果（可选） */
+.card-3d-tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+}
+
+.card-3d-tilt:hover {
+  transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) scale(1.02);
+}
+
+/* =================================
+   动画禁用控制
+   ================================= */
+
+/* 全局禁用所有动画 */
+body.animations-disabled * {
+  animation: none !important;
+  transition: none !important;
+}
+
+body.animations-disabled .page-transition,
+body.animations-disabled .animate-fade-slide-up,
+body.animations-disabled .tab-content-active {
+  animation: none !important;
+}
+
+/* 播放器控件动画禁用 */
+body.no-icon-morph .control-main-btn svg {
+  animation: none !important;
+}
+
+body.no-heartbeat .function-square-btn.active svg {
+  animation: none !important;
+}
+
+body.no-rotate .control-small-btn.repeat-mode-change svg {
+  animation: none !important;
+}
+
+body.no-shuffle .control-small-btn.shuffle-activate svg {
+  animation: none !important;
+}
+
+/* 进度条动画禁用 */
+body.no-progress-pulse .progress-handle.active {
+  animation: none !important;
+}
+
+body.no-progress-ripple .progress-ripple {
+  display: none !important;
+}
+
+/* 空状态动画禁用 */
+body.no-empty-float .empty-state-icon {
+  animation: none !important;
+}
+
+body.no-text-pulse .empty-state-text {
+  animation: none !important;
+}
+
+/* 侧边栏动画禁用 */
+body.no-playlist-bounce .playlist-icon-hover {
+  animation: none !important;
+}
+
+body.no-modal-dramatic .modal-dramatic {
+  animation: none !important;
+}
+
+/* Toast 动画禁用 */
+body.animations-disabled .toast-success,
+body.animations-disabled .toast-error,
+body.animations-disabled .toast-warning {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+body.animations-disabled .toast-progress-bar {
+  animation: none !important;
 }

@@ -1,4 +1,5 @@
 use crate::db::Database;
+// 使用新的PlayerCore的Track类型
 use crate::player::Track;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -99,8 +100,16 @@ impl Library {
                 self.rescan_all_tracks()?;
             }
             LibraryCommand::GetTracks => {
+                log::info!("📥 收到GetTracks命令，开始从数据库加载曲目...");
                 let tracks = self.get_all_tracks()?;
-                let _ = self.event_tx.send(LibraryEvent::TracksLoaded(tracks));
+                log::info!("✅ 从数据库加载了 {} 首曲目", tracks.len());
+                log::info!("📤 发送TracksLoaded事件...");
+                let send_result = self.event_tx.send(LibraryEvent::TracksLoaded(tracks));
+                if send_result.is_ok() {
+                    log::info!("✅ TracksLoaded事件已成功发送");
+                } else {
+                    log::error!("❌ TracksLoaded事件发送失败: {:?}", send_result);
+                }
             }
             LibraryCommand::SearchTracks(query) => {
                 let tracks = self.search_tracks(&query)?;

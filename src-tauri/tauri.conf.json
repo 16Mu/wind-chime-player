@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "windchime",
-  "version": "0.1.0",
-  "identifier": "com.ggbond.windchime",
+  "productName": "WindChime Player",
+  "version": "0.3.1",
+  "identifier": "com.windchime.player",
   "build": {
     "beforeDevCommand": "pnpm run dev",
     "devUrl": "http://localhost:1420",
@@ -39,6 +39,27 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Wind",
+    "copyright": "Copyright © 2025 Wind. All rights reserved.",
+    "category": "Music",
+    "shortDescription": "现代化音乐播放器",
+    "longDescription": "WindChime Player 是一款现代化的跨平台音乐播放器，支持本地和远程音乐源，提供沉浸式歌词体验。",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "installerIcon": "icons/icon.ico",
+        "installMode": "perUser",
+        "compression": "lzma",
+        "template": null
+      }
+    }
   }
 }

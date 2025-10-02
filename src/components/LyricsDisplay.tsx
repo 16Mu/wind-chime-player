@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ImmersiveLyricsView from './ImmersiveLyricsView';
 
@@ -37,6 +37,22 @@ function LyricsDisplay({
   className = '',
   onError 
 }: LyricsDisplayProps) {
+  // 🐛 调试：追踪track对象引用变化
+  const trackRefForDebug = useRef(track);
+  useEffect(() => {
+    if (trackRefForDebug.current !== track && trackRefForDebug.current?.id === track?.id) {
+      console.warn('⚠️ [LyricsDisplay] track对象引用变化但ID相同！这会导致子组件无限重渲染', {
+        oldTrack: trackRefForDebug.current,
+        newTrack: track,
+        相同: trackRefForDebug.current === track
+      });
+    }
+    trackRefForDebug.current = track;
+  }, [track]);
+  
+  // ✅ 稳定track对象引用，只在id变化时才创建新对象
+  const stableTrack = useMemo(() => track, [track?.id]);
+  
   const [lyrics, setLyrics] = useState<ParsedLyrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +112,7 @@ function LyricsDisplay({
     
     try {
       // 首先尝试从数据库获取歌词
-      const dbLyrics = await invoke('lyrics_get', { trackId: id });
+      const dbLyrics = await invoke('lyrics_get', { trackId: id, track_id: id });
       console.log('🎵 数据库歌词查询结果:', dbLyrics);
       
       if (dbLyrics && typeof dbLyrics === 'object' && 'content' in dbLyrics) {
@@ -121,14 +137,16 @@ function LyricsDisplay({
           // 先单独测试文件搜索
           console.log('🎵 测试单独的文件搜索...');
           const lyricsFilePath = await invoke('lyrics_search_file', { 
-            audioPath: trackPath 
+            audioPath: trackPath,
+            audio_path: trackPath 
           }) as string | null;
           console.log('🎵 歌词文件路径搜索结果:', lyricsFilePath);
           
           // 然后尝试综合搜索歌词（包括同目录的lrc文件、音频元数据等）
           console.log('🎵 开始综合搜索...');
-          const searchResult = await invoke('lyrics_search_comprehensive', { 
-            audioPath: trackPath 
+        const searchResult = await invoke('lyrics_search_comprehensive', {
+          audioPath: trackPath,
+          audio_path: trackPath
           }) as ParsedLyrics | null;
           
           console.log('🎵 综合搜索结果:', searchResult);
@@ -164,6 +182,7 @@ function LyricsDisplay({
               
               await invoke('lyrics_save', {
                 trackId: id,
+                track_id: id,
                 content: lrcContent,
                 format: 'lrc',
                 source: 'file_auto'
@@ -237,7 +256,7 @@ function LyricsDisplay({
       <div className={`flex items-center justify-center h-full ${className}`}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm text-gray-500">加载歌词中...</span>
+          <span className="text-sm text-slate-500 dark:text-dark-700">加载歌词中...</span>
         </div>
       </div>
     );
@@ -253,12 +272,12 @@ function LyricsDisplay({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500">{error}</p>
+          <p className="text-sm text-slate-500 dark:text-dark-700">{error}</p>
           
           {/* 显示调试信息 */}
           {track?.path && (
             <div className="mt-4 text-xs text-left max-w-lg mx-auto">
-              <div className="bg-gray-100 p-3 rounded-lg text-gray-700 font-mono break-all">
+              <div className="bg-slate-100 dark:bg-dark-200 p-3 rounded-lg text-slate-700 dark:text-dark-800 font-mono break-all">
                 <div className="font-bold mb-2">调试信息：</div>
                 <div>音频文件：{track.path}</div>
                 <div className="mt-2">
@@ -338,7 +357,7 @@ function LyricsDisplay({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500">暂无歌词</p>
+          <p className="text-sm text-slate-500 dark:text-dark-700">暂无歌词</p>
         </div>
       </div>
     );
@@ -369,13 +388,13 @@ function LyricsDisplay({
 
         {/* 歌词元数据显示（如果有的话） */}
         {lyrics.metadata.ti && (
-          <div className="text-center mb-6 pb-4 border-b border-gray-200">
-            <h3 className="font-medium text-gray-800">{lyrics.metadata.ti}</h3>
+          <div className="text-center mb-6 pb-4 border-b border-slate-200 dark:border-dark-400">
+            <h3 className="font-medium text-slate-800 dark:text-dark-800">{lyrics.metadata.ti}</h3>
             {lyrics.metadata.ar && (
-              <p className="text-sm text-gray-500 mt-1">{lyrics.metadata.ar}</p>
+              <p className="text-sm text-slate-500 dark:text-dark-700 mt-1">{lyrics.metadata.ar}</p>
             )}
             {lyrics.metadata.al && (
-              <p className="text-xs text-gray-400 mt-1">{lyrics.metadata.al}</p>
+              <p className="text-xs text-slate-400 dark:text-dark-600 mt-1">{lyrics.metadata.al}</p>
             )}
           </div>
         )}
@@ -399,13 +418,13 @@ function LyricsDisplay({
                   before:from-transparent before:via-blue-200/20 before:to-transparent 
                   before:rounded-xl before:animate-pulse
                 ` 
-                : 'text-gray-600 hover:text-gray-800 hover:bg-white/30 hover:backdrop-blur-sm'
+                : 'text-slate-600 dark:text-dark-700 hover:text-slate-800 dark:hover:text-dark-900 hover:bg-white/30 dark:hover:bg-white/10 hover:backdrop-blur-sm'
               }
               ${Math.abs((currentLineIndex ?? -1) - index) <= 1 && currentLineIndex !== null
                 ? 'opacity-100 transform translate-y-0' 
                 : 'opacity-50 transform translate-y-1'
               }
-              hover:shadow-md hover:shadow-gray-200/30 hover:transform hover:scale-105
+              hover:shadow-md hover:shadow-slate-200/30 dark:hover:shadow-dark-400/30 hover:transform hover:scale-105
               backdrop-blur-sm
             `}
             style={{
@@ -422,8 +441,8 @@ function LyricsDisplay({
                 try {
                   console.log('🎵 [用户点击] LyricsDisplay用户点击第', index, '行，时间戳:', line.timestamp_ms);
                   
-                  // 跳转到指定时间点
-                  await invoke('player_seek', { positionMs: line.timestamp_ms });
+                  // 跳转到指定时间点（确保是整数）
+                  await invoke('player_seek', { positionMs: Math.floor(line.timestamp_ms) });
                   if (isPlaying) {
                     await invoke('player_resume');
                   }
@@ -454,8 +473,7 @@ function LyricsDisplay({
       {/* 沉浸式歌词模式 */}
       {showImmersiveMode && (
         <ImmersiveLyricsView
-          track={track}
-          currentPositionMs={currentPositionMs}
+          track={stableTrack}
           isPlaying={isPlaying}
           onClose={() => setShowImmersiveMode(false)}
           onError={onError}
