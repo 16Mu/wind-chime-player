@@ -180,35 +180,6 @@ impl Clone for AudioDecoder {
     }
 }
 
-/// 解码器工厂
-/// 
-/// 提供便捷的解码器创建方法
-/// 解码器工厂（预留接口）
-#[allow(dead_code)]
-pub struct DecoderFactory;
-
-#[allow(dead_code)]
-impl DecoderFactory {
-    /// 创建同步解码器
-    pub fn create_sync(path: impl Into<PathBuf>) -> AudioDecoder {
-        AudioDecoder::new(path)
-    }
-    
-    /// 创建异步解码器
-    pub fn create_async(path: impl Into<PathBuf>) -> AsyncAudioDecoder {
-        AsyncAudioDecoder::new(path)
-    }
-    
-    /// 批量验证文件
-    pub fn validate_batch(paths: &[PathBuf]) -> Vec<(PathBuf, Result<()>)> {
-        paths.iter().map(|path| {
-            let decoder = AudioDecoder::new(path);
-            let result = decoder.validate();
-            (path.clone(), result)
-        }).collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

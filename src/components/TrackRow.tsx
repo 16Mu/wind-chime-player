@@ -1,12 +1,4 @@
-
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
-}
+import type { Track } from '../types/music';
 
 interface TrackRowProps {
   track: Track;
@@ -25,15 +17,13 @@ interface TrackRowProps {
   onSelect: () => void;
   onHover: () => void;
   onFavoriteToggle?: () => void;
+  onAddToPlaylist?: () => void;
   rowRef: (el: HTMLTableRowElement | null) => void;
 }
 
 export default function TrackRow({
   track,
-  index,
   isSelected,
-  isHovered,
-  hoveredIndex,
   albumCoverUrl,
   densitySettings,
   showFavoriteButtons,
@@ -41,6 +31,7 @@ export default function TrackRow({
   onSelect,
   onHover,
   onFavoriteToggle,
+  onAddToPlaylist,
   rowRef
 }: TrackRowProps) {
   const { rowPaddingY, thumbSize, contentGap } = densitySettings;
@@ -73,7 +64,7 @@ export default function TrackRow({
         <div className="flex items-center min-w-0" style={{ gap: contentGap }}>
           {/* 专辑封面 */}
           <div 
-            className="flex-shrink-0 rounded-lg overflow-hidden bg-slate-100/80 backdrop-blur-sm border border-white/40 shadow-sm ring-1 ring-black/5" 
+            className="flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 dark:bg-dark-200/80 backdrop-blur-sm border border-white/40 shadow-sm ring-1 ring-black/5" 
             style={{ width: thumbSize, height: thumbSize }}
           >
             {albumCoverUrl ? (
@@ -83,7 +74,7 @@ export default function TrackRow({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-400 bg-gradient-to-br from-slate-50 to-slate-100">
+              <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-dark-700 bg-gradient-to-br from-slate-50 to-slate-100">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
@@ -102,26 +93,46 @@ export default function TrackRow({
               </div>
             </div>
             
-            {/* 收藏按钮 */}
-            {showFavoriteButtons && (
-              <div className="ml-3 hidden md:flex items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onFavoriteToggle?.();
-                  }}
-                  className={`
-                    p-1.5 rounded-full transition-all duration-200
-                    ${isFavorite 
-                      ? 'text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-500/10' 
-                      : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'
-                    }
-                  `}
-                >
-                  <svg className="w-4 h-4" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                </button>
+            {/* 操作按钮 */}
+            {(showFavoriteButtons || onAddToPlaylist) && (
+              <div className="ml-3 hidden md:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {/* 添加到歌单按钮 */}
+                {onAddToPlaylist && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddToPlaylist();
+                    }}
+                    className="p-1.5 rounded-full transition-all duration-200 text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10"
+                    title="添加到歌单"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                )}
+                
+                {/* 收藏按钮 */}
+                {showFavoriteButtons && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFavoriteToggle?.();
+                    }}
+                    className={`
+                      p-1.5 rounded-full transition-all duration-200
+                      ${isFavorite 
+                        ? 'text-rose-500 hover:text-rose-600 bg-rose-50 dark:bg-rose-500/10' 
+                        : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'
+                      }
+                    `}
+                    title={isFavorite ? '取消收藏' : '添加到收藏'}
+                  >
+                    <svg className="w-4 h-4" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>

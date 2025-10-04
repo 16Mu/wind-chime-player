@@ -172,16 +172,19 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
   };
 
   const handleDeleteFolder = async (folderPath: string) => {
-    // 确认删除
+    // ✅ 修复：先确认，确认后再执行删除操作
     const confirmDelete = window.confirm(
       `确认要删除文件夹 "${folderPath}" 及其所有音乐文件吗？\n\n此操作将从音乐库中移除该文件夹下的所有曲目，但不会删除本地文件。`
     );
     
-    if (!confirmDelete) return;
+    if (!confirmDelete) {
+      console.log('用户取消删除操作');
+      return;
+    }
 
     try {
       setIsLoading(true);
-      console.log('删除文件夹:', folderPath);
+      console.log('开始删除文件夹:', folderPath);
       
       const deletedCount = await invoke<number>('library_delete_folder', { folderPath });
       console.log(`成功删除了 ${deletedCount} 首曲目`);
@@ -202,7 +205,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
   const hasFolders = musicFolders.length > 0;
 
   return (
-    <div className={`glass-surface rounded-lg overflow-hidden ${className}`}>
+    <div className={`bg-white dark:bg-dark-100 border border-slate-200 dark:border-dark-400 rounded-lg overflow-hidden ${className}`}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between p-4 hover:bg-slate-50/50 dark:hover:bg-dark-200/50 group"
@@ -241,7 +244,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : hasFolders 
                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
-                : 'bg-slate-100 dark:bg-dark-200 text-slate-600 dark:text-dark-600'
+                : 'bg-slate-100 dark:bg-dark-200 text-slate-600 dark:text-dark-700'
               }
             `}
             style={{
@@ -303,7 +306,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
               </div>
-              <p className="text-sm text-slate-600 dark:text-dark-600 mb-4">还未添加任何音乐文件夹</p>
+              <p className="text-sm text-slate-600 dark:text-dark-700 mb-4">还未添加任何音乐文件夹</p>
               <button
                 onClick={handleFolderSelect}
                 disabled={isScanning}
@@ -330,7 +333,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
           {/* 有文件夹状态 */}
           {hasFolders && !isLoading && (
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700 dark:text-dark-700 mb-3">已导入的文件路径：</div>
+              <div className="text-sm font-medium text-slate-700 dark:text-dark-800 mb-3">已导入的文件路径：</div>
               
               {/* 文件夹路径列表 */}
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -356,7 +359,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                       onClick={() => handleDeleteFolder(folder)}
                       disabled={isLoading || isScanning}
                       className={`
-                        opacity-0 group-hover:opacity-100 w-8 h-8 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center transition-all duration-200 text-red-600 hover:text-red-700 hover:scale-110
+                        opacity-0 group-hover:opacity-100 w-8 h-8 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 rounded-lg flex items-center justify-center transition-all duration-200 text-red-600 dark:text-red-400 hover:text-red-700 hover:scale-110
                         ${(isLoading || isScanning) ? 'cursor-not-allowed opacity-50' : ''}
                       `}
                       title="删除此文件夹"
@@ -380,7 +383,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
                   className={`w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg transition-all duration-200 ${
                     isScanning 
                       ? 'border-slate-200 dark:border-dark-500 text-slate-400 dark:text-dark-600 cursor-not-allowed opacity-50' 
-                      : 'border-slate-300 dark:border-dark-500 text-slate-600 dark:text-dark-600 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 hover:bg-brand-50/50 dark:hover:bg-brand-900/20'
+                      : 'border-slate-300 dark:border-dark-500 text-slate-600 dark:text-dark-700 hover:border-brand-300 dark:hover:border-brand-600 hover:text-brand-600 hover:bg-brand-50/50 dark:hover:bg-brand-900/20'
                   }`}
                   title={isScanning ? '正在扫描中，请稍候...' : '添加新的音乐文件夹'}
                 >
@@ -408,7 +411,7 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
               <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-dark-200 rounded-full flex items-center justify-center">
                 <div className="ring-loader" style={{ width: '24px', height: '24px', borderWidth: '3px' }}></div>
               </div>
-              <p className="text-sm text-slate-600 dark:text-dark-600">加载音乐文件夹列表...</p>
+              <p className="text-sm text-slate-600 dark:text-dark-700">加载音乐文件夹列表...</p>
             </div>
           )}
         </div>

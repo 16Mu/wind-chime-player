@@ -1,9 +1,8 @@
 // WebDAV客户端核心实现 - 高内聚：专注于WebDAV协议操作
 // 低耦合：通过接口与其他模块通信
 
-use super::{auth::AuthManager, types::*, safe_stream::{SafeWebDAVStream, SafeStreamConfig}};
-use crate::music_source::provider::{RemoteFileInfo, WebDAVClientTrait};
-use async_trait::async_trait;
+use super::{auth::AuthManager, types::*};
+// 已删除：旧版 provider trait，现在使用 remote_adapter
 use futures::stream::Stream;
 use reqwest::{header::*, Client as HttpClient, Response};
 use std::{sync::Arc, time::Instant};
@@ -125,7 +124,21 @@ impl WebDAVClient {
         
         // 解析响应
         let response_text = response.text().await?;
+        
+        // 🔍 调试：输出原始 XML 响应的前 2000 字符
+        if response_text.len() <= 2000 {
+            log::info!("📄 WebDAV 原始 XML 响应:\n{}", response_text);
+        } else {
+            log::info!("📄 WebDAV 原始 XML 响应 (前 2000 字符):\n{}", &response_text[..2000]);
+        }
+        
         let files = self.parse_propfind_response(&response_text)?;
+        
+        log::info!("🔍 解析结果：共 {} 个项目", files.len());
+        for (idx, file) in files.iter().enumerate() {
+            log::info!("  [{}] {} (目录: {}, 大小: {:?})", 
+                idx, file.name, file.is_directory, file.size);
+        }
         
         let listing = WebDAVDirectoryListing {
             path: path.to_string(),
@@ -134,7 +147,7 @@ impl WebDAVClient {
             files,
         };
         
-        log::debug!("目录列表获取成功，共 {} 个项目", listing.total_count);
+        log::info!("✅ 目录列表获取成功，共 {} 个项目", listing.total_count);
         Ok(listing)
     }
     
@@ -351,7 +364,21 @@ impl WebDAVClient {
             WebDAVMethod::Delete => self.http_client.delete(&url),
             WebDAVMethod::Head => self.http_client.head(&url),
             WebDAVMethod::Options => self.http_client.request(reqwest::Method::OPTIONS, &url),
-            _ => self.http_client.request(reqwest::Method::from_bytes(method.to_string().as_bytes())?, &url),
+            WebDAVMethod::Propfind => {
+                let method = reqwest::Method::from_bytes(b"PROPFIND")
+                    .map_err(|e| WebDAVError::HttpMethodError(e))?;
+                self.http_client.request(method, &url)
+            },
+            WebDAVMethod::Mkcol => {
+                let method = reqwest::Method::from_bytes(b"MKCOL")
+                    .map_err(|e| WebDAVError::HttpMethodError(e))?;
+                self.http_client.request(method, &url)
+            },
+            _ => {
+                let method = reqwest::Method::from_bytes(method.to_string().as_bytes())
+                    .map_err(|e| WebDAVError::HttpMethodError(e))?;
+                self.http_client.request(method, &url)
+            },
         };
         
         let mut request = request_builder.headers(headers);
@@ -389,8 +416,11 @@ impl WebDAVClient {
             headers.extend(additional);
         }
         
+        let http_method = reqwest::Method::from_bytes(method.to_string().as_bytes())
+            .map_err(|e| WebDAVError::HttpMethodError(e))?;
+            
         let request = self.http_client
-            .request(reqwest::Method::from_bytes(method.to_string().as_bytes())?, &url)
+            .request(http_method, &url)
             .headers(headers)
             .body(body);
         
@@ -423,37 +453,48 @@ impl WebDAVClient {
         )
     }
     
-    /// 解析PROPFIND响应（简化实现）
-    fn parse_propfind_response(&self, _response_xml: &str) -> WebDAVResult<Vec<WebDAVFileInfo>> {
-        // 这是一个简化的XML解析实现
-        // 在实际项目中，应该使用更robust的XML解析库
+    /// 解析PROPFIND响应
+    fn parse_propfind_response(&self, response_xml: &str) -> WebDAVResult<Vec<WebDAVFileInfo>> {
+        use crate::webdav::xml_parser::PropfindParser;
         
-        let files = Vec::new();
+        // 自动检测服务器类型
+        let server_hints = PropfindParser::detect_server_type(response_xml);
+        log::debug!("检测到WebDAV服务器类型: {:?}", server_hints);
         
-        // 基本的XML解析逻辑
-        // 这里需要实现完整的WebDAV XML响应解析
-        // 暂时返回空列表，在实际使用时需要完善
+        // 创建解析器并解析
+        let parser = PropfindParser::new(server_hints);
+        let files = parser.parse_multistatus(response_xml)?;
         
-        log::debug!("PROPFIND响应解析暂未完全实现，返回空结果");
-        
+        log::debug!("成功解析 {} 个文件/目录", files.len());
         Ok(files)
     }
     
-    /// 确保父目录存在
-    fn ensure_parent_directories<'a>(&'a self, path: &'a str) -> futures::future::BoxFuture<'a, WebDAVResult<()>> {
-        Box::pin(async move {
-            let parent_path = std::path::Path::new(path).parent()
+    /// 确保父目录存在（迭代实现，避免栈溢出）
+    async fn ensure_parent_directories(&self, path: &str) -> WebDAVResult<()> {
+        let mut directories_to_create = Vec::new();
+        let mut current_path = path;
+        
+        // 收集所有需要创建的父目录
+        loop {
+            let parent_path = std::path::Path::new(current_path).parent()
                 .and_then(|p| p.to_str())
                 .unwrap_or("");
             
-            if !parent_path.is_empty() && parent_path != "/" {
-                // 递归创建父目录
-                self.ensure_parent_directories(parent_path).await?;
-                self.create_directory(parent_path).await?;
+            if parent_path.is_empty() || parent_path == "/" {
+                break;
             }
             
-            Ok(())
-        })
+            directories_to_create.push(parent_path.to_string());
+            current_path = parent_path;
+        }
+        
+        // 从最顶层开始创建目录
+        directories_to_create.reverse();
+        for dir in directories_to_create {
+            self.create_directory(&dir).await?;
+        }
+        
+        Ok(())
     }
     
     /// 更新操作统计
@@ -486,81 +527,5 @@ impl WebDAVClient {
     }
 }
 
-// 实现音乐源提供器trait
-#[async_trait]
-impl WebDAVClientTrait for WebDAVClient {
-    async fn download_stream(&self, url: &str) -> anyhow::Result<Box<dyn AsyncRead + Send + Unpin>> {
-        // 从完整URL中提取路径
-        let path = url.strip_prefix(&self.config.get_base_url())
-            .unwrap_or(url);
-        
-        log::info!("开始 WebDAV 流式下载: {}", path);
-        
-        let stream = self.download_stream(path).await
-            .map_err(|e| anyhow::anyhow!("WebDAV下载失败: {}", e))?;
-        
-        // 使用 SafeWebDAVStream 进行 Stream 到 AsyncRead 转换
-        let safe_stream_config = SafeStreamConfig {
-            max_buffer_size: 64 * 1024 * 1024, // 64MB 缓冲
-            chunk_size: 256 * 1024,             // 256KB 块大小
-            total_timeout: std::time::Duration::from_secs(600), // 10分钟总超时
-            activity_timeout: std::time::Duration::from_secs(30), // 30秒活动超时
-            max_errors: 5,
-        };
-        
-        let safe_stream = SafeWebDAVStream::from_webdav_stream(stream, safe_stream_config);
-        
-        log::info!("WebDAV 流转换成功: {}", path);
-        
-        Ok(Box::new(safe_stream))
-    }
-    
-    async fn download_range(&self, url: &str, start: u64, end: Option<u64>) -> anyhow::Result<Box<dyn AsyncRead + Send + Unpin>> {
-        let path = url.strip_prefix(&self.config.get_base_url())
-            .unwrap_or(url);
-        
-        log::info!("开始 WebDAV 范围下载: {} ({}~{:?})", path, start, end);
-        
-        let range = RangeRequest { start, end };
-        let stream = self.download_range(path, range).await
-            .map_err(|e| anyhow::anyhow!("WebDAV范围下载失败: {}", e))?;
-        
-        // 使用 SafeWebDAVStream 进行 Stream 到 AsyncRead 转换
-        let safe_stream_config = SafeStreamConfig {
-            max_buffer_size: 32 * 1024 * 1024, // 32MB 缓冲 (范围请求通常更小)
-            chunk_size: 128 * 1024,             // 128KB 块大小
-            total_timeout: std::time::Duration::from_secs(300), // 5分钟总超时
-            activity_timeout: std::time::Duration::from_secs(30), // 30秒活动超时
-            max_errors: 3,
-        };
-        
-        let safe_stream = SafeWebDAVStream::from_webdav_stream(stream, safe_stream_config);
-        
-        log::info!("WebDAV 范围流转换成功: {}", path);
-        
-        Ok(Box::new(safe_stream))
-    }
-    
-    async fn get_file_info(&self, url: &str) -> anyhow::Result<RemoteFileInfo> {
-        let path = url.strip_prefix(&self.config.get_base_url())
-            .unwrap_or(url);
-        
-        let file_info = self.get_file_info(path).await
-            .map_err(|e| anyhow::anyhow!("WebDAV文件信息获取失败: {}", e))?;
-        
-        Ok(RemoteFileInfo {
-            size: file_info.size.unwrap_or(0),
-            last_modified: file_info.last_modified.unwrap_or(0),
-            content_type: file_info.content_type,
-            etag: file_info.etag,
-        })
-    }
-    
-    async fn file_exists(&self, url: &str) -> anyhow::Result<bool> {
-        let path = url.strip_prefix(&self.config.get_base_url())
-            .unwrap_or(url);
-        
-        self.file_exists(path).await
-            .map_err(|e| anyhow::anyhow!("WebDAV文件存在检查失败: {}", e))
-    }
-}
+// 注释：旧版 WebDAVClientTrait 实现已删除
+// 现在使用 webdav::remote_adapter::WebDAVAdapter 来提供统一的远程源接口

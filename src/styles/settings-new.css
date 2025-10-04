@@ -1,0 +1,105 @@
+/**
+ * 新设置界面样式
+ * 支持顶部Tab导航和通用组件
+ */
+
+/* 隐藏滚动条 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tab切换动画 */
+.settings-page-new .settings-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .settings-page-new .settings-header {
+    padding: 1rem;
+  }
+
+  .settings-page-new .settings-content {
+    padding: 1rem;
+  }
+
+  /* Tab在移动端缩小 */
+  .settings-page-new .settings-header button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* 卡片悬停效果 */
+.setting-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.setting-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Toggle开关动画增强 */
+.toggle-switch-track {
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch-thumb {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 可折叠面板过渡 */
+.collapsible-content {
+  transition: 
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 选择卡片点击反馈 */
+.select-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.select-card:active {
+  transform: scale(0.98);
+}
+
+/* 深色模式优化 */
+@media (prefers-color-scheme: dark) {
+  .setting-card-hover:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 高对比度模式适配 */
+@media (prefers-contrast: more) {
+  .settings-page-new {
+    --border-width: 2px;
+  }
+
+  .settings-page-new button {
+    border-width: var(--border-width);
+  }
+}
+
+
+
+
+

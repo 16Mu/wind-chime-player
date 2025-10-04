@@ -32,6 +32,12 @@ use tokio::task::JoinHandle;
 /// PreloadActor的消息类型
 #[derive(Debug)]
 pub enum PreloadMsg {
+    /// 内部消息：预加载完成，将数据存入缓存
+    CacheLoadedData {
+        track_id: i64,
+        data: Vec<u8>,
+    },
+    
     /// 开始预加载指定曲目
     PreloadTrack {
         track: Track,
@@ -100,6 +106,15 @@ pub enum PreloadPriority {
     Urgent = 3,
 }
 
+/// 缓存状态信息
+#[derive(Debug, Clone)]
+pub struct CacheStatus {
+    /// 已缓存的曲目数量
+    pub cached_count: usize,
+    /// 缓存总大小（字节）
+    pub total_size: usize,
+}
+
 // ============================================================================
 // 缓存数据结构
 // ============================================================================
@@ -119,23 +134,6 @@ struct CachedAudio {
     access_count: u32,
     /// 优先级
     priority: PreloadPriority,
-}
-
-/// 缓存状态信息
-#[derive(Debug, Clone)]
-pub struct CacheStatus {
-    /// 缓存的曲目数量
-    pub cached_count: usize,
-    /// 总缓存大小（字节）
-    pub total_size: usize,
-    /// 最大容量（曲目数）
-    pub max_capacity: usize,
-    /// 缓存命中次数
-    pub hits: u64,
-    /// 缓存未命中次数
-    pub misses: u64,
-    /// 命中率
-    pub hit_rate: f64,
 }
 
 // ============================================================================
@@ -232,18 +230,9 @@ impl AudioCache {
 
     /// 获取缓存状态
     fn status(&self) -> CacheStatus {
-        let total = self.hits + self.misses;
         CacheStatus {
             cached_count: self.cache.len(),
             total_size: self.current_size,
-            max_capacity: self.cache.cap().get(),
-            hits: self.hits,
-            misses: self.misses,
-            hit_rate: if total > 0 {
-                self.hits as f64 / total as f64
-            } else {
-                0.0
-            },
         }
     }
 }
@@ -256,6 +245,9 @@ impl AudioCache {
 pub struct PreloadActor {
     /// 消息接收器
     inbox: mpsc::Receiver<PreloadMsg>,
+    
+    /// 消息发送器（用于内部任务回传数据）
+    inbox_tx: mpsc::Sender<PreloadMsg>,
 
     /// 缓存管理器
     cache: AudioCache,
@@ -283,12 +275,14 @@ impl PreloadActor {
     /// 创建新的PreloadActor
     pub fn new(
         inbox: mpsc::Receiver<PreloadMsg>,
+        inbox_tx: mpsc::Sender<PreloadMsg>,
         event_tx: mpsc::Sender<PlayerEvent>,
         max_cache_capacity: usize,
         max_cache_size_mb: usize,
     ) -> Self {
         Self {
             inbox,
+            inbox_tx,
             cache: AudioCache::new(max_cache_capacity, max_cache_size_mb),
             event_tx,
             playlist: Vec::new(),
@@ -307,6 +301,22 @@ impl PreloadActor {
         println!("🔄 [CORE] PreloadActor 进入事件循环，等待消息...");
         while let Some(msg) = self.inbox.recv().await {
             match msg {
+                PreloadMsg::CacheLoadedData { track_id, data } => {
+                    // 将加载的数据存入缓存
+                    let cached_audio = CachedAudio {
+                        track_id,
+                        data: Arc::new(data.clone()),
+                        size: data.len(),
+                        cached_at: std::time::Instant::now(),  // ✅ 使用正确的字段名
+                        access_count: 0,
+                        priority: PreloadPriority::High,  // ✅ 添加缺失的字段
+                    };
+                    self.cache.put(cached_audio);
+                    // 从加载任务列表中移除
+                    self.loading_tasks.remove(&track_id);
+                    log::info!("💾 曲目 {} 已存入缓存 ({:.2}MB)", track_id, data.len() as f64 / 1024.0 / 1024.0);
+                }
+                
                 PreloadMsg::PreloadTrack { track, priority } => {
                     self.handle_preload_track(track, priority).await;
                 }
@@ -399,7 +409,8 @@ impl PreloadActor {
         // 启动加载任务
         let track_id = track.id;
         let path = PathBuf::from(&track.path);
-        let cache_tx = self.event_tx.clone();
+        let event_tx = self.event_tx.clone();
+        let inbox_tx = self.inbox_tx.clone();
 
         let handle = tokio::spawn(async move {
             match Self::load_audio_data(&path).await {
@@ -410,8 +421,14 @@ impl PreloadActor {
                         data.len() as f64 / 1024.0 / 1024.0
                     );
 
+                    // 发送加载完成的数据到Actor（存入缓存）
+                    let _ = inbox_tx.send(PreloadMsg::CacheLoadedData {
+                        track_id,
+                        data,
+                    }).await;
+
                     // 发送预加载完成事件（可选）
-                    let _ = cache_tx
+                    let _ = event_tx
                         .send(PlayerEvent::PreloadCompleted { track_id })
                         .await;
                 }
@@ -567,7 +584,30 @@ impl PreloadActor {
     }
 
     /// 加载音频数据
+    /// 
+    /// 安全措施：
+    /// - 添加文件大小检查，防止OOM
+    /// - 最大限制：200MB
     async fn load_audio_data(path: &PathBuf) -> Result<Vec<u8>> {
+        // 最大预加载大小：200MB（预加载不应该处理超大文件）
+        const MAX_PRELOAD_SIZE: u64 = 200 * 1024 * 1024;
+        
+        // 检查文件大小
+        let metadata = fs::metadata(path)
+            .await
+            .context("获取文件信息失败")?;
+        
+        let file_size = metadata.len();
+        if file_size > MAX_PRELOAD_SIZE {
+            anyhow::bail!(
+                "文件过大 ({:.2} MB)，超过预加载限制 ({:.2} MB)",
+                file_size as f64 / 1024.0 / 1024.0,
+                MAX_PRELOAD_SIZE as f64 / 1024.0 / 1024.0
+            );
+        }
+        
+        log::debug!("预加载文件: {} ({:.2} MB)", path.display(), file_size as f64 / 1024.0 / 1024.0);
+        
         let data = fs::read(path)
             .await
             .context("读取音频文件失败")?;

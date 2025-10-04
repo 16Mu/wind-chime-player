@@ -22,9 +22,6 @@ pub mod actors;
 // 核心协调器（已完成）
 pub mod core;
 
-// 性能监控模块（暂时禁用 - 待修复sysinfo API兼容性）
-// pub mod monitor;
-
 // 公开导出常用类型
 pub use types::{
     Track, RepeatMode,
@@ -34,7 +31,7 @@ pub use types::{
 // 内部使用的类型（暂不导出）
 #[allow(unused_imports)]
 pub(crate) use types::{
-    PlayerState, PlayerError, ErrorSeverity, Result,
+    PlayerState, PlayerError, Result,
 };
 
 // 内部使用的音频模块类型（暂不导出）
@@ -43,7 +40,6 @@ pub(crate) use audio::{
     AudioDevice, LazyAudioDevice,
     AudioFormat, AudioDecoder,
     SinkPool, PooledSink,
-    StreamMonitor, StreamState,
 };
 
 // 内部使用的Actor类型（暂不导出）

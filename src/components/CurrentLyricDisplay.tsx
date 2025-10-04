@@ -22,7 +22,6 @@ interface CurrentLyricDisplayProps {
 }
 
 export default function CurrentLyricDisplay({ track, className = '', lyricsData }: CurrentLyricDisplayProps) {
-  const [lyrics, setLyrics] = useState<LyricLine[]>(lyricsData ?? []);
   const [currentText, setCurrentText] = useState('');
   const [isFadingOut, setIsFadingOut] = useState(false);
   const lyricsRef = useRef<LyricLine[]>(lyricsData ?? []);
@@ -53,7 +52,6 @@ export default function CurrentLyricDisplay({ track, className = '', lyricsData 
 
   useEffect(() => {
     if (lyricsData) {
-      setLyrics(lyricsData);
       lyricsRef.current = lyricsData;
       return;
     }
@@ -63,7 +61,6 @@ export default function CurrentLyricDisplay({ track, className = '', lyricsData 
     const loadLyrics = async () => {
       if (!track?.id) {
         if (isMounted) {
-          setLyrics([]);
           setCurrentText('');
           lyricsRef.current = [];
         }
@@ -76,17 +73,14 @@ export default function CurrentLyricDisplay({ track, className = '', lyricsData 
 
         if (result?.content) {
           const parsed = parseLyrics(result.content);
-          setLyrics(parsed);
           lyricsRef.current = parsed;
         } else {
-          setLyrics([]);
           lyricsRef.current = [];
           setCurrentText('');
         }
       } catch (error) {
         if (!isMounted) return;
         console.error('加载歌词失败:', error);
-        setLyrics([]);
         lyricsRef.current = [];
         setCurrentText('');
       }

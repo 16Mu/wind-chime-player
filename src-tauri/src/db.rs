@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use anyhow::Result;
@@ -230,6 +230,9 @@ impl Database {
             [],
         )?;
 
+        // Migrate playlists table to add extended fields
+        self.migrate_playlist_extended_columns()?;
+
         // Create playlist_items table
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS playlist_items (
@@ -242,6 +245,9 @@ impl Database {
             )",
             [],
         )?;
+
+        // Migrate playlist_items table to add extended fields
+        self.migrate_playlist_items_extended_columns()?;
 
         // Create lyrics table
         self.conn.execute(
@@ -265,6 +271,34 @@ impl Database {
                 created_at INTEGER DEFAULT (strftime('%s', 'now')),
                 FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE
             )",
+            [],
+        )?;
+
+        // Create play_history table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS play_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_id INTEGER NOT NULL,
+                played_at INTEGER NOT NULL,
+                duration_played_ms INTEGER DEFAULT 0,
+                FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Migrate existing play_history table to add duration_played_ms
+        if self.conn.prepare("SELECT duration_played_ms FROM play_history LIMIT 1").is_err() {
+            log::info!("添加duration_played_ms字段到play_history表");
+            self.conn.execute("ALTER TABLE play_history ADD COLUMN duration_played_ms INTEGER DEFAULT 0", [])?;
+        }
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_play_history_track ON play_history(track_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_play_history_time ON play_history(played_at DESC)",
             [],
         )?;
 
@@ -395,6 +429,79 @@ impl Database {
             )",
             [],
         )?;
+
+        // ========== 远程音乐源相关表 (仅支持WebDAV) ==========
+        
+        // 统一的远程服务器配置表
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS remote_servers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                server_type TEXT NOT NULL CHECK(server_type IN ('webdav')),
+                config_json TEXT NOT NULL,
+                enabled INTEGER DEFAULT 1,
+                priority INTEGER DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                last_connected_at INTEGER,
+                connection_status TEXT DEFAULT 'unknown'
+            )",
+            [],
+        )?;
+
+        // 统一的缓存表
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS remote_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_id TEXT NOT NULL,
+                remote_path TEXT NOT NULL,
+                local_cache_path TEXT NOT NULL,
+                file_size INTEGER,
+                mime_type TEXT,
+                etag TEXT,
+                last_modified INTEGER,
+                cached_at INTEGER NOT NULL,
+                last_accessed INTEGER NOT NULL,
+                access_count INTEGER DEFAULT 0,
+                cache_status TEXT DEFAULT 'valid' CHECK(cache_status IN ('valid', 'stale', 'invalid')),
+                UNIQUE(server_id, remote_path),
+                FOREIGN KEY(server_id) REFERENCES remote_servers(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // 缓存索引
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_server ON remote_cache(server_id)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_access ON remote_cache(last_accessed DESC)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_status ON remote_cache(cache_status)",
+            [],
+        )?;
+
+        // 同步任务表
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS sync_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_id TEXT NOT NULL,
+                task_type TEXT NOT NULL CHECK(task_type IN ('scan', 'download', 'cleanup')),
+                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed')),
+                progress_current INTEGER DEFAULT 0,
+                progress_total INTEGER DEFAULT 0,
+                started_at INTEGER,
+                completed_at INTEGER,
+                error_message TEXT,
+                FOREIGN KEY(server_id) REFERENCES remote_servers(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        log::info!("远程服务器数据库表已创建");
 
         // Create indexes for performance - 低耦合：优化查询性能
         self.conn.execute(
@@ -590,6 +697,84 @@ impl Database {
         }
         
         log::info!("WebDAV支持字段迁移完成");
+        Ok(())
+    }
+
+    /// 迁移歌单表扩展字段
+    fn migrate_playlist_extended_columns(&self) -> Result<()> {
+        // description
+        if self.conn.prepare("SELECT description FROM playlists LIMIT 1").is_err() {
+            log::info!("添加description字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN description TEXT", [])?;
+        }
+        
+        // cover_path
+        if self.conn.prepare("SELECT cover_path FROM playlists LIMIT 1").is_err() {
+            log::info!("添加cover_path字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN cover_path TEXT", [])?;
+        }
+        
+        // is_smart
+        if self.conn.prepare("SELECT is_smart FROM playlists LIMIT 1").is_err() {
+            log::info!("添加is_smart字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN is_smart INTEGER DEFAULT 0", [])?;
+        }
+        
+        // smart_rules
+        if self.conn.prepare("SELECT smart_rules FROM playlists LIMIT 1").is_err() {
+            log::info!("添加smart_rules字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN smart_rules TEXT", [])?;
+        }
+        
+        // color_theme
+        if self.conn.prepare("SELECT color_theme FROM playlists LIMIT 1").is_err() {
+            log::info!("添加color_theme字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN color_theme TEXT", [])?;
+        }
+        
+        // is_favorite
+        if self.conn.prepare("SELECT is_favorite FROM playlists LIMIT 1").is_err() {
+            log::info!("添加is_favorite字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN is_favorite INTEGER DEFAULT 0", [])?;
+        }
+        
+        // last_played
+        if self.conn.prepare("SELECT last_played FROM playlists LIMIT 1").is_err() {
+            log::info!("添加last_played字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN last_played INTEGER", [])?;
+        }
+        
+        // play_count
+        if self.conn.prepare("SELECT play_count FROM playlists LIMIT 1").is_err() {
+            log::info!("添加play_count字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN play_count INTEGER DEFAULT 0", [])?;
+        }
+        
+        // updated_at
+        if self.conn.prepare("SELECT updated_at FROM playlists LIMIT 1").is_err() {
+            log::info!("添加updated_at字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN updated_at INTEGER", [])?;
+        }
+        
+        // is_pinned
+        if self.conn.prepare("SELECT is_pinned FROM playlists LIMIT 1").is_err() {
+            log::info!("添加is_pinned字段到playlists表");
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN is_pinned INTEGER DEFAULT 0", [])?;
+        }
+        
+        log::info!("歌单表扩展字段迁移完成");
+        Ok(())
+    }
+
+    /// 迁移歌单项表扩展字段
+    fn migrate_playlist_items_extended_columns(&self) -> Result<()> {
+        // added_at
+        if self.conn.prepare("SELECT added_at FROM playlist_items LIMIT 1").is_err() {
+            log::info!("添加added_at字段到playlist_items表");
+            self.conn.execute("ALTER TABLE playlist_items ADD COLUMN added_at INTEGER DEFAULT (strftime('%s', 'now'))", [])?;
+        }
+        
+        log::info!("歌单项表扩展字段迁移完成");
         Ok(())
     }
 
@@ -1049,6 +1234,25 @@ impl Database {
         Ok(())
     }
 
+    /// 删除指定来源的歌词（用于清理临时歌词）
+    pub fn delete_lyrics_by_source(&self, track_id: i64, source: &str) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "DELETE FROM lyrics WHERE track_id = ?1 AND source = ?2"
+        )?;
+        stmt.execute(params![track_id, source])?;
+        Ok(())
+    }
+
+    /// 检查歌词是否存在
+    pub fn has_lyrics(&self, track_id: i64) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM lyrics WHERE track_id = ?1",
+            [track_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
     /// 获取所有已扫描的音乐文件夹路径
     pub fn get_music_folder_paths(&self) -> Result<Vec<String>> {
         // 简化的 SQL 查询，在 Rust 中处理路径提取
@@ -1203,5 +1407,670 @@ impl Database {
             self.add_favorite(track_id)?;
             Ok(true)
         }
+    }
+
+    // ========== 远程服务器管理 ==========
+
+    pub fn add_remote_server(&self, id: &str, name: &str, server_type: &str, config_json: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        self.conn.execute(
+            "INSERT INTO remote_servers (id, name, server_type, config_json, created_at, updated_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, name, server_type, config_json, now, now],
+        )?;
+        log::info!("添加远程服务器: {} ({})", name, server_type);
+        Ok(())
+    }
+
+    pub fn get_remote_servers(&self) -> Result<Vec<(String, String, String, String, bool)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, server_type, config_json, enabled FROM remote_servers ORDER BY priority DESC, name ASC"
+        )?;
+        
+        let servers = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get::<_, i64>(4)? == 1,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+        
+        Ok(servers)
+    }
+
+    pub fn delete_remote_server(&self, id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM remote_servers WHERE id = ?1", params![id])?;
+        log::info!("删除远程服务器: {}", id);
+        Ok(())
+    }
+
+    // ========== 缓存管理 ==========
+
+    pub fn add_cache_entry(
+        &self,
+        server_id: &str,
+        remote_path: &str,
+        local_cache_path: &str,
+        file_size: Option<i64>,
+        mime_type: Option<&str>,
+    ) -> Result<i64> {
+        let now = chrono::Utc::now().timestamp();
+        
+        self.conn.execute(
+            "INSERT OR REPLACE INTO remote_cache 
+             (server_id, remote_path, local_cache_path, file_size, mime_type, cached_at, last_accessed, access_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)",
+            params![server_id, remote_path, local_cache_path, file_size, mime_type, now, now],
+        )?;
+        
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_cache_entry(&self, server_id: &str, remote_path: &str) -> Result<Option<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT local_cache_path FROM remote_cache 
+             WHERE server_id = ?1 AND remote_path = ?2 AND cache_status = 'valid'"
+        )?;
+        
+        let result = stmt.query_row(params![server_id, remote_path], |row| row.get(0))
+            .optional()?;
+        
+        // 更新访问时间
+        if result.is_some() {
+            let now = chrono::Utc::now().timestamp();
+            self.conn.execute(
+                "UPDATE remote_cache SET last_accessed = ?1, access_count = access_count + 1 
+                 WHERE server_id = ?2 AND remote_path = ?3",
+                params![now, server_id, remote_path],
+            )?;
+        }
+        
+        Ok(result)
+    }
+
+    pub fn get_cache_stats(&self) -> Result<(i64, i64)> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM remote_cache WHERE cache_status = 'valid'"
+        )?;
+        
+        let result = stmt.query_row([], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        }).map_err(|e| anyhow::anyhow!("查询缓存统计失败: {}", e))?;
+        
+        Ok(result)
+    }
+
+    // ========== 扩展的歌单管理方法 ==========
+
+    /// 创建扩展歌单（包含元数据）
+    pub fn create_playlist_extended(
+        &self,
+        name: &str,
+        description: Option<&str>,
+        cover_path: Option<&str>,
+        is_smart: bool,
+        smart_rules: Option<&str>,
+        color_theme: Option<&str>,
+    ) -> Result<i64> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let mut stmt = self.conn.prepare(
+            "INSERT INTO playlists (
+                name, description, cover_path, is_smart, smart_rules, 
+                color_theme, is_favorite, play_count, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?7)"
+        )?;
+
+        stmt.execute(params![
+            name,
+            description,
+            cover_path,
+            is_smart as i64,
+            smart_rules,
+            color_theme,
+            now
+        ])?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// 获取所有扩展歌单信息
+    pub fn get_all_playlists_extended(&self) -> Result<Vec<crate::playlist::Playlist>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.id, p.name, p.description, p.cover_path, p.color_theme,
+                    p.is_smart, p.smart_rules, p.is_favorite, p.is_pinned, p.created_at, 
+                    p.updated_at, p.last_played, p.play_count,
+                    COUNT(pi.id) as track_count,
+                    COALESCE(SUM(t.duration_ms), 0) as total_duration
+             FROM playlists p
+             LEFT JOIN playlist_items pi ON p.id = pi.playlist_id
+             LEFT JOIN tracks t ON pi.track_id = t.id
+             GROUP BY p.id
+             ORDER BY p.created_at DESC"
+        )?;
+
+        let playlist_iter = stmt.query_map([], |row| {
+            Ok(crate::playlist::Playlist {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                cover_path: row.get(3)?,
+                color_theme: row.get(4)?,
+                is_smart: row.get::<_, i64>(5)? == 1,
+                smart_rules: row.get(6)?,
+                is_favorite: row.get::<_, i64>(7)? == 1,
+                is_pinned: row.get::<_, i64>(8)? == 1,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+                last_played: row.get(11)?,
+                play_count: row.get(12)?,
+                track_count: row.get(13)?,
+                total_duration_ms: row.get(14)?,
+            })
+        })?;
+
+        let mut playlists = Vec::new();
+        for playlist in playlist_iter {
+            playlists.push(playlist?);
+        }
+
+        Ok(playlists)
+    }
+
+    /// 获取单个歌单信息
+    pub fn get_playlist_by_id(&self, playlist_id: i64) -> Result<Option<crate::playlist::Playlist>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.id, p.name, p.description, p.cover_path, p.color_theme,
+                    p.is_smart, p.smart_rules, p.is_favorite, p.is_pinned, p.created_at, 
+                    p.updated_at, p.last_played, p.play_count,
+                    COUNT(pi.id) as track_count,
+                    COALESCE(SUM(t.duration_ms), 0) as total_duration
+             FROM playlists p
+             LEFT JOIN playlist_items pi ON p.id = pi.playlist_id
+             LEFT JOIN tracks t ON pi.track_id = t.id
+             WHERE p.id = ?1
+             GROUP BY p.id"
+        )?;
+
+        let result = stmt.query_row([playlist_id], |row| {
+            Ok(crate::playlist::Playlist {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                cover_path: row.get(3)?,
+                color_theme: row.get(4)?,
+                is_smart: row.get::<_, i64>(5)? == 1,
+                smart_rules: row.get(6)?,
+                is_favorite: row.get::<_, i64>(7)? == 1,
+                is_pinned: row.get::<_, i64>(8)? == 1,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+                last_played: row.get(11)?,
+                play_count: row.get(12)?,
+                track_count: row.get(13)?,
+                total_duration_ms: row.get(14)?,
+            })
+        });
+
+        match result {
+            Ok(playlist) => Ok(Some(playlist)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// 更新歌单元数据
+    pub fn update_playlist_metadata(
+        &self,
+        playlist_id: i64,
+        name: Option<&str>,
+        description: Option<&str>,
+        cover_path: Option<&str>,
+        color_theme: Option<&str>,
+        is_favorite: Option<bool>,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let mut updates = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(n) = name {
+            updates.push("name = ?");
+            params.push(Box::new(n.to_string()));
+        }
+        if let Some(d) = description {
+            updates.push("description = ?");
+            params.push(Box::new(d.to_string()));
+        }
+        if let Some(c) = cover_path {
+            updates.push("cover_path = ?");
+            params.push(Box::new(c.to_string()));
+        }
+        if let Some(ct) = color_theme {
+            updates.push("color_theme = ?");
+            params.push(Box::new(ct.to_string()));
+        }
+        if let Some(f) = is_favorite {
+            updates.push("is_favorite = ?");
+            params.push(Box::new(f as i64));
+        }
+
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        updates.push("updated_at = ?");
+        params.push(Box::new(now));
+        params.push(Box::new(playlist_id));
+
+        let sql = format!(
+            "UPDATE playlists SET {} WHERE id = ?",
+            updates.join(", ")
+        );
+
+        let params_ref: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        self.conn.execute(&sql, params_ref.as_slice())?;
+
+        Ok(())
+    }
+
+    /// 更新智能歌单规则
+    pub fn update_smart_playlist_rules(&self, playlist_id: i64, rules: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "UPDATE playlists SET smart_rules = ?1, updated_at = ?2 WHERE id = ?3",
+            params![rules, now, playlist_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// 清空歌单曲目
+    pub fn clear_playlist_items(&self, playlist_id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM playlist_items WHERE playlist_id = ?1",
+            [playlist_id],
+        )?;
+        Ok(())
+    }
+
+    /// 重排歌单曲目
+    pub fn reorder_playlist_tracks(&self, playlist_id: i64, track_ids: &[i64]) -> Result<()> {
+        // 使用事务确保原子性
+        self.conn.execute("BEGIN TRANSACTION", [])?;
+
+        for (index, track_id) in track_ids.iter().enumerate() {
+            self.conn.execute(
+                "UPDATE playlist_items SET order_index = ?1 
+                 WHERE playlist_id = ?2 AND track_id = ?3",
+                params![index as i64, playlist_id, track_id],
+            )?;
+        }
+
+        self.conn.execute("COMMIT", [])?;
+        Ok(())
+    }
+
+    /// 更新歌单的更新时间
+    pub fn touch_playlist(&self, playlist_id: i64) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "UPDATE playlists SET updated_at = ?1 WHERE id = ?2",
+            params![now, playlist_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// 标记歌单为已播放
+    pub fn mark_playlist_played(&self, playlist_id: i64) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "UPDATE playlists SET last_played = ?1, play_count = play_count + 1 WHERE id = ?2",
+            params![now, playlist_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// 切换歌单收藏状态
+    pub fn toggle_playlist_favorite(&self, playlist_id: i64) -> Result<bool> {
+        let is_favorite: i64 = self.conn.query_row(
+            "SELECT is_favorite FROM playlists WHERE id = ?1",
+            [playlist_id],
+            |row| row.get(0),
+        )?;
+
+        let new_state = if is_favorite == 1 { 0 } else { 1 };
+
+        self.conn.execute(
+            "UPDATE playlists SET is_favorite = ?1 WHERE id = ?2",
+            params![new_state, playlist_id],
+        )?;
+
+        Ok(new_state == 1)
+    }
+
+    /// 获取所有智能歌单ID
+    pub fn get_smart_playlist_ids(&self) -> Result<Vec<i64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id FROM playlists WHERE is_smart = 1"
+        )?;
+
+        let ids = stmt.query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<i64>, _>>()?;
+
+        Ok(ids)
+    }
+
+    /// 获取歌单统计信息
+    pub fn get_playlist_stats(&self) -> Result<crate::playlist::PlaylistStats> {
+        let total_playlists: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM playlists",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let total_smart_playlists: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM playlists WHERE is_smart = 1",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let total_favorite_playlists: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM playlists WHERE is_favorite = 1",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let total_tracks_in_playlists: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM playlist_items",
+            [],
+            |row| row.get(0),
+        )?;
+
+        Ok(crate::playlist::PlaylistStats {
+            total_playlists,
+            total_smart_playlists,
+            total_favorite_playlists,
+            total_tracks_in_playlists,
+        })
+    }
+
+    // ========== Pin 歌单功能 ==========
+
+    /// Pin歌单到侧边栏
+    pub fn pin_playlist(&self, playlist_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE playlists SET is_pinned = 1 WHERE id = ?1",
+            params![playlist_id],
+        )?;
+        Ok(())
+    }
+
+    /// 取消Pin
+    pub fn unpin_playlist(&self, playlist_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE playlists SET is_pinned = 0 WHERE id = ?1",
+            params![playlist_id],
+        )?;
+        Ok(())
+    }
+
+    /// 切换Pin状态
+    pub fn toggle_pin(&self, playlist_id: i64) -> Result<bool> {
+        let is_pinned: i64 = self.conn.query_row(
+            "SELECT is_pinned FROM playlists WHERE id = ?1",
+            params![playlist_id],
+            |row| row.get(0),
+        )?;
+        
+        let new_value = if is_pinned == 1 { 0 } else { 1 };
+        self.conn.execute(
+            "UPDATE playlists SET is_pinned = ?1 WHERE id = ?2",
+            params![new_value, playlist_id],
+        )?;
+        
+        Ok(new_value == 1)
+    }
+
+    // ========== 播放历史管理 ==========
+
+    /// 记录播放历史
+    pub fn add_play_history(&self, track_id: i64, duration_played_ms: i64) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
+        self.conn.execute(
+            "INSERT INTO play_history (track_id, played_at, duration_played_ms) VALUES (?1, ?2, ?3)",
+            params![track_id, now, duration_played_ms],
+        )?;
+        Ok(())
+    }
+
+    /// 获取播放历史（带统计）
+    pub fn get_play_history(&self, sort_by: &str, limit: i64) -> Result<Vec<(Track, i64, i64, i64)>> {
+        let order_clause = match sort_by {
+            "play_count" => "play_count DESC, last_played DESC",
+            "first_played" => "first_played ASC",
+            _ => "last_played DESC", // default: last_played
+        };
+        
+        let sql = format!(
+            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms,
+                    COUNT(ph.id) as play_count,
+                    MAX(ph.played_at) as last_played,
+                    MIN(ph.played_at) as first_played
+             FROM tracks t
+             INNER JOIN play_history ph ON t.id = ph.track_id
+             GROUP BY t.id
+             ORDER BY {}
+             LIMIT ?1",
+            order_clause
+        );
+        
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([limit], |row| {
+            Ok((
+                Track {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    title: row.get(2).ok(),
+                    artist: row.get(3).ok(),
+                    album: row.get(4).ok(),
+                    duration_ms: row.get(5).ok(),
+                    album_cover_data: None,
+                    album_cover_mime: None,
+                },
+                row.get(6)?, // play_count
+                row.get(7)?, // last_played
+                row.get(8)?, // first_played
+            ))
+        })?;
+        
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        Ok(result)
+    }
+
+    /// 获取播放统计
+    pub fn get_play_statistics(&self) -> Result<(i64, i64, i64)> {
+        let total_plays: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM play_history",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        let unique_tracks: i64 = self.conn.query_row(
+            "SELECT COUNT(DISTINCT track_id) FROM play_history",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        // 使用实际播放时长而非曲目完整时长
+        let total_duration_ms: i64 = self.conn.query_row(
+            "SELECT COALESCE(SUM(duration_played_ms), 0) FROM play_history",
+            [],
+            |row| row.get(0),
+        )?;
+        
+        Ok((total_plays, unique_tracks, total_duration_ms))
+    }
+
+    /// 清空播放历史
+    pub fn clear_play_history(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM play_history", [])?;
+        Ok(())
+    }
+
+    /// 从历史中删除某曲目
+    pub fn remove_from_history(&self, track_id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM play_history WHERE track_id = ?1",
+            params![track_id],
+        )?;
+        Ok(())
+    }
+    
+    // 🔧 P2新增：播放历史相关的查询方法
+    
+    /// 删除指定时间之前的播放历史
+    pub fn delete_play_history_before(&self, timestamp: i64) -> Result<usize> {
+        let deleted = self.conn.execute(
+            "DELETE FROM play_history WHERE played_at < ?1",
+            params![timestamp],
+        )?;
+        Ok(deleted)
+    }
+    
+    /// 获取最近播放历史（返回PlayHistoryEntry结构）
+    pub fn get_recent_play_history(&self, limit: usize) -> Result<Vec<crate::play_history::PlayHistoryEntry>> {
+        let history_data = self.get_play_history("last_played", limit as i64)?;
+        
+        Ok(history_data.into_iter().map(|(track, play_count, last_played, first_played)| {
+            crate::play_history::PlayHistoryEntry {
+                track,
+                play_count,
+                last_played_at: last_played,
+                first_played_at: first_played,
+            }
+        }).collect())
+    }
+    
+    /// 🔧 修复：获取播放统计信息（返回PlayStatistics结构）
+    pub fn get_play_statistics_struct(&self) -> Result<crate::play_history::PlayStatistics> {
+        let (total_plays, unique_tracks, total_duration_ms) = self.get_play_statistics()?;
+        Ok(crate::play_history::PlayStatistics {
+            total_plays,
+            unique_tracks,
+            total_duration_ms,
+        })
+    }
+    
+    // 🔧 P2新增：智能歌单扩展字段查询
+    
+    /// 获取曲目的添加时间
+    pub fn get_track_date_added(&self, track_id: i64) -> Result<Option<i64>> {
+        // 从tracks表的created_at字段或文件系统时间获取
+        let timestamp: Option<i64> = self.conn.query_row(
+            "SELECT created_at FROM tracks WHERE id = ?1",
+            params![track_id],
+            |row| row.get(0),
+        ).optional()?;
+        
+        Ok(timestamp)
+    }
+    
+    /// 获取曲目的最后播放时间
+    pub fn get_track_last_played(&self, track_id: i64) -> Result<Option<i64>> {
+        let timestamp: Option<i64> = self.conn.query_row(
+            "SELECT MAX(played_at) FROM play_history WHERE track_id = ?1",
+            params![track_id],
+            |row| row.get(0),
+        ).optional()?;
+        
+        Ok(timestamp)
+    }
+    
+    /// 获取曲目的播放次数
+    pub fn get_track_play_count(&self, track_id: i64) -> Result<i64> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM play_history WHERE track_id = ?1",
+            params![track_id],
+            |row| row.get(0),
+        ).unwrap_or(0);
+        
+        Ok(count)
+    }
+    
+    /// 检查曲目是否被收藏
+    pub fn is_track_favorite(&self, track_id: i64) -> Result<bool> {
+        self.is_favorite(track_id)
+    }
+    
+    /// 🔧 P2新增：使用SQL WHERE子句查询曲目（智能歌单优化）
+    pub fn query_tracks_by_smart_rules(
+        &self,
+        where_clause: &str,
+        params: &[String],
+        limit: Option<u32>,
+    ) -> Result<Vec<Track>> {
+        let limit_clause = limit.map(|l| format!(" LIMIT {}", l)).unwrap_or_default();
+        
+        let sql = format!(
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime 
+             FROM tracks 
+             WHERE {} 
+             ORDER BY artist, album, title{}",
+            where_clause,
+            limit_clause
+        );
+        
+        let mut stmt = self.conn.prepare(&sql)?;
+        
+        // 转换参数为rusqlite可接受的格式
+        let rusqlite_params: Vec<&dyn rusqlite::ToSql> = params.iter()
+            .map(|p| p as &dyn rusqlite::ToSql)
+            .collect();
+        
+        let tracks = stmt.query_map(rusqlite_params.as_slice(), |row| {
+            Ok(Track {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                title: row.get(2).ok(),
+                artist: row.get(3).ok(),
+                album: row.get(4).ok(),
+                duration_ms: row.get(5).ok(),
+                album_cover_data: row.get(6).ok(),
+                album_cover_mime: row.get(7).ok(),
+            })
+        })?.collect::<Result<Vec<_>, _>>()?;
+        
+        Ok(tracks)
     }
 }

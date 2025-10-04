@@ -183,7 +183,7 @@ const AudioEnhancementPanel: React.FC = () => {
         <p>无法加载音质增强设置</p>
         <button 
           onClick={loadSettings}
-          className="mt-2 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          className="mt-2 px-4 py-2 text-sm bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors"
         >
           重试
         </button>
@@ -205,7 +205,7 @@ const AudioEnhancementPanel: React.FC = () => {
                 setAnimatingToggle(true);
                 setTimeout(() => setAnimatingToggle(false), 400);
               }}
-              className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 transition-transform duration-200"
+              className="rounded border-slate-300 dark:border-dark-400 text-purple-600 dark:text-purple-400 focus:ring-purple-500 transition-transform duration-200"
             />
             <span className="font-semibold text-slate-900 dark:text-dark-900">
               启用音质增强
@@ -221,7 +221,7 @@ const AudioEnhancementPanel: React.FC = () => {
         {isDirty && (
           <button
             onClick={saveSettings}
-            className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
@@ -250,7 +250,7 @@ const AudioEnhancementPanel: React.FC = () => {
                 type="checkbox"
                 checked={settings.equalizer.enabled}
                 onChange={(e) => updateEqualizer({ enabled: e.target.checked })}
-                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-slate-300 dark:border-dark-400 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
               />
               <span className="text-sm text-slate-600 dark:text-dark-700">启用</span>
             </label>
@@ -341,7 +341,7 @@ const AudioEnhancementPanel: React.FC = () => {
                 type="checkbox"
                 checked={settings.spatial_audio.enabled}
                 onChange={(e) => updateSpatialAudio({ enabled: e.target.checked })}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-slate-300 dark:border-dark-400 text-indigo-600 dark:text-indigo-400 focus:ring-indigo-500"
               />
               <span className="text-sm text-slate-600 dark:text-dark-700">启用</span>
             </label>
@@ -360,7 +360,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   onChange={(e) => updateSpatialAudio({ room_size: parseFloat(e.target.value) })}
                   className="w-full"
                 />
-                <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                   {(settings.spatial_audio.room_size * 100).toFixed(0)}%
                 </div>
               </div>
@@ -376,7 +376,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   onChange={(e) => updateSpatialAudio({ reverb_amount: parseFloat(e.target.value) })}
                   className="w-full"
                 />
-                <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                   {(settings.spatial_audio.reverb_amount * 100).toFixed(0)}%
                 </div>
               </div>
@@ -392,7 +392,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   onChange={(e) => updateSpatialAudio({ stereo_width: parseFloat(e.target.value) })}
                   className="w-full"
                 />
-                <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                   {settings.spatial_audio.stereo_width.toFixed(1)}x
                 </div>
               </div>
@@ -418,7 +418,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   type="checkbox"
                   checked={settings.dynamic_range.compressor_enabled}
                   onChange={(e) => updateDynamicRange({ compressor_enabled: e.target.checked })}
-                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  className="rounded border-slate-300 dark:border-dark-400 text-orange-600 focus:ring-orange-500"
                 />
                 <span className="text-sm text-slate-600 dark:text-dark-700">压缩器</span>
               </label>
@@ -428,7 +428,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   type="checkbox"
                   checked={settings.dynamic_range.volume_normalization}
                   onChange={(e) => updateDynamicRange({ volume_normalization: e.target.checked })}
-                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  className="rounded border-slate-300 dark:border-dark-400 text-orange-600 focus:ring-orange-500"
                 />
                 <span className="text-sm text-slate-600 dark:text-dark-700">音量标准化</span>
               </label>
@@ -447,7 +447,7 @@ const AudioEnhancementPanel: React.FC = () => {
                     onChange={(e) => updateDynamicRange({ threshold_db: parseFloat(e.target.value) })}
                     className="w-full"
                   />
-                  <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                  <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                     {settings.dynamic_range.threshold_db}dB
                   </div>
                 </div>
@@ -463,7 +463,7 @@ const AudioEnhancementPanel: React.FC = () => {
                     onChange={(e) => updateDynamicRange({ ratio: parseFloat(e.target.value) })}
                     className="w-full"
                   />
-                  <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                  <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                     {settings.dynamic_range.ratio.toFixed(1)}:1
                   </div>
                 </div>
@@ -482,7 +482,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   onChange={(e) => updateDynamicRange({ target_lufs: parseFloat(e.target.value) })}
                   className="w-full"
                 />
-                <div className="text-xs text-center mt-1 font-mono text-slate-500">
+                <div className="text-xs text-center mt-1 font-mono text-slate-500 dark:text-dark-600">
                   {settings.dynamic_range.target_lufs}LUFS ({settings.dynamic_range.target_lufs === -23 ? '广播标准' : settings.dynamic_range.target_lufs === -16 ? '音乐标准' : '自定义'})
                 </div>
               </div>
@@ -548,7 +548,7 @@ const AudioEnhancementPanel: React.FC = () => {
                   type="checkbox"
                   checked={settings.output_quality.dithering}
                   onChange={(e) => updateOutputQuality({ dithering: e.target.checked })}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  className="rounded border-slate-300 dark:border-dark-400 text-emerald-600 dark:text-emerald-400 focus:ring-emerald-500"
                 />
                 <span className="text-sm text-slate-600 dark:text-dark-700">抖动处理</span>
               </label>

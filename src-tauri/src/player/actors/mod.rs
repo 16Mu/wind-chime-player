@@ -25,17 +25,3 @@ pub use preload_actor::{
     PreloadActor, PreloadActorHandle,
 };
 pub use state_actor::{StateActor, StateActorHandle};
-
-/// Actor模块版本
-#[allow(dead_code)]
-pub const ACTORS_MODULE_VERSION: &str = "1.0.0";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_module_version() {
-        assert!(!ACTORS_MODULE_VERSION.is_empty());
-    }
-}

@@ -8,6 +8,13 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // 主品牌色系统
+        brand: {
+          400: '#7FB0FF',  // 浅品牌蓝
+          500: '#4D86FF',  // 中等品牌蓝
+          600: '#2B6FFF',  // 主品牌蓝 ⭐ 主要使用
+          700: '#1E56E0',  // 深品牌蓝
+        },
         accent: {
           DEFAULT: '#7C5CFF',
           50: '#F8F6FF',

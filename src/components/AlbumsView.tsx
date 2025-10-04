@@ -1,14 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
-}
+import type { Track } from '../types/music';
 
 interface Album {
   name: string;
@@ -29,40 +21,56 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
   // 封面刷新触发器
   const [coverRefreshTrigger, setCoverRefreshTrigger] = useState(0);
 
-  // 临时：在控制台提供测试和重新扫描函数
+  // 开发环境：在控制台提供测试和重新扫描函数（生产环境移除）
   useEffect(() => {
-    (window as any).rescanCovers = async () => {
-      try {
-        console.log('🔄 开始重新扫描封面数据...');
-        await invoke('library_rescan_covers');
-        console.log('✅ 重新扫描请求已发送');
-        // 清空当前封面缓存，强制重新加载
-        setAlbumCovers(new Map());
-        setCoverRefreshTrigger(prev => prev + 1);
-      } catch (error) {
-        console.error('❌ 重新扫描失败:', error);
+    if (import.meta.env.DEV) {
+      // 使用命名空间避免污染全局作用域
+      if (!(window as any).__windChimePlayer) {
+        (window as any).__windChimePlayer = {};
       }
-    };
+      
+      (window as any).__windChimePlayer.rescanCovers = async () => {
+        try {
+          console.log('🔄 开始重新扫描封面数据...');
+          await invoke('library_rescan_covers');
+          console.log('✅ 重新扫描请求已发送');
+          // 清空当前封面缓存，强制重新加载
+          setAlbumCovers(new Map());
+          setCoverRefreshTrigger(prev => prev + 1);
+        } catch (error) {
+          console.error('❌ 重新扫描失败:', error);
+        }
+      };
 
-    (window as any).testAudioCover = async (filePath: string) => {
-      try {
-        console.log('🔍 测试音频文件封面:', filePath);
-        const result = await invoke('test_audio_cover', { filePath }) as string;
-        console.log('📋 音频文件分析结果:\n', result);
-        return result;
-      } catch (error) {
-        console.error('❌ 测试失败:', error);
-        return error;
-      }
-    };
+      (window as any).__windChimePlayer.testAudioCover = async (filePath: string) => {
+        try {
+          console.log('🔍 测试音频文件封面:', filePath);
+          const result = await invoke('test_audio_cover', { filePath }) as string;
+          console.log('📋 音频文件分析结果:\n', result);
+          return result;
+        } catch (error) {
+          console.error('❌ 测试失败:', error);
+          return error;
+        }
+      };
 
-    // 提供快捷测试函数
-    (window as any).testTracks = () => {
-      console.log('📝 可用的测试命令:');
-      console.log('1. testAudioCover("E:\\\\Music\\\\鹿晗 - 我们的明天.flac")');
-      console.log('2. testAudioCover("E:\\\\Music\\\\邓超 _ 陈赫 _ 范志毅 _ 王勉 _ 李乃文 _ 王俊凯 - 耙耳朵.flac")');
-      console.log('3. rescanCovers()');
-    };
+      // 提供快捷测试函数
+      (window as any).__windChimePlayer.testTracks = () => {
+        console.log('📝 可用的测试命令:');
+        console.log('1. __windChimePlayer.testAudioCover("E:\\\\Music\\\\鹿晗 - 我们的明天.flac")');
+        console.log('2. __windChimePlayer.testAudioCover("E:\\\\Music\\\\邓超 _ 陈赫 _ 范志毅 _ 王勉 _ 李乃文 _ 王俊凯 - 耙耳朵.flac")');
+        console.log('3. __windChimePlayer.rescanCovers()');
+      };
+
+      console.log('🛠️ [开发模式] 调试工具已加载，输入 __windChimePlayer.testTracks() 查看可用命令');
+      
+      // 清理函数：组件卸载时移除
+      return () => {
+        if ((window as any).__windChimePlayer) {
+          delete (window as any).__windChimePlayer;
+        }
+      };
+    }
   }, []);
   
   const albums = useMemo(() => {
@@ -170,7 +178,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center glass-card max-w-md">
-          <div className="text-slate-400 mb-6">
+          <div className="text-slate-400 dark:text-dark-700 mb-6">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
@@ -213,7 +221,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
           
           return (
             <div 
-              key={albumKey} 
+              key={`${albumKey}-${selectedAlbum ? 'list' : 'grid'}`}
               className={`album-card ${isSelected ? 'album-card-selected' : ''}`}
               onClick={() => {
                 setSelectedAlbum(albumKey);
@@ -278,15 +286,16 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
       {/* 右侧抽屉 */}
       {selectedAlbumData && (
         <div className="album-drawer">
-          {/* 关闭按钮 */}
+          {/* 返回按钮 */}
           <button 
-            className="album-drawer-close"
+            className="album-drawer-back-btn"
             onClick={() => setSelectedAlbum(null)}
-            title="关闭（ESC）"
+            title="返回（ESC）"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
+            <span>返回</span>
           </button>
 
           {/* 头部 - 封面和信息 */}

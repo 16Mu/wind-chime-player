@@ -60,9 +60,7 @@ const LyricsScrollContainer = React.memo<LyricsScrollContainerProps>(
     fontSizes, 
     scrollConfig,
     onLineClick,
-    highlightOverrideIndex,
     onScrollStateChange,
-    onManualHighlightChange,
     className = ''
   }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -89,8 +87,9 @@ const LyricsScrollContainer = React.memo<LyricsScrollContainerProps>(
     }, [onLineClick]);
     
     // ✅ 计算间距（memo避免重复计算）
+    // ✅ 修复1: 增大歌词行之间的间距（从0.6倍增加到1.2倍字体大小），使其明显大于同一行内的换行间距
     const lineSpacing = useMemo(() => {
-      return fontSizes.spacingInfo?.lineSpacing || Math.max(fontSizes.normal * 0.6, 16);
+      return fontSizes.spacingInfo?.lineSpacing || Math.max(fontSizes.normal * 1.2, 32);
     }, [fontSizes.spacingInfo?.lineSpacing, fontSizes.normal]);
     
     console.log(`🔄 [LyricsScrollContainer] 渲染, currentIndex=${currentLineIndex}, linesCount=${lyrics.lines.length}`, {

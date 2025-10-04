@@ -36,7 +36,7 @@ export default function LibraryFilterBar({
   
   const [showSortMenu, setShowSortMenu] = useState(false);
 
-  const viewOptions: Array<{ value: ViewMode; label: string; icon: JSX.Element }> = [
+  const viewOptions: Array<{ value: ViewMode; label: string; icon: React.ReactElement }> = [
     {
       value: 'tracks',
       label: '歌曲',

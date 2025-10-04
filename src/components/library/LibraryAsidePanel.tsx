@@ -1,9 +1,4 @@
-interface Track {
-  id: number;
-  title?: string;
-  artist?: string;
-  album?: string;
-}
+import type { Track } from '../../types/music';
 
 interface ListeningHistoryItem {
   time: string;
@@ -67,10 +62,10 @@ export default function LibraryAsidePanel({
           </div>
         ) : (
           <div className="now-playing-empty">
-            <svg className="w-16 h-16 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-16 h-16 text-gray-300 dark:text-dark-800 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
-            <p className="text-sm text-gray-500">暂无播放</p>
+            <p className="text-sm text-gray-500 dark:text-dark-600">暂无播放</p>
           </div>
         )}
       </div>
@@ -119,7 +114,7 @@ export default function LibraryAsidePanel({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 text-center py-4">暂无播放历史</p>
+          <p className="text-sm text-gray-500 dark:text-dark-600 text-center py-4">暂无播放历史</p>
         )}
       </div>
 
@@ -128,7 +123,7 @@ export default function LibraryAsidePanel({
         <div className="aside-card announcement-card">
           <h3 className="aside-card-title">{announcement.title}</h3>
           <div className="announcement-content">
-            <p className="text-sm text-gray-600 leading-relaxed">{announcement.content}</p>
+            <p className="text-sm text-gray-600 dark:text-dark-700 leading-relaxed">{announcement.content}</p>
           </div>
         </div>
       )}

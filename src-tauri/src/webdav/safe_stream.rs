@@ -450,7 +450,10 @@ impl AsyncRead for SafeWebDAVStream {
         // 3. 检查背压 (暂停读取条件)
         if self.buffer_manager.should_pause_reading() {
             log::debug!("缓冲区接近满载，暂停读取");
-            self.waker = Some(cx.waker().clone());
+            // 只在 waker 不存在时才设置
+            if self.waker.is_none() {
+                self.waker = Some(cx.waker().clone());
+            }
             return Poll::Pending;
         }
         
@@ -524,8 +527,10 @@ impl AsyncRead for SafeWebDAVStream {
             }
             
             Poll::Pending => {
-                // 保存waker以便后续唤醒
-                self.waker = Some(cx.waker().clone());
+                // 保存waker以便后续唤醒（避免重复设置）
+                if self.waker.is_none() {
+                    self.waker = Some(cx.waker().clone());
+                }
                 Poll::Pending
             }
         }

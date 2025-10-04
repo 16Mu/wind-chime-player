@@ -59,38 +59,92 @@ impl PlayerAdapter {
             log::info!("🔄 命令处理循环已启动");
             
             loop {
-                let cmd = {
-                    let rx = cmd_rx.lock().await;
-                    match rx.try_recv() {
-                        Ok(cmd) => {
-                            log::debug!("📬 接收到命令: {:?}", cmd);
-                            cmd
-                        },
-                        Err(_) => {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                            continue;
+                // 🔧 关键优化：一次性获取所有待处理命令，过滤掉过期的Play命令
+                let (cmd_to_process, skipped_play_count) = {
+                    // 🔧 P1修复：使用spawn_blocking包装同步recv，避免阻塞async runtime
+                    let rx_clone = Arc::clone(&cmd_rx);
+                    let first_cmd = tokio::task::spawn_blocking(move || {
+                        let rx = rx_clone.blocking_lock();
+                        rx.recv()
+                    }).await;
+                    
+                    let first_cmd = match first_cmd {
+                        Ok(Ok(cmd)) => cmd,
+                        _ => {
+                            log::info!("Command channel closed or error, exiting loop");
+                            break;
                         }
+                    };
+                    
+                    let rx = cmd_rx.lock().await;
+                    
+                    // 如果不是Play命令，直接处理
+                    if !matches!(first_cmd, PlayerCommand::Play(_, _)) {
+                        drop(rx);
+                        (first_cmd, 0)
+                    } else {
+                        // 如果是Play命令，检查队列中是否有更新的Play命令
+                        let mut latest_play = first_cmd;
+                        let mut skipped = 0;
+                        let mut non_play_commands = Vec::new();
+                        
+                        // 继续从队列中获取命令，保留最新的Play命令
+                        loop {
+                            match rx.try_recv() {
+                                Ok(next_cmd) => {
+                                    if let PlayerCommand::Play(_, _) = next_cmd {
+                                        println!("⏭️ [ADAPTER] 跳过过期Play命令，保留最新");
+                                        latest_play = next_cmd;
+                                        skipped += 1;
+                                    } else {
+                                        // 遇到非Play命令，收集起来稍后处理
+                                        non_play_commands.push(next_cmd);
+                                    }
+                                }
+                                Err(_) => break, // 队列空了
+                            }
+                        }
+                        
+                        drop(rx);
+                        
+                        // 处理收集到的非Play命令
+                        for non_play_cmd in non_play_commands {
+                            let mut c = core.lock().await;
+                            let _ = c.handle_command(non_play_cmd).await;
+                        }
+                        
+                        (latest_play, skipped)
                     }
                 };
                 
-                if matches!(cmd, PlayerCommand::Shutdown) {
+                if skipped_play_count > 0 {
+                    println!("✨ [ADAPTER] 跳过了 {} 个过期Play命令", skipped_play_count);
+                    log::info!("✨ [ADAPTER] 跳过了 {} 个过期Play命令", skipped_play_count);
+                }
+                
+                if matches!(cmd_to_process, PlayerCommand::Shutdown) {
                     log::info!("🛑 收到关闭命令");
                     let mut c = core.lock().await;
                     let _ = c.shutdown().await;
                     break;
                 }
                 
-                log::debug!("📨 开始处理命令: {:?}", cmd);
+                log::debug!("📨 处理命令: {:?}", cmd_to_process);
                 
-                let mut c = core.lock().await;
-                
-                if let Err(e) = c.handle_command(cmd).await {
-                    log::error!("❌ 命令处理失败: {}", e);
+                // Play命令异步处理，不阻塞循环
+                if matches!(cmd_to_process, PlayerCommand::Play(_, _)) {
+                    let core_clone = Arc::clone(&core);
+                    tauri::async_runtime::spawn(async move {
+                        let mut c = core_clone.lock().await;
+                        if let Err(e) = c.handle_command(cmd_to_process).await {
+                            log::error!("❌ Play命令失败: {}", e);
+                        }
+                    });
                 } else {
-                    log::debug!("✅ 命令处理成功");
+                    // 其他命令同步处理
+                    let mut c = core.lock().await;
+                    let _ = c.handle_command(cmd_to_process).await;
                 }
-                
-                drop(c);
             }
             
             log::info!("⏹️ 命令处理循环已退出");

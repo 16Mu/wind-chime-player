@@ -79,49 +79,6 @@ impl PlayerError {
         PlayerError::Internal(format!("资源耗尽: {}", msg.into()))
     }
     
-    /// 判断错误是否可恢复
-    pub fn is_recoverable(&self) -> bool {
-        matches!(
-            self,
-            PlayerError::DeviceTemporaryUnavailable(_)
-                | PlayerError::Timeout(_)
-                | PlayerError::FileReadError(_)
-        )
-    }
-    
-    /// 判断是否需要用户干预
-    pub fn requires_user_action(&self) -> bool {
-        matches!(
-            self,
-            PlayerError::DeviceLost | PlayerError::AudioDeviceError(_)
-        )
-    }
-    
-    /// 获取错误级别
-    pub fn severity(&self) -> ErrorSeverity {
-        match self {
-            PlayerError::Internal(_) => ErrorSeverity::Critical,
-            PlayerError::DeviceLost => ErrorSeverity::Critical,
-            PlayerError::AudioDeviceError(_) => ErrorSeverity::High,
-            PlayerError::DecodeFailed(_) => ErrorSeverity::Medium,
-            PlayerError::FileNotFound(_) => ErrorSeverity::Medium,
-            PlayerError::TrackNotFound(_) => ErrorSeverity::Low,
-            _ => ErrorSeverity::Low,
-        }
-    }
-}
-
-/// 错误严重程度
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ErrorSeverity {
-    /// 低（可忽略）
-    Low,
-    /// 中（需要注意）
-    Medium,
-    /// 高（需要处理）
-    High,
-    /// 严重（可能导致崩溃）
-    Critical,
 }
 
 /// 将anyhow::Error转换为PlayerError
@@ -149,30 +106,4 @@ impl From<std::io::Error> for PlayerError {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_error_recoverability() {
-        let recoverable = PlayerError::DeviceTemporaryUnavailable("test".to_string());
-        assert!(recoverable.is_recoverable());
-        
-        let critical = PlayerError::DeviceLost;
-        assert!(!critical.is_recoverable());
-        assert!(critical.requires_user_action());
-    }
-    
-    #[test]
-    fn test_error_severity() {
-        assert_eq!(
-            PlayerError::Internal("test".to_string()).severity(),
-            ErrorSeverity::Critical
-        );
-        assert_eq!(
-            PlayerError::TrackNotFound(1).severity(),
-            ErrorSeverity::Low
-        );
-    }
-}
 

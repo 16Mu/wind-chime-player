@@ -1,6 +1,6 @@
 [package]
 name = "windchime"
-version = "0.3.1"
+version = "0.4.0"
 description = "现代化音乐播放器 - Modern Music Player"
 authors = ["Wind"]
 license = "MIT"
@@ -46,9 +46,6 @@ http = "0.2"
 url = "2.4"
 bytes = "1.5"
 
-# FTP支持
-suppaftp = { version = "6.0", features = ["native-tls"] }
-
 # 异步和并发增强
 tokio-util = { version = "0.7", features = ["io"] }
 futures = "0.3"
@@ -56,13 +53,20 @@ futures = "0.3"
 # 缓存和数据结构
 lru = "0.12"
 serde-xml-rs = "0.6"
+quick-xml = "0.31"  # 高性能XML解析（用于WebDAV）
+uuid = { version = "1.6", features = ["v4"] }  # UUID生成
 
 # 加密和安全
 base64 = "0.21"
 md5 = "0.7"
+zeroize = { version = "1.7", features = ["derive"] }
+secrecy = { version = "0.8", features = ["serde"] }
 
 # 异步trait支持
 async-trait = "0.1"
+
+# 懒加载静态变量
+once_cell = "1.19"
 
 # 错误处理增强
 thiserror = "1.0"
@@ -84,4 +88,10 @@ rand = "0.8"
 
 # 系统资源监控
 sysinfo = "0.30"
+
+
+
+
+
+
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "WindChime Player",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "identifier": "com.windchime.player",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -51,14 +51,6 @@
       "timestampUrl": "",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
-      },
-      "nsis": {
-        "languages": ["SimpChinese", "English"],
-        "displayLanguageSelector": true,
-        "installerIcon": "icons/icon.ico",
-        "installMode": "perUser",
-        "compression": "lzma",
-        "template": null
       }
     }
   }

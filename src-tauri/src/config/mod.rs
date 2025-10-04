@@ -2,14 +2,8 @@
 // 低耦合：通过清晰的接口与其他模块交互
 
 pub mod webdav_config;
-pub mod sync_config;
-pub mod types;
 
-// 配置类型（暂不导出）
-#[allow(unused_imports)]
-pub(crate) use types::*;
 pub use webdav_config::*;
-pub use sync_config::*;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -36,9 +30,6 @@ pub struct AppConfig {
     
     /// WebDAV服务器配置
     pub webdav_servers: HashMap<String, WebDAVServerConfig>,
-    
-    /// 同步配置
-    pub sync: SyncConfig,
     
     /// 音频播放配置
     pub audio: AudioConfig,
@@ -133,7 +124,6 @@ impl Default for AppConfig {
             },
             
             webdav_servers: HashMap::new(),
-            sync: SyncConfig::default(),
             
             audio: AudioConfig {
                 default_volume: 0.8,
@@ -267,64 +257,3 @@ impl ConfigManager {
             .collect()
     }
 }
-
-// 暂时禁用测试（需要tempfile依赖）
-#[cfg(all(test, feature = "config-tests"))]
-mod tests {
-    use super::*;
-    // use tempfile::TempDir;
-    
-    #[test]
-    #[ignore] // 暂时忽略，需要tempfile依赖
-    fn test_config_save_and_load() {
-        let temp_dir = TempDir::new().unwrap();
-        let config_path = temp_dir.path().join("test_config.json");
-        
-        // 创建并保存配置
-        let mut manager = ConfigManager::new(Some(config_path.clone())).unwrap();
-        manager.get_config_mut().ui.theme = "light".to_string();
-        manager.save().unwrap();
-        
-        // 重新加载并验证
-        let new_manager = ConfigManager::new(Some(config_path)).unwrap();
-        assert_eq!(new_manager.get_config().ui.theme, "light");
-    }
-    
-    #[test]
-    fn test_webdav_server_management() {
-        let temp_dir = TempDir::new().unwrap();
-        let config_path = temp_dir.path().join("test_config.json");
-        
-        let mut manager = ConfigManager::new(Some(config_path)).unwrap();
-        
-        // 添加WebDAV服务器
-        let server_config = WebDAVServerConfig {
-            name: "Test Server".to_string(),
-            url: "https://example.com/dav".to_string(),
-            username: Some("user".to_string()),
-            password: Some("pass".to_string()),
-            enabled: true,
-            ..Default::default()
-        };
-        
-        manager.add_webdav_server("test".to_string(), server_config.clone()).unwrap();
-        
-        // 验证添加
-        let retrieved = manager.get_webdav_server("test").unwrap();
-        assert_eq!(retrieved.name, "Test Server");
-        
-        // 更新配置
-        let mut updated_config = server_config.clone();
-        updated_config.name = "Updated Server".to_string();
-        manager.update_webdav_server("test", updated_config).unwrap();
-        
-        // 验证更新
-        let updated = manager.get_webdav_server("test").unwrap();
-        assert_eq!(updated.name, "Updated Server");
-        
-        // 移除配置
-        assert!(manager.remove_webdav_server("test").unwrap());
-        assert!(manager.get_webdav_server("test").is_none());
-    }
-}
-

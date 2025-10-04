@@ -9,6 +9,7 @@
 
 use tokio::sync::{mpsc, watch};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use parking_lot::RwLock;
 use tauri::async_runtime::JoinHandle;
@@ -86,6 +87,9 @@ pub struct PlayerCore {
     
     /// 配置
     config: PlayerCoreConfig,
+    
+    /// 最新播放请求时间戳（用于快速切歌优化）
+    latest_play_timestamp: Arc<AtomicI64>,
 }
 
 impl PlayerCore {
@@ -139,6 +143,7 @@ impl PlayerCore {
             let (preload_tx, preload_rx) = mpsc::channel(100);
             let actor = PreloadActor::new(
                 preload_rx,
+                preload_tx.clone(),  // ✅ 添加inbox_tx参数用于内部消息传递
                 event_tx.clone(),
                 config.preload_cache_capacity,
                 config.preload_cache_size_mb,
@@ -169,31 +174,53 @@ impl PlayerCore {
         let playback_tx_clone = playback_tx.clone();
         let playback_handle = PlaybackActorHandle::new(playback_tx);
         
+        // 🔧 P1修复：使用catch_unwind处理panic，防止线程崩溃
         let playback_thread = thread::Builder::new()
             .name("playback-actor".to_string())
             .spawn(move || {
                 println!("🧵 [CORE] PlaybackActor线程已启动");
                 log::info!("🧵 PlaybackActor线程已启动");
                 
-                // 在线程内部创建PlaybackActor（避免Send问题）
-                let playback_actor = PlaybackActor::new_with_receiver(playback_rx, playback_tx_clone, event_tx_for_playback, state_watch_for_playback);
+                // 使用catch_unwind捕获panic
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    // 在线程内部创建PlaybackActor（避免Send问题）
+                    let playback_actor = PlaybackActor::new_with_receiver(playback_rx, playback_tx_clone, event_tx_for_playback, state_watch_for_playback);
+                    
+                    // 🔧 修复：使用多线程runtime以支持流式播放中的block_in_place
+                    // 虽然AudioDevice不是Send，但PlaybackActor已经在专用线程中，
+                    // 多线程runtime只是允许并发执行异步任务，音频操作仍在同一线程
+                    let rt = tokio::runtime::Builder::new_multi_thread()
+                        .worker_threads(2) // 使用2个工作线程，足够处理流式IO
+                        .thread_name("playback-worker")
+                        .enable_all()
+                        .build()
+                        .expect("创建playback runtime失败");
+                    
+                    println!("⚡ [CORE] PlaybackActor runtime已创建");
+                    log::info!("⚡ PlaybackActor runtime已创建");
+                    // 在该runtime上执行playback_actor
+                    rt.block_on(async move {
+                        println!("▶️ [CORE] PlaybackActor.run() 开始执行");
+                        log::info!("▶️ PlaybackActor.run() 开始执行");
+                        playback_actor.run().await;
+                        println!("⏹️ [CORE] PlaybackActor已退出");
+                        log::info!("⏹️ PlaybackActor已退出");
+                    });
+                }));
                 
-                // 创建单线程tokio runtime
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("创建playback runtime失败");
-                
-                println!("⚡ [CORE] PlaybackActor runtime已创建");
-                log::info!("⚡ PlaybackActor runtime已创建");
-                // 在该runtime上执行playback_actor
-                rt.block_on(async move {
-                    println!("▶️ [CORE] PlaybackActor.run() 开始执行");
-                    log::info!("▶️ PlaybackActor.run() 开始执行");
-                    playback_actor.run().await;
-                    println!("⏹️ [CORE] PlaybackActor已退出");
-                    log::info!("⏹️ PlaybackActor已退出");
-                });
+                // 处理panic
+                if let Err(panic_err) = result {
+                    let panic_msg = if let Some(s) = panic_err.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else if let Some(s) = panic_err.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "Unknown panic".to_string()
+                    };
+                    
+                    log::error!("❌ [CORE] PlaybackActor线程panic: {}", panic_msg);
+                    println!("❌ [CORE] PlaybackActor线程panic: {}", panic_msg);
+                }
             })
             .map_err(|e| PlayerError::Internal(format!("创建playback线程失败: {}", e)))?;
         
@@ -234,6 +261,7 @@ impl PlayerCore {
             actor_handles: handles,
             playback_thread: Some(playback_thread),
             config,
+            latest_play_timestamp: Arc::new(AtomicI64::new(0)),
         })
     }
     
@@ -251,16 +279,32 @@ impl PlayerCore {
         
         match command {
             // 播放控制命令
-            PlayerCommand::Play(track_id) => {
-                println!("▶️ [CORE] 处理Play命令: track_id={}", track_id);
-                log::info!("▶️ [CORE] 处理Play命令: track_id={}", track_id);
-                self.handle_play(track_id).await
+            PlayerCommand::Play(track_id, timestamp) => {
+                println!("▶️ [CORE] 处理Play命令: track_id={}, timestamp={}", track_id, timestamp);
+                log::info!("▶️ [CORE] 处理Play命令: track_id={}, timestamp={}", track_id, timestamp);
+                
+                // 🎯 关键优化：在入口处立即检查时间戳，避免过期请求执行任何操作
+                let current_latest = self.latest_play_timestamp.load(Ordering::SeqCst);
+                if timestamp < current_latest {
+                    println!("⏭️ [CORE] 播放请求已过期（入口检查: 请求={}, 最新={}），立即拒绝", timestamp, current_latest);
+                    log::info!("⏭️ [CORE] 播放请求已过期（入口检查），立即拒绝");
+                    return Ok(()); // 直接返回，不执行任何操作
+                }
+                
+                // 更新最新时间戳
+                self.latest_play_timestamp.store(timestamp, Ordering::SeqCst);
+                
+                self.handle_play(track_id, timestamp).await
             }
             PlayerCommand::Pause => {
-                self.playback_handle.pause().await
+                self.playback_handle.pause().await?;
+                self.state_handle.update_playing_state(false).await;
+                Ok(())
             }
             PlayerCommand::Resume => {
-                self.playback_handle.resume().await
+                self.playback_handle.resume().await?;
+                self.state_handle.update_playing_state(true).await;
+                Ok(())
             }
             PlayerCommand::Stop => {
                 self.playback_handle.stop().await?;
@@ -268,7 +312,19 @@ impl PlayerCore {
                 Ok(())
             }
             PlayerCommand::Seek(position_ms) => {
-                self.playback_handle.seek(position_ms).await
+                // 🔧 修复：记录seek前的播放状态
+                let was_playing = self.get_state().is_playing;
+                
+                // 执行seek操作
+                self.playback_handle.seek(position_ms).await?;
+                
+                // 🔧 修复：如果原本在播放，确保seek后状态保持为playing
+                // 因为handle_seek内部会调用sink.play()，但不会更新StateActor
+                if was_playing {
+                    self.state_handle.update_playing_state(true).await;
+                }
+                
+                Ok(())
             }
             PlayerCommand::Next => {
                 self.handle_next().await
@@ -339,54 +395,74 @@ impl PlayerCore {
     }
     
     /// 处理播放命令
-    async fn handle_play(&mut self, track_id: i64) -> Result<()> {
-        println!("🎵 [CORE] 处理播放命令: track_id={}", track_id);
-        log::info!("🎵 [CORE] 处理播放命令: track_id={}", track_id);
+    async fn handle_play(&mut self, track_id: i64, timestamp: i64) -> Result<()> {
+        use std::time::Instant;
+        let start_time = Instant::now();
+        println!("🎵 [CORE] 处理播放命令: track_id={}, timestamp={}", track_id, timestamp);
+        log::info!("🎵 [CORE] 处理播放命令: track_id={}, timestamp={}", track_id, timestamp);
         
         // 从播放列表获取曲目
+        let step1 = Instant::now();
         println!("📋 [CORE] 从播放列表获取曲目...");
-        log::info!("📋 [CORE] 从播放列表获取曲目...");
         let track = match self.playlist_handle.jump_to(track_id).await {
             Ok(t) => {
-                println!("✅ [CORE] 曲目获取成功: {:?}", t.title);
-                log::info!("✅ [CORE] 曲目获取成功: {:?}", t.title);
+                println!("✅ [CORE] 曲目获取成功: {:?} (耗时: {}ms)", t.title, step1.elapsed().as_millis());
                 t
             }
             Err(e) => {
                 println!("❌ [CORE] 获取曲目失败: {}", e);
-                log::error!("❌ [CORE] 获取曲目失败: {}", e);
                 return Err(e);
             }
         };
         
-        // 获取当前索引和完整播放列表
-        let current_index = self.playlist_handle.get_current_index().await.ok().flatten().unwrap_or(0);
-        let playlist = self.playlist_handle.get_playlist().await.unwrap_or_default();
+        // 检查时间戳（防止在获取曲目过程中有新请求）
+        let latest_timestamp = self.latest_play_timestamp.load(Ordering::SeqCst);
+        if timestamp < latest_timestamp {
+            println!("⏭️ [CORE] 播放请求已过期，跳过");
+            return Ok(());
+        }
+        
+        // 🔧 优化：快速切歌时先停止当前播放
+        let step2 = Instant::now();
+        let current_state = self.get_state();
+        if let Some(ref curr) = current_state.current_track {
+            if curr.id != track.id {
+                println!("⏸️ [CORE] 先停止当前播放...");
+                let _ = self.playback_handle.stop().await;
+                println!("✅ [CORE] 停止完成 (耗时: {}ms)", step2.elapsed().as_millis());
+            }
+        }
+        
+        // 再次检查时间戳
+        let latest_timestamp = self.latest_play_timestamp.load(Ordering::SeqCst);
+        if timestamp < latest_timestamp {
+            println!("⏭️ [CORE] 播放请求已过期（播放前检查），跳过");
+            return Ok(());
+        }
         
         // 播放曲目
+        let step3 = Instant::now();
         println!("▶️ [CORE] 调用PlaybackActor播放...");
-        log::info!("▶️ [CORE] 调用PlaybackActor播放...");
         self.playback_handle.play(track.clone()).await?;
+        println!("✅ [CORE] PlaybackActor播放完成 (耗时: {}ms)", step3.elapsed().as_millis());
         
-        // 更新状态
-        println!("📊 [CORE] 更新播放状态...");
-        log::info!("📊 [CORE] 更新播放状态...");
+        // 更新状态（异步，不等待）
+        let step4 = Instant::now();
         self.state_handle.update_current_track(Some(track.clone())).await;
         self.state_handle.update_playing_state(true).await;
+        println!("✅ [CORE] 状态更新完成 (耗时: {}ms)", step4.elapsed().as_millis());
         
-        // 触发预加载（如果启用）
+        // 触发预加载（异步，不阻塞）
         if let Some(preload) = &self.preload_handle {
-            log::debug!("🔄 触发预加载: track={}, index={}", track.id, current_index);
-            // 更新播放列表信息
+            let current_index = self.playlist_handle.get_current_index().await.ok().flatten().unwrap_or(0);
+            let playlist = self.playlist_handle.get_playlist().await.unwrap_or_default();
             if !playlist.is_empty() {
                 let _ = preload.update_playlist(playlist.clone(), Some(current_index)).await;
             }
-            // 通知曲目变化
             let _ = preload.on_track_changed(track.clone(), current_index).await;
         }
         
-        println!("✅ [CORE] 播放命令处理完成");
-        log::info!("✅ [CORE] 播放命令处理完成");
+        println!("✅ [CORE] 播放命令处理完成 (总耗时: {}ms)", start_time.elapsed().as_millis());
         Ok(())
     }
     
@@ -487,35 +563,85 @@ impl PlayerCore {
         self.playback_handle.get_position().await
     }
     
-    /// 关闭PlayerCore
+    /// 🔧 P1修复：关闭PlayerCore（并发关闭+超时，防止死锁）
     pub async fn shutdown(&mut self) -> Result<()> {
         log::info!("🛑 关闭PlayerCore");
         
-        // 发送关闭信号给所有Actor
-        let _ = self.playback_handle.shutdown().await;
-        let _ = self.playlist_handle.shutdown().await;
-        let _ = self.state_handle.shutdown().await;
-        let _ = self.audio_handle.shutdown().await;
+        // 并发发送关闭信号给所有Actor（不等待响应）
+        use tokio::time::{timeout, Duration};
+        
+        // 并发发送关闭信号给所有Actor（不等待响应）
+        let timeout_duration = Duration::from_secs(5);
+        
+        // 分别执行关闭并收集结果
+        // 注意：state_handle.shutdown()返回()，需要包装为Result类型
+        let r1 = timeout(timeout_duration, self.playback_handle.shutdown()).await;
+        let r2 = timeout(timeout_duration, self.playlist_handle.shutdown()).await;
+        let r3 = timeout(timeout_duration, async {
+            self.state_handle.shutdown().await;
+            Ok::<(), PlayerError>(())
+        }).await;
+        let r4 = timeout(timeout_duration, self.audio_handle.shutdown()).await;
+        
+        // 记录失败的关闭操作
+        match r1 {
+            Ok(Ok(_)) => log::debug!("PlaybackActor 关闭成功"),
+            Ok(Err(e)) => log::warn!("PlaybackActor 关闭失败: {}", e),
+            Err(_) => log::warn!("PlaybackActor 关闭超时"),
+        }
+        
+        match r2 {
+            Ok(Ok(_)) => log::debug!("PlaylistActor 关闭成功"),
+            Ok(Err(e)) => log::warn!("PlaylistActor 关闭失败: {}", e),
+            Err(_) => log::warn!("PlaylistActor 关闭超时"),
+        }
+        
+        if let Ok(Ok(_)) = r3 {
+            log::debug!("StateActor 关闭成功");
+        } else if let Ok(Err(ref e)) = r3 {
+            log::warn!("StateActor 关闭失败: {}", e);
+        } else {
+            log::warn!("StateActor 关闭超时");
+        }
+        
+        if let Ok(Ok(_)) = r4 {
+            log::debug!("AudioActor 关闭成功");
+        } else if let Ok(Err(ref e)) = r4 {
+            log::warn!("AudioActor 关闭失败: {}", e);
+        } else {
+            log::warn!("AudioActor 关闭超时");
+        }
         
         // 关闭PreloadActor（如果启用）
         if let Some(preload) = &self.preload_handle {
-            let _ = preload.shutdown().await;
+            match timeout(timeout_duration, preload.shutdown()).await {
+                Ok(Ok(_)) => log::debug!("PreloadActor 关闭成功"),
+                Ok(Err(e)) => log::warn!("PreloadActor 关闭失败: {}", e),
+                Err(_) => log::warn!("PreloadActor 关闭超时"),
+            }
         }
         
-        // 等待所有Actor任务完成（带超时）
-        let timeout = tokio::time::Duration::from_secs(5);
-        for handle in self.actor_handles.drain(..) {
-            let _ = tokio::time::timeout(timeout, handle).await;
-        }
+        // 并发等待所有Actor任务完成（带超时）
+        let actor_timeout = Duration::from_secs(3);
+        let handle_futures: Vec<_> = self.actor_handles.drain(..)
+            .map(|handle| timeout(actor_timeout, handle))
+            .collect();
         
-        // 等待playback线程完成
+        let _ = futures::future::join_all(handle_futures).await;
+        
+        // 等待playback线程完成（带超时）
         if let Some(thread_handle) = self.playback_thread.take() {
-            // 注意：这里使用spawn_blocking因为thread::join是阻塞的
-            tokio::task::spawn_blocking(move || {
-                if let Err(e) = thread_handle.join() {
-                    log::error!("等待playback线程失败: {:?}", e);
-                }
-            }).await.ok();
+            let join_result = tokio::task::spawn_blocking(move || {
+                thread_handle.join()
+            });
+            
+            // 超时3秒
+            match timeout(Duration::from_secs(3), join_result).await {
+                Ok(Ok(Ok(_))) => log::info!("Playback线程正常退出"),
+                Ok(Ok(Err(e))) => log::error!("Playback线程panic: {:?}", e),
+                Ok(Err(e)) => log::error!("等待playback线程失败: {}", e),
+                Err(_) => log::warn!("等待playback线程超时"),
+            }
         }
         
         log::info!("✅ PlayerCore已关闭");

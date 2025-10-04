@@ -5,8 +5,8 @@ use super::{track::Track, state::RepeatMode};
 /// 播放器命令
 #[derive(Debug)]
 pub enum PlayerCommand {
-    /// 播放指定曲目（by track_id）
-    Play(i64),
+    /// 播放指定曲目（track_id, timestamp）
+    Play(i64, i64),
     
     /// 暂停播放
     Pause,
@@ -49,7 +49,7 @@ impl PlayerCommand {
     /// 获取命令名称（用于日志）
     pub fn name(&self) -> &str {
         match self {
-            PlayerCommand::Play(_) => "Play",
+            PlayerCommand::Play(_, _) => "Play",
             PlayerCommand::Pause => "Pause",
             PlayerCommand::Resume => "Resume",
             PlayerCommand::Stop => "Stop",
@@ -69,7 +69,7 @@ impl PlayerCommand {
     pub fn is_playback_control(&self) -> bool {
         matches!(
             self,
-            PlayerCommand::Play(_)
+            PlayerCommand::Play(_, _)
                 | PlayerCommand::Pause
                 | PlayerCommand::Resume
                 | PlayerCommand::Stop

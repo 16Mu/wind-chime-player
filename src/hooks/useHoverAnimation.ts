@@ -2,7 +2,30 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * Q弹悬停动画Hook
- * 提供平滑的悬停指示器动画效果
+ * 
+ * 提供平滑的悬停指示器动画效果，带Q弹缓动
+ * 
+ * 功能：
+ * - 自动跟踪悬停元素位置和大小
+ * - Q弹缓动效果（easeOutBack）
+ * - 可配置的启用/禁用
+ * - 首次显示瞬间定位，后续动画过渡
+ * 
+ * @param enabled 是否启用动画和指示器
+ * 
+ * @returns {{
+ *   hoverIndicator: 指示器状态对象,
+ *   indicatorRef: 指示器DOM引用,
+ *   updateIndicator: 更新指示器位置的函数,
+ *   hideIndicator: 隐藏指示器的函数
+ * }}
+ * 
+ * @example
+ * const { updateIndicator, hideIndicator, hoverIndicator } = useHoverAnimation();
+ * 
+ * <div onMouseEnter={(e) => updateIndicator(e.currentTarget)}>
+ *   Item
+ * </div>
  */
 export function useHoverAnimation(enabled: boolean = true) {
   const [hoverIndicator, setHoverIndicator] = useState({
@@ -41,8 +64,8 @@ export function useHoverAnimation(enabled: boolean = true) {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // 使用简单的 ease-out
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      // 🔧 P2修复：使用easeOutBack创建Q弹效果
+      const easedProgress = easeOutBack(progress);
 
       const currentTop = startTop + (targetTop - startTop) * easedProgress;
       const currentHeight = startHeight + (targetHeight - startHeight) * easedProgress;
@@ -118,4 +141,3 @@ export function useHoverAnimation(enabled: boolean = true) {
     hideIndicator
   };
 }
-

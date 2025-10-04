@@ -585,10 +585,33 @@ tbody tr {
   align-items: center;
   gap: 14px;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  /* hover效果 */
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  /* 网格模式：淡入交错动画 */
+  opacity: 0;
+  animation: gridFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* 网格模式交错动画 - 增大延迟间隔，让波浪效果更明显 */
+.artist-card-modern:nth-child(1) { animation-delay: 0s; }
+.artist-card-modern:nth-child(2) { animation-delay: 0.04s; }
+.artist-card-modern:nth-child(3) { animation-delay: 0.08s; }
+.artist-card-modern:nth-child(4) { animation-delay: 0.12s; }
+.artist-card-modern:nth-child(5) { animation-delay: 0.16s; }
+.artist-card-modern:nth-child(6) { animation-delay: 0.2s; }
+.artist-card-modern:nth-child(7) { animation-delay: 0.24s; }
+.artist-card-modern:nth-child(8) { animation-delay: 0.28s; }
+.artist-card-modern:nth-child(9) { animation-delay: 0.32s; }
+.artist-card-modern:nth-child(10) { animation-delay: 0.36s; }
+.artist-card-modern:nth-child(11) { animation-delay: 0.4s; }
+.artist-card-modern:nth-child(12) { animation-delay: 0.44s; }
+.artist-card-modern:nth-child(13) { animation-delay: 0.48s; }
+.artist-card-modern:nth-child(14) { animation-delay: 0.52s; }
+.artist-card-modern:nth-child(15) { animation-delay: 0.56s; }
+/* 剩余卡片：在前15个之后统一出现 */
+.artist-card-modern:nth-child(n+16) { animation-delay: 0.6s; }
 
 .artist-card-modern:hover {
   transform: translateY(-2px);
@@ -704,13 +727,15 @@ tbody tr {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 16px;
   padding: 16px;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 容器过渡：略微放慢，让卡片动画有时间完成 */
+  transition: flex 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-y: auto;
   overflow-x: hidden;
   align-items: start;
   grid-auto-rows: min-content;
   height: 100%;
   max-height: 100%;
+  will-change: flex;
 }
 
 /* 有选中时，收缩成单列 */
@@ -726,6 +751,9 @@ tbody tr {
   height: 100%;
   max-height: 100%;
   background: transparent;
+  /* 性能优化：提示浏览器使用GPU加速 */
+  will-change: flex;
+  contain: layout style;
 }
 
 .album-card {
@@ -734,10 +762,33 @@ tbody tr {
   border-radius: 10px;
   padding: 10px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  /* hover效果 */
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  /* 网格模式：淡入交错动画 */
+  opacity: 0;
+  animation: gridFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* 网格模式交错动画 - 增大延迟间隔，让波浪效果更明显 */
+.album-card:nth-child(1) { animation-delay: 0s; }
+.album-card:nth-child(2) { animation-delay: 0.04s; }
+.album-card:nth-child(3) { animation-delay: 0.08s; }
+.album-card:nth-child(4) { animation-delay: 0.12s; }
+.album-card:nth-child(5) { animation-delay: 0.16s; }
+.album-card:nth-child(6) { animation-delay: 0.2s; }
+.album-card:nth-child(7) { animation-delay: 0.24s; }
+.album-card:nth-child(8) { animation-delay: 0.28s; }
+.album-card:nth-child(9) { animation-delay: 0.32s; }
+.album-card:nth-child(10) { animation-delay: 0.36s; }
+.album-card:nth-child(11) { animation-delay: 0.4s; }
+.album-card:nth-child(12) { animation-delay: 0.44s; }
+.album-card:nth-child(13) { animation-delay: 0.48s; }
+.album-card:nth-child(14) { animation-delay: 0.52s; }
+.album-card:nth-child(15) { animation-delay: 0.56s; }
+/* 剩余卡片：在前15个之后统一出现 */
+.album-card:nth-child(n+16) { animation-delay: 0.6s; }
 
 .album-card:hover {
   transform: translateY(-4px);
@@ -753,22 +804,43 @@ tbody tr {
   gap: 10px;
   padding: 10px 12px;
   flex-shrink: 0;
-  transform: none;
   background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.1) !important;
   box-shadow: none !important;
-  border-bottom: 1px solid rgba(217, 214, 208, 0.15);
   min-height: 68px;
   height: 68px;
   width: 100%;
   box-sizing: border-box;
+  /* hover效果 */
+  transition: background 0.15s ease;
+  /* 列表模式：从左滑入交错动画 */
+  opacity: 0;
+  animation: listSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* 列表模式交错动画 - 增大延迟间隔，让波浪效果更明显 */
+.albums-grid-container.has-selection .album-card:nth-child(1) { animation-delay: 0s; }
+.albums-grid-container.has-selection .album-card:nth-child(2) { animation-delay: 0.04s; }
+.albums-grid-container.has-selection .album-card:nth-child(3) { animation-delay: 0.08s; }
+.albums-grid-container.has-selection .album-card:nth-child(4) { animation-delay: 0.12s; }
+.albums-grid-container.has-selection .album-card:nth-child(5) { animation-delay: 0.16s; }
+.albums-grid-container.has-selection .album-card:nth-child(6) { animation-delay: 0.2s; }
+.albums-grid-container.has-selection .album-card:nth-child(7) { animation-delay: 0.24s; }
+.albums-grid-container.has-selection .album-card:nth-child(8) { animation-delay: 0.28s; }
+.albums-grid-container.has-selection .album-card:nth-child(9) { animation-delay: 0.32s; }
+.albums-grid-container.has-selection .album-card:nth-child(10) { animation-delay: 0.36s; }
+.albums-grid-container.has-selection .album-card:nth-child(11) { animation-delay: 0.4s; }
+.albums-grid-container.has-selection .album-card:nth-child(12) { animation-delay: 0.44s; }
+.albums-grid-container.has-selection .album-card:nth-child(13) { animation-delay: 0.48s; }
+.albums-grid-container.has-selection .album-card:nth-child(14) { animation-delay: 0.52s; }
+.albums-grid-container.has-selection .album-card:nth-child(15) { animation-delay: 0.56s; }
+/* 剩余卡片：在前15个之后统一出现 */
+.albums-grid-container.has-selection .album-card:nth-child(n+16) { animation-delay: 0.6s; }
+
 .albums-grid-container.has-selection .album-card:hover {
-  transform: none;
   background: rgba(168, 85, 247, 0.04) !important;
-  box-shadow: none !important;
 }
 
 .albums-grid-container.has-selection .album-cover {
@@ -839,6 +911,109 @@ tbody tr {
   background: rgba(168, 85, 247, 0.08) !important;
   border: none !important;
   border-left: 3px solid #a855f7 !important;
+  box-shadow: none !important;
+  padding-left: 9px !important;
+}
+
+/* ==================== 艺术家卡片 - 列表模式适配 ==================== */
+
+/* 艺术家卡片在选中状态下的布局 */
+.albums-grid-container.has-selection .artist-card-modern {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid rgba(217, 214, 208, 0.1) !important;
+  /* hover效果 */
+  transition: background 0.15s ease;
+  /* 列表模式：从左滑入交错动画 */
+  opacity: 0;
+  animation: listSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 列表模式交错动画 - 增大延迟间隔，让波浪效果更明显 */
+.albums-grid-container.has-selection .artist-card-modern:nth-child(1) { animation-delay: 0s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(2) { animation-delay: 0.04s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(3) { animation-delay: 0.08s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(4) { animation-delay: 0.12s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(5) { animation-delay: 0.16s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(6) { animation-delay: 0.2s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(7) { animation-delay: 0.24s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(8) { animation-delay: 0.28s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(9) { animation-delay: 0.32s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(10) { animation-delay: 0.36s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(11) { animation-delay: 0.4s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(12) { animation-delay: 0.44s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(13) { animation-delay: 0.48s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(14) { animation-delay: 0.52s; }
+.albums-grid-container.has-selection .artist-card-modern:nth-child(15) { animation-delay: 0.56s; }
+/* 剩余卡片：在前15个之后统一出现 */
+.albums-grid-container.has-selection .artist-card-modern:nth-child(n+16) { animation-delay: 0.6s; }
+
+.albums-grid-container.has-selection .artist-card-modern:hover {
+  background: rgba(102, 126, 234, 0.04) !important;
+}
+
+/* 艺术家头像在列表模式下 */
+.albums-grid-container.has-selection .artist-avatar-modern {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.albums-grid-container.has-selection .artist-card-modern:hover .artist-avatar-modern {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+}
+
+/* 艺术家信息在列表模式下 */
+.albums-grid-container.has-selection .artist-info-modern {
+  flex: 1;
+  gap: 2px;
+}
+
+.albums-grid-container.has-selection .artist-name-modern {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.albums-grid-container.has-selection .artist-meta-modern {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  gap: 4px;
+}
+
+/* 隐藏悬停播放按钮和选中指示器 */
+.albums-grid-container.has-selection .artist-play-btn-modern {
+  display: none;
+}
+
+.albums-grid-container.has-selection .album-selected-indicator {
+  display: none;
+}
+
+.albums-grid-container.has-selection .artist-initial-modern {
+  font-size: 20px;
+  opacity: 1 !important;
+}
+
+/* 艺术家卡片选中状态 */
+.albums-grid-container.has-selection .artist-card-modern.album-card-selected {
+  background: rgba(102, 126, 234, 0.08) !important;
+  border: none !important;
+  border-left: 3px solid #667eea !important;
   box-shadow: none !important;
   padding-left: 9px !important;
 }
@@ -962,22 +1137,90 @@ tbody tr {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 一镜到底：从右侧滑入，时长与容器匹配 */
+  animation: slideInFromRight 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 16px 24px;
   height: 100%;
   max-height: 100%;
   min-height: 0;
+  /* 性能优化：使用 transform 而不是位置属性 */
+  will-change: transform, opacity;
 }
 
-@keyframes slideInRight {
+@keyframes slideInFromRight {
   from {
     opacity: 0;
-    transform: translateX(40px);
+    transform: translateX(30px);
   }
   to {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* 网格模式：淡入动画 */
+@keyframes gridFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 列表模式：从左滑入动画 */
+@keyframes listSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 抽屉返回按钮 - 右上角 */
+.album-drawer-back-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(217, 214, 208, 0.3);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  /* 优化：只对必要属性添加过渡 */
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              background-color 0.15s ease,
+              border-color 0.15s ease,
+              color 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  will-change: transform;
+}
+
+.album-drawer-back-btn:hover {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #667eea;
+  /* Q弹效果：轻微放大 */
+  transform: scale(1.05);
+}
+
+.album-drawer-back-btn:active {
+  /* Q弹效果：按下时缩小 */
+  transform: scale(0.95);
+  transition-duration: 0.1s;
 }
 
 .album-drawer-close {
@@ -1221,6 +1464,16 @@ tbody tr {
   box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3) !important;
 }
 
+/* 深色模式 - 艺术家列表模式 */
+[data-theme="dark"] .albums-grid-container.has-selection .artist-card-modern:hover {
+  background: rgba(102, 126, 234, 0.08) !important;
+}
+
+[data-theme="dark"] .albums-grid-container.has-selection .artist-card-modern.album-card-selected {
+  background: rgba(102, 126, 234, 0.12) !important;
+  border-left-color: #7c8ef7 !important;
+}
+
 [data-theme="dark"] .artist-name-modern,
 [data-theme="dark"] .album-name {
   color: rgba(255, 255, 255, 0.9);
@@ -1238,6 +1491,20 @@ tbody tr {
 [data-theme="dark"] .album-drawer {
   background: rgba(20, 20, 20, 0.98);
   border-left-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .album-drawer-back-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .album-drawer-back-btn:hover {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #7c8ef7;
+  /* 深色模式下也使用相同的Q弹效果 */
 }
 
 [data-theme="dark"] .album-drawer-close {
@@ -1546,113 +1813,113 @@ tbody tr {
   text-overflow: ellipsis;
 }
 
-/* 🌙 深色主题兼容性类 */
-.dark\:text-dark-900 {
+/* 🌙 深色主题兼容性类 - 只在dark模式下生效 */
+.dark .dark\:text-dark-900 {
   color: var(--text-primary);
 }
 
-.dark\:text-dark-700 {
+.dark .dark\:text-dark-700 {
   color: var(--text-secondary);
 }
 
-.dark\:text-dark-600 {
+.dark .dark\:text-dark-600 {
   color: var(--text-muted);
 }
 
-.dark\:bg-dark-100 {
+.dark .dark\:bg-dark-100 {
   background-color: var(--surface-secondary);
 }
 
-.dark\:bg-dark-200 {
+.dark .dark\:bg-dark-200 {
   background-color: var(--surface-tertiary);
 }
 
-.dark\:border-dark-500 {
+.dark .dark\:border-dark-500 {
   border-color: var(--border-primary);
 }
 
-.dark\:border-dark-400 {
+.dark .dark\:border-dark-400 {
   border-color: var(--border-secondary);
 }
 
-.dark\:hover\:border-dark-400:hover {
+.dark .dark\:hover\:border-dark-400:hover {
   border-color: var(--border-secondary);
 }
 
-.dark\:bg-card-bg {
+.dark .dark\:bg-card-bg {
   background-color: var(--card-bg-secondary);
 }
 
-.dark\:bg-card-bg-strong {
+.dark .dark\:bg-card-bg-strong {
   background-color: var(--card-bg);
 }
 
-.dark\:border-card-border {
+.dark .dark\:border-card-border {
   border-color: var(--card-border);
 }
 
-.dark\:hover\:bg-dark-200\/50:hover {
+.dark .dark\:hover\:bg-dark-200\/50:hover {
   background-color: rgba(var(--surface-tertiary), 0.5);
 }
 
-.dark\:placeholder-dark-600::placeholder {
+.dark .dark\:placeholder-dark-600::placeholder {
   color: var(--text-muted);
 }
 
-.dark\:bg-green-900\/30 {
+.dark .dark\:bg-green-900\/30 {
   background-color: rgba(34, 197, 94, 0.3);
 }
 
-.dark\:text-green-300 {
+.dark .dark\:text-green-300 {
   color: #86efac;
 }
 
-.dark\:text-blue-300 {
+.dark .dark\:text-blue-300 {
   color: #93c5fd;
 }
 
-.dark\:bg-brand-900\/30 {
+.dark .dark\:bg-brand-900\/30 {
   background-color: rgba(99, 102, 241, 0.3);
 }
 
-.dark\:text-brand-400 {
+.dark .dark\:text-brand-400 {
   color: #a78bfa;
 }
 
-.dark\:bg-dark-300 {
+.dark .dark\:bg-dark-300 {
   background-color: rgba(17, 24, 39, 1);
 }
 
-.dark\:hover\:bg-dark-300:hover {
+.dark .dark\:hover\:bg-dark-300:hover {
   background-color: rgba(17, 24, 39, 1);
 }
 
-.dark\:bg-dark-500 {
+.dark .dark\:bg-dark-500 {
   border-color: var(--border-primary);
 }
 
-.dark\:hover\:border-brand-600:hover {
+.dark .dark\:hover\:border-brand-600:hover {
   border-color: var(--brand-600);
 }
 
-.dark\:hover\:bg-brand-900\/20:hover {
+.dark .dark\:hover\:bg-brand-900\/20:hover {
   background-color: rgba(99, 102, 241, 0.2);
 }
 
 /* 🎵 音乐库行级透明度类 - 微妙层级感 */
-.dark\:bg-white\/02 {
+.dark .dark\:bg-white\/02 {
   background-color: rgba(255, 255, 255, 0.02);
 }
 
-.dark\:hover\:bg-white\/05:hover {
+.dark .dark\:hover\:bg-white\/05:hover {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
-.dark\:active\:bg-white\/08:active {
+.dark .dark\:active\:bg-white\/08:active {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
-.dark\:border-white\/10 {
+.dark .dark\:border-white\/10 {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -3764,20 +4031,107 @@ tbody tr {
     color: var(--text-muted);
   }
 
-  /* 当前歌词显示区域 - 纯文字 */
+  /* 当前歌词显示区域 - 容器 */
   .current-lyric-display {
+    position: relative;
     font-size: 13px;
     font-weight: 400;
     color: var(--text-muted);
     line-height: 1.4;
+    height: 20px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    white-space: nowrap;
   }
 
   .current-lyric-display.empty {
     font-style: italic;
     opacity: 0.6;
+  }
+
+  /* 歌词内容包装器 */
+  .lyric-content-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  /* 歌词切换动画：旧的从左侧退出（渐隐+缩小） */
+  @keyframes lyricSlideOut {
+    0% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-30%) scale(0.85); /* 缩小并向左退出 */
+      opacity: 0;
+    }
+  }
+
+  /* 歌词切换动画：新的从右侧进入（渐显+缩放，缓慢停下） */
+  @keyframes lyricSlideIn {
+    0% {
+      transform: translateX(20%) scale(0.9); /* 从右侧进入，略小 */
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0) scale(1); /* 缓慢减速到最终位置 */
+      opacity: 1;
+    }
+  }
+
+  .lyric-slide-out {
+    animation: lyricSlideOut 0.3s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  }
+
+  .lyric-slide-in {
+    animation: lyricSlideIn 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; /* 柔和减速 */
+  }
+
+  /* 跑马灯动画（超长歌词） */
+  @keyframes marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .lyric-marquee {
+    animation: marquee linear infinite;
+    display: inline-block;
+  }
+
+  /* 跑马灯内容需要重复一次以实现无缝循环 */
+  .lyric-marquee::after {
+    content: attr(data-text);
+    padding-left: 2em;
+  }
+
+  /* 歌词加载状态 */
+  .loading-lyrics {
+    display: inline-flex;
+    align-items: center;
+    color: var(--brand-primary);
+    font-style: italic;
+    opacity: 0.8;
+  }
+
+  /* 旋转动画 */
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-spin {
+    animation: spin 1s linear infinite;
   }
 
   .lyric-fade-in {
@@ -6789,4 +7143,138 @@ body.animations-disabled .toast-warning {
 
 body.animations-disabled .toast-progress-bar {
   animation: none !important;
+}
+
+/* =================================
+   歌词动画预览效果
+   ================================= */
+
+/* 弹性Q弹动画预览 */
+@keyframes lyrics-preview-bouncy-soft {
+  0% {
+    transform: translateY(10px) scale(0.9);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-5px) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes lyrics-preview-bouncy-strong {
+  0% {
+    transform: translateY(15px) scale(0.85);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(-8px) scale(1.15);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(3px) scale(0.95);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes lyrics-preview-bouncy-playful {
+  0% {
+    transform: translateY(12px) scale(0.88) rotate(-2deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(-6px) scale(1.12) rotate(2deg);
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(2px) scale(0.96) rotate(-1deg);
+  }
+  85% {
+    transform: translateY(-1px) scale(1.02) rotate(0.5deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes lyrics-preview-elastic-soft {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes lyrics-preview-elastic-strong {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(0.92);
+  }
+  80% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 平滑流畅动画预览 */
+@keyframes lyrics-preview-smooth {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 快速动画预览 */
+@keyframes lyrics-preview-fast {
+  0% {
+    transform: translateY(5px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 慢速动画预览 */
+@keyframes lyrics-preview-slow {
+  0% {
+    transform: translateY(12px) scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }

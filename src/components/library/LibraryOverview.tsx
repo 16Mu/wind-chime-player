@@ -24,7 +24,7 @@ export default function LibraryOverview({
   
   const handlePlayRecent = async (trackId: number) => {
     try {
-      await invoke('player_play', { track_id: trackId });
+      await invoke('player_play', { trackId, timestamp: Date.now() });
     } catch (error) {
       console.error('播放失败:', error);
     }
@@ -73,7 +73,7 @@ export default function LibraryOverview({
               </button>
             ))}
             {recentTracks.length === 0 && (
-              <p className="text-sm text-gray-500">暂无播放记录</p>
+              <p className="text-sm text-gray-500 dark:text-dark-600">暂无播放记录</p>
             )}
           </div>
         </div>

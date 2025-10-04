@@ -1,15 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import TracksView from './TracksView';
-
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
-}
+import type { Track } from '../types/music';
 
 interface FavoritesViewProps {
   onTrackSelect: (track: Track) => void;
@@ -77,21 +69,6 @@ export default function FavoritesView({
     }
   };
 
-  // 从收藏中移除单首歌曲（保留以备将来使用）
-  // const removeFavorite = async (trackId: number) => {
-  //   try {
-  //     await invoke('favorites_remove', { trackId });
-  //     
-  //     // 更新本地状态，移除该歌曲
-  //     setFavorites(prev => prev.filter(track => track.id !== trackId));
-  //     setFavoriteCount(prev => prev - 1);
-  //     
-  //     console.log('💔 已取消收藏');
-  //   } catch (error) {
-  //     console.error('移除收藏失败:', error);
-  //   }
-  // };
-
   // 组件挂载时加载收藏
   useEffect(() => {
     loadFavorites();
@@ -107,7 +84,7 @@ export default function FavoritesView({
     return (
       <div className="glass-card min-h-[400px] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-slate-400 mb-6">
+          <div className="text-slate-400 dark:text-dark-700 mb-6">
             <svg className="w-16 h-16 mx-auto animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
@@ -128,7 +105,7 @@ export default function FavoritesView({
     return (
       <div className="glass-card min-h-[400px] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-400 mb-6">
+          <div className="text-red-400 dark:text-red-400 mb-6">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
@@ -155,15 +132,15 @@ export default function FavoritesView({
     return (
       <div className="glass-card min-h-[400px] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-slate-400 mb-6">
+          <div className="text-slate-400 dark:text-dark-700 mb-6">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">暂无收藏</h2>
-          <p className="text-slate-600 text-lg mb-6">您还没有收藏任何音乐</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-dark-900 mb-4">暂无收藏</h2>
+          <p className="text-slate-600 dark:text-dark-700 text-lg mb-6">您还没有收藏任何音乐</p>
           <div className="space-y-3">
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 dark:text-dark-600">
               点击播放器中的收藏按钮来收藏喜爱的歌曲
             </p>
             <button

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Page } from '../App';
+import type { Page } from '../types/music';
+import { usePlaylist } from '../contexts/PlaylistContext';
 
 interface SidebarProps {
   currentPage: Page;
@@ -8,40 +9,13 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: SidebarProps) {
+  // 从 PlaylistContext 获取歌单数据 - 高内聚低耦合
+  const { getSidebarPlaylists } = usePlaylist();
+  const sidebarPlaylists = getSidebarPlaylists() || []; // 防御性编程，确保总是返回数组
+
   // 动画状态
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
-  const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [newPlaylistIcon, setNewPlaylistIcon] = useState('♪');
-  const [newPlaylistColor, setNewPlaylistColor] = useState('from-purple-500 to-pink-500');
-  const [newPlaylistPrivate, setNewPlaylistPrivate] = useState(false);
-  const [playlists, setPlaylists] = useState([
-    {
-      id: 1,
-      name: 'Wind的音乐精选',
-      trackCount: 42,
-      color: 'from-purple-500 to-pink-500',
-      icon: '🎵',
-      isPrivate: false
-    },
-    {
-      id: 2,
-      name: '深夜电台',
-      trackCount: 28,
-      color: 'from-blue-600 to-indigo-600',
-      icon: '🌙',
-      isPrivate: true
-    },
-    {
-      id: 3,
-      name: '工作专注',
-      trackCount: 35,
-      color: 'from-green-500 to-teal-500',
-      icon: '⚡',
-      isPrivate: false
-    }
-  ]);
   const [hoverIndicatorStyle, setHoverIndicatorStyle] = useState({
     transform: 'translateY(0px)',
     height: '48px',
@@ -77,11 +51,20 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
       )
     },
     { 
-      id: 'playlist' as Page, 
-      label: '播放列表', 
+      id: 'playlists' as Page, 
+      label: '歌单库', 
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      )
+    },
+    { 
+      id: 'history' as Page, 
+      label: '播放记录', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       )
     },
@@ -190,53 +173,22 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
     onCollapseChange?.(newCollapsedState);
   };
 
-  // 创建新歌单
-  const handleCreatePlaylist = () => {
-    if (newPlaylistName.trim()) {
-      const newPlaylist = {
-        id: Date.now(),
-        name: newPlaylistName.trim(),
-        trackCount: 0,
-        color: newPlaylistColor,
-        icon: newPlaylistIcon,
-        isPrivate: newPlaylistPrivate
-      };
-      setPlaylists([...playlists, newPlaylist]);
-      setShowCreatePlaylist(false);
-      setNewPlaylistName('');
-      setNewPlaylistIcon('♪');
-      setNewPlaylistColor('from-purple-500 to-pink-500');
-      setNewPlaylistPrivate(false);
-    }
+  // 点击歌单卡片 - 导航到歌单页面
+  const handlePlaylistClick = () => {
+    onNavigate('playlists' as Page);
   };
 
-  // 预设的颜色方案
-  const colorOptions = [
-    'from-purple-500 to-pink-500',
-    'from-blue-600 to-indigo-600', 
-    'from-green-500 to-teal-500',
-    'from-orange-500 to-red-500',
-    'from-cyan-500 to-blue-500',
-    'from-violet-500 to-purple-500',
-    'from-amber-500 to-orange-500',
-    'from-emerald-500 to-green-500'
-  ];
-
-  // 预设的简约图标选项
-  const iconOptions = [
-    { icon: '♪', name: '音符' },
-    { icon: '♫', name: '双音符' },
-    { icon: '♬', name: '音乐' },
-    { icon: '★', name: '星星' },
-    { icon: '♡', name: '爱心' },
-    { icon: '◆', name: '钻石' },
-    { icon: '●', name: '圆点' },
-    { icon: '▲', name: '三角' },
-    { icon: '■', name: '方块' },
-    { icon: '▼', name: '下三角' },
-    { icon: '◎', name: '圆环' },
-    { icon: '✦', name: '光芒' }
-  ];
+  // 获取歌单颜色样式
+  const getPlaylistGradient = (index: number): string => {
+    const gradients = [
+      'from-purple-500 to-pink-500',
+      'from-blue-600 to-indigo-600',
+      'from-green-500 to-teal-500',
+      'from-orange-500 to-red-500',
+      'from-cyan-500 to-blue-500',
+    ];
+    return gradients[index % gradients.length];
+  };
 
   // 🔄 当前页面变化时更新激活指示器
   useEffect(() => {
@@ -266,7 +218,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
     >
       {/* 全局激活状态指示器 */}
       <div
-        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-300/50 dark:to-dark-200/50 border border-blue-200/50 dark:border-card-dark-border shadow-md pointer-events-none z-10 bounce-indicator transition-opacity duration-700 ${
+        className={`absolute rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-dark-300/50 dark:to-dark-200/50 border border-blue-200 dark:border-blue-800/50 dark:border-card-dark-border shadow-md pointer-events-none z-10 bounce-indicator transition-opacity duration-700 ${
           isCollapsed ? 'left-3 right-3' : 'left-6 right-6'
         }`}
         style={{
@@ -367,16 +319,16 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           <div className="mb-4">
             {!isCollapsed && (
               <div className="flex items-center justify-between mb-3 px-4">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-dark-800">我的歌单</h3>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-dark-900">我的歌单</h3>
                 <button
-                  onClick={() => setShowCreatePlaylist(true)}
-                  className="w-7 h-7 rounded-lg bg-brand-500 hover:bg-brand-600
+                  onClick={() => onNavigate('playlists' as Page)}
+                  className="w-7 h-7 rounded-lg bg-brand-500 dark:bg-brand-600 hover:bg-brand-600 dark:hover:bg-brand-700
                            flex items-center justify-center text-white hover:scale-105 
                            transition-all duration-300 shadow-sm hover:shadow-md"
-                  title="创建新歌单"
+                  title="管理歌单"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
@@ -384,13 +336,15 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
             {isCollapsed && (
               <div className="mb-3">
                 <button
-                  onClick={() => setShowCreatePlaylist(true)}
+                  onClick={() => onNavigate('playlists' as Page)}
                   className="w-full py-3 px-2 rounded-xl flex items-center justify-center
-                           text-slate-800 hover:bg-slate-100 hover:scale-105 
+                           text-slate-800 dark:text-dark-900 hover:bg-slate-100 dark:hover:bg-dark-200/50 hover:scale-105 
                            transition-all duration-300"
-                  title="创建新歌单"
+                  title="管理歌单"
                 >
-                  <span className="text-lg font-bold">+</span>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
                 </button>
               </div>
             )}
@@ -399,7 +353,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
           {/* 歌单列表 */}
           <div>
             <div className="space-y-1.5">
-              {playlists.map((playlist) => (
+              {sidebarPlaylists.map((playlist, index) => (
                 <div
                   key={playlist.id}
                   className={`group relative cursor-pointer rounded-xl py-3 flex items-center
@@ -409,10 +363,10 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                     transitionProperty: 'padding',
                     transitionDuration: '0.7s'
                   }}
-                  onClick={() => console.log('打开歌单:', playlist.name)}
+                  onClick={handlePlaylistClick}
                 >
                   {/* 歌单图标 */}
-                  <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${playlist.color} 
+                  <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${getPlaylistGradient(index)} 
                                 flex items-center justify-center text-white text-xs 
                                 shadow-sm flex-shrink-0 group-hover:playlist-icon-hover`}
                        style={{
@@ -420,7 +374,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                          transitionProperty: 'transform',
                          transitionDuration: '0.7s'
                        }}>
-                    {playlist.icon}
+                    {playlist.is_smart ? '⚡' : '♪'}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 
                                   transition-colors duration-300 flex items-center justify-center rounded-md">
                       <svg className="w-2.5 h-2.5 text-white opacity-0 group-hover:opacity-100 
@@ -447,31 +401,31 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                     <div className="min-w-0 flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h4 className="font-medium text-slate-800 dark:text-dark-800 text-sm truncate leading-tight whitespace-nowrap">
+                          <h4 className="font-medium text-slate-800 dark:text-dark-900 text-sm truncate leading-tight whitespace-nowrap">
                             {playlist.name}
                           </h4>
-                          {playlist.isPrivate && (
-                            <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          {playlist.is_pinned && (
+                            <svg className="w-3 h-3 text-amber-500 dark:text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06zM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06zM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06z" />
                             </svg>
                           )}
                         </div>
                         <p className="text-xs text-slate-500 dark:text-dark-600 leading-tight whitespace-nowrap">
-                          {playlist.trackCount} 首
+                          {playlist.track_count} 首
                         </p>
                       </div>
                       
                       {/* 播放按钮 */}
                       <button 
-                        className="w-6 h-6 rounded-md bg-white/80 hover:bg-white 
+                        className="w-6 h-6 rounded-md bg-white/80 dark:bg-dark-300/80 hover:bg-white dark:hover:bg-dark-300
                                  flex items-center justify-center opacity-0 group-hover:opacity-100 
                                  transition-all duration-200 hover:scale-105 shadow-sm ml-2 flex-shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('播放歌单:', playlist.name);
+                          onNavigate('playlists' as Page);
                         }}
                       >
-                        <svg className="w-3 h-3 text-slate-700 ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-3 h-3 text-slate-700 dark:text-dark-800 ml-0.5" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                         </svg>
                       </button>
@@ -576,164 +530,6 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
         </div>
       </div>
 
-      {/* 创建歌单浮动弹窗 - 整个软件正中央 */}
-      {showCreatePlaylist && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          {/* 高斯模糊背景 */}
-          <div 
-            className="absolute inset-0 bg-black/40"
-            style={{
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-            }}
-            onClick={() => setShowCreatePlaylist(false)}
-          />
-          
-          {/* 弹窗内容 */}
-          <div className="relative w-full max-w-sm bg-white/95 dark:bg-dark-100/95 backdrop-blur-xl rounded-2xl 
-                         shadow-2xl border border-white/30 dark:border-dark-400/30 overflow-hidden
-                         modal-dramatic">
-            
-            {/* 标题栏 */}
-            <div className="flex items-center justify-between p-6 pb-4">
-              <h3 className="text-lg font-semibold text-slate-900">创建新歌单</h3>
-              <button
-                onClick={() => setShowCreatePlaylist(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 
-                         flex items-center justify-center transition-colors duration-200"
-              >
-                <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="px-6 pb-6 space-y-4">
-              {/* 歌单名称 */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">歌单名称</label>
-                <input
-                  type="text"
-                  value={newPlaylistName}
-                  onChange={(e) => setNewPlaylistName(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl
-                           focus:ring-2 focus:ring-brand-500 focus:border-transparent
-                           text-slate-900 placeholder-slate-400 transition-all duration-200"
-                  placeholder="给你的歌单起个好听的名字..."
-                  autoFocus
-                />
-              </div>
-
-              {/* 简约图标选择 */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-3">选择图标</label>
-                <div className="grid grid-cols-6 gap-2">
-                  {iconOptions.map((iconItem) => (
-                    <button
-                      key={iconItem.icon}
-                      onClick={() => setNewPlaylistIcon(iconItem.icon)}
-                      className={`aspect-square rounded-lg flex items-center justify-center text-lg font-medium
-                                transition-all duration-200 hover:scale-105
-                                ${newPlaylistIcon === iconItem.icon 
-                                  ? 'bg-brand-500 text-white shadow-md scale-105' 
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
-                      title={iconItem.name}
-                    >
-                      {iconItem.icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 简约颜色选择 */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-3">选择主题色</label>
-                <div className="grid grid-cols-4 gap-3">
-                  {colorOptions.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setNewPlaylistColor(color)}
-                      className={`aspect-square rounded-lg bg-gradient-to-br ${color} 
-                                transition-all duration-200 hover:scale-105 shadow-sm
-                                ${newPlaylistColor === color 
-                                  ? 'ring-3 ring-white ring-offset-2 ring-offset-slate-200 scale-105' 
-                                  : 'hover:shadow-md'
-                                }`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* 私密设置 */}
-              <div className="flex items-center justify-between bg-slate-50 rounded-xl p-4">
-                <div>
-                  <div className="font-medium text-slate-900 text-sm">私密歌单</div>
-                  <div className="text-xs text-slate-500">只有你可以看到</div>
-                </div>
-                <button
-                  onClick={() => setNewPlaylistPrivate(!newPlaylistPrivate)}
-                  className={`relative w-11 h-6 rounded-full transition-all duration-300
-                            ${newPlaylistPrivate ? 'bg-brand-500' : 'bg-slate-300'}`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm 
-                              transition-transform duration-300
-                              ${newPlaylistPrivate ? 'left-5' : 'left-0.5'}`}
-                  />
-                </button>
-              </div>
-
-              {/* 预览 */}
-              <div className="bg-slate-50 rounded-xl p-4">
-                <div className="text-xs text-slate-500 mb-3">预览效果</div>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${newPlaylistColor} 
-                                flex items-center justify-center text-white text-xl shadow-sm`}>
-                    {newPlaylistIcon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-900 text-sm truncate">
-                        {newPlaylistName || '未命名歌单'}
-                      </span>
-                      {newPlaylistPrivate && (
-                        <div className="w-3 h-3 rounded-full bg-slate-400 flex items-center justify-center">
-                          <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-xs text-slate-500">0 首歌曲</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 操作按钮 */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowCreatePlaylist(false)}
-                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 
-                           rounded-xl font-medium transition-colors duration-200"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleCreatePlaylist}
-                  disabled={!newPlaylistName.trim()}
-                  className="flex-1 py-3 px-4 bg-brand-500 hover:bg-brand-600 text-white 
-                           rounded-xl font-medium transition-all duration-200 
-                           disabled:opacity-50 disabled:cursor-not-allowed
-                           disabled:hover:bg-brand-500"
-                >
-                  创建歌单
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

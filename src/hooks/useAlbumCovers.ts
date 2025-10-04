@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { getAlbumCoverService } from '../services/albumCoverService';
 
 interface Track {
   id: number;
@@ -8,80 +8,102 @@ interface Track {
 
 /**
  * 专辑封面加载Hook
- * 自动加载和管理专辑封面URL
+ * 
+ * 重构后的设计：
+ * - 低耦合：依赖抽象的AlbumCoverService，而非直接调用invoke
+ * - 高性能：使用服务的并发加载和缓存机制
+ * - 防内存泄漏：使用AbortController中止异步操作
+ * - 批量更新：一次性更新所有封面URL，减少重渲染
  */
 export function useAlbumCovers(tracks: Track[]) {
   const [albumCoverUrls, setAlbumCoverUrls] = useState<{ [trackId: number]: string }>({});
-  const urlsRef = useRef<{ [trackId: number]: string }>({});
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // 使用ref保持service引用稳定
+  const serviceRef = useRef(getAlbumCoverService());
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const loadCovers = async () => {
-      const currentTrackIds = new Set(tracks.map(t => t.id));
-      let hasChanges = false;
-      
-      // 清理不再需要的 URL
-      Object.keys(urlsRef.current).forEach(trackIdStr => {
-        const trackId = parseInt(trackIdStr);
-        if (!currentTrackIds.has(trackId)) {
-          const url = urlsRef.current[trackId];
-          if (url) {
-            URL.revokeObjectURL(url);
-            delete urlsRef.current[trackId];
-            hasChanges = true;
-          }
-        }
-      });
+    // 取消之前的加载操作
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-      // 如果有清理，更新状态
-      if (hasChanges) {
-        setAlbumCoverUrls(prev => {
-          const newUrls = { ...prev };
-          Object.keys(newUrls).forEach(trackIdStr => {
-            const trackId = parseInt(trackIdStr);
-            if (!currentTrackIds.has(trackId)) {
-              delete newUrls[trackId];
-            }
-          });
-          return newUrls;
-        });
+    // 创建新的AbortController
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const loadCovers = async () => {
+      if (tracks.length === 0) {
+        setAlbumCoverUrls({});
+        return;
       }
 
-      // 加载新的封面
-      for (const track of tracks) {
-        if (urlsRef.current[track.id]) continue;
+      setIsLoading(true);
+      const trackIds = tracks.map(t => t.id);
 
-        try {
-          const result = await invoke<[number[], string] | null>('get_album_cover', {
-            trackId: track.id
-          });
+      try {
+        // 并发加载所有封面（服务内部处理并发控制、缓存、去重）
+        const results = await serviceRef.current.loadCovers(
+          trackIds,
+          abortController.signal
+        );
 
-          if (result && result[0] && result[0].length > 0) {
-            const [coverData, mimeType] = result;
-            const blob = new Blob([new Uint8Array(coverData)], { type: mimeType || 'image/jpeg' });
-            const url = URL.createObjectURL(blob);
-            
-            urlsRef.current[track.id] = url;
-            setAlbumCoverUrls(prev => ({ ...prev, [track.id]: url }));
-          }
-        } catch (err) {
-          console.warn(`封面加载失败 (track ${track.id}):`, err);
+        // 检查是否已被中止
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        // 转换为对象格式（批量更新，只触发一次重渲染）
+        const urlsObject: { [trackId: number]: string } = {};
+        results.forEach((url, trackId) => {
+          urlsObject[trackId] = url;
+        });
+
+        setAlbumCoverUrls(urlsObject);
+
+        // 清理不再需要的封面
+        serviceRef.current.cleanupCovers(trackIds);
+      } catch (error) {
+        // 忽略中止错误
+        if (error instanceof Error && error.message === 'Load operation aborted') {
+          return;
+        }
+        console.error('批量加载封面失败:', error);
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsLoading(false);
         }
       }
     };
 
     loadCovers();
+
+    // 清理函数：中止未完成的加载
+    return () => {
+      abortController.abort();
+    };
   }, [tracks]);
 
-  // 组件卸载时清理所有 URL
+  // 组件卸载时清理所有资源
   useEffect(() => {
     return () => {
-      Object.values(urlsRef.current).forEach(url => {
-        if (url) URL.revokeObjectURL(url);
-      });
-      urlsRef.current = {};
+      // 中止所有进行中的操作
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // 清理所有封面URL（在开发环境可选，因为service已经管理）
+      // 生产环境建议保留service的全局缓存以提升性能
+      if (import.meta.env.DEV) {
+        serviceRef.current.cleanup();
+      }
     };
   }, []);
 
-  return albumCoverUrls;
+  return { 
+    albumCoverUrls, 
+    isLoading,
+    stats: serviceRef.current.getStats() // 提供缓存统计（调试用）
+  };
 }
-

@@ -20,6 +20,7 @@ interface TracksViewProps {
   selectedTrackId?: number;
   showFavoriteButtons?: boolean;
   onFavoriteChange?: (trackId: number, isFavorite: boolean) => void;
+  onAddToPlaylist?: (track: Track) => void;
 }
 
 export default function TracksView({
@@ -28,7 +29,8 @@ export default function TracksView({
   isLoading,
   selectedTrackId,
   showFavoriteButtons = false,
-  onFavoriteChange
+  onFavoriteChange,
+  onAddToPlaylist
 }: TracksViewProps) {
   // 状态管理
   const [hoveredRowIndex, setHoveredRowIndex] = useState<number>(-1);
@@ -40,7 +42,7 @@ export default function TracksView({
 
   // 自定义Hooks
   const { hoverIndicator, indicatorRef, updateIndicator, hideIndicator } = useHoverAnimation(true);
-  const albumCoverUrls = useAlbumCovers(tracks);
+  const { albumCoverUrls } = useAlbumCovers(tracks);
   const densitySettings = useResponsiveDensity();
 
   // 事件处理
@@ -89,7 +91,7 @@ export default function TracksView({
           <div className="text-center max-w-md px-6">
             <div className="mb-6 flex justify-center">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center shadow-lg">
-                <svg className="w-10 h-10 text-slate-400 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-10 h-10 text-slate-400 dark:text-dark-700 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
               </div>
@@ -134,7 +136,7 @@ export default function TracksView({
           <tr>
             <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group">
               <span className="flex items-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
                 <span className="tracking-wide">歌曲</span>
@@ -142,7 +144,7 @@ export default function TracksView({
             </th>
             <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group hidden md:table-cell">
               <span className="flex items-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 <span className="tracking-wide">专辑</span>
@@ -150,7 +152,7 @@ export default function TracksView({
             </th>
             <th className="px-6 py-3 text-center text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group min-w-32">
               <span className="flex items-center justify-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span className="tracking-wide">时长</span>
@@ -174,6 +176,7 @@ export default function TracksView({
               onSelect={() => onTrackSelect(track)}
               onHover={() => handleRowMouseEnter(index)}
               onFavoriteToggle={() => handleFavoriteToggle(track.id)}
+              onAddToPlaylist={onAddToPlaylist ? () => onAddToPlaylist(track) : undefined}
               rowRef={(el) => { rowRefs.current[index] = el; }}
             />
           ))}

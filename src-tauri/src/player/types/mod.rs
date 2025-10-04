@@ -11,7 +11,7 @@ pub use track::Track;
 pub use state::{PlayerState, RepeatMode};
 pub use commands::PlayerCommand;
 pub use events::PlayerEvent;
-pub use errors::{PlayerError, ErrorSeverity};
+pub use errors::PlayerError;
 
 // 类型别名
 pub type Result<T> = std::result::Result<T, PlayerError>;

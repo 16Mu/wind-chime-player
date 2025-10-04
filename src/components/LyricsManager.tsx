@@ -1,15 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ParsedLyrics } from './LyricsDisplay';
-
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
-}
+import type { Track } from '../types/music';
 
 interface LyricsManagerProps {
   track: Track;
@@ -165,7 +157,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-8 h-8 border-2 border-blue-500 dark:border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p>加载歌词中...</p>
           </div>
         </div>
@@ -201,7 +193,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
           {/* 左侧：编辑区域 */}
           <div className="flex-1 flex flex-col liquid-glass-content p-6 border-r border-white/20">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-slate-800 dark:text-dark-800">歌词编辑</h3>
+              <h3 className="font-medium text-slate-800 dark:text-dark-900">歌词编辑</h3>
               <div className="flex gap-2">
                 <button
                   onClick={handleImportFile}
@@ -211,7 +203,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
                 </button>
                 <button
                   onClick={handlePreview}
-                  className="px-3 py-1 text-sm liquid-glass liquid-glass-interactive text-blue-700 rounded-full transition-colors hover:bg-blue-100/50"
+                  className="px-3 py-1 text-sm liquid-glass liquid-glass-interactive text-blue-700 dark:text-blue-300 rounded-full transition-colors hover:bg-blue-100/50"
                 >
                   预览
                 </button>
@@ -234,7 +226,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
             />
 
             {error && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
                 {error}
               </div>
             )}
@@ -242,7 +234,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
 
           {/* 右侧：预览区域 */}
           <div className="w-80 p-6 liquid-glass-content bg-gradient-to-br from-white/30 to-white/10">
-            <h3 className="font-medium text-slate-800 dark:text-dark-800 mb-4">预览</h3>
+            <h3 className="font-medium text-slate-800 dark:text-dark-900 mb-4">预览</h3>
             
             {previewMode && parsedLyrics ? (
               <div className="space-y-2">
@@ -288,7 +280,7 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
             <button
               onClick={handleDelete}
               disabled={isSaving}
-              className="px-4 py-2 text-red-600 liquid-glass liquid-glass-interactive hover:bg-red-100/50 rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-red-600 dark:text-red-400 liquid-glass liquid-glass-interactive hover:bg-red-100/50 rounded-lg transition-colors disabled:opacity-50"
             >
               删除歌词
             </button>

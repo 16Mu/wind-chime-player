@@ -10,7 +10,7 @@ const ANIMATION_PRESETS = {
   // Q弹系列 🏀
   BOUNCY_SOFT: {
     easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-    durBase: 350, durK: 1.0, durMin: 450, durMax: 1000,
+    durBase: 400, durK: 1.5, durMin: 500, durMax: 1400,  // ✅ 增强：提高durK和durMax，让长距离更Q弹
     name: '轻柔Q弹'
   },
   BOUNCY_STRONG: {
@@ -121,14 +121,6 @@ const createScrollConfig = (animationKey: keyof typeof ANIMATION_PRESETS) => {
     EASING: animation.easing
   };
 };
-
-// 距离自适应时长计算函数
-// ❌ 已弃用：由 useScrollAnimation Hook 内部处理
-// const computeDurationMs = (deltaY: number, config: ReturnType<typeof createScrollConfig>): number => {
-//   const abs = Math.abs(deltaY);
-//   const { DURATION_BASE_MS, DURATION_K_PER_PX, DURATION_MIN_MS, DURATION_MAX_MS } = config;
-//   return Math.max(DURATION_MIN_MS, Math.min(DURATION_MAX_MS, DURATION_BASE_MS + DURATION_K_PER_PX * abs));
-// };
 
 // 🔧 性能优化：环境感知的轻量日志系统
 // ❌ 已弃用：日志类型定义
@@ -682,14 +674,8 @@ export interface ParsedLyrics {
   metadata: { [key: string]: string };
 }
 
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
-}
+import type { Track } from '../types/music';
+import { extractColorPaletteWithCache, generateGradientBackground, rgbToCss } from '../utils/colorExtractor';
 
 interface ImmersiveLyricsViewProps {
   // ✅ 移除 currentPositionMs - 改用 PlaybackContext
@@ -792,12 +778,17 @@ function ImmersiveLyricsView({
       if (stored) {
         try {
           const settings = JSON.parse(stored);
-          return settings.enabled ? settings.style : 'BOUNCY_SOFT';
+          // 检查style是否是有效的动画预设
+          if (settings.style && ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS]) {
+            console.log(`🎨 [动画设置] 初始化加载: ${settings.style} (${ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS].name})`);
+            return settings.style;
+          }
         } catch (error) {
           console.warn('Failed to parse lyrics animation settings:', error);
         }
       }
     }
+    console.log('🎨 [动画设置] 使用默认: BOUNCY_SOFT');
     return 'BOUNCY_SOFT';
   });
   
@@ -808,13 +799,10 @@ function ImmersiveLyricsView({
       if (e.key === 'windchime-lyrics-animation-settings' && e.newValue) {
         try {
           const settings = JSON.parse(e.newValue);
-          if (settings.enabled) {
+          // 检查style是否是有效的动画预设
+          if (settings.style && ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS]) {
             setSelectedAnimation(settings.style);
-            console.log(`🎨 [动画设置] 已同步: ${ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS]?.name}`);
-          } else {
-            // 禁用时使用精准快速模式（最小动画）
-            setSelectedAnimation('PRECISE_SNAP');
-            console.log('🎨 [动画设置] 动画已禁用，使用精准快速模式');
+            console.log(`🎨 [动画设置] 已同步: ${settings.style} (${ANIMATION_PRESETS[settings.style as keyof typeof ANIMATION_PRESETS].name})`);
           }
         } catch (error) {
           console.warn('Failed to sync lyrics animation settings:', error);
@@ -825,30 +813,8 @@ function ImmersiveLyricsView({
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
-
-  // 初始化时检查设置状态
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('windchime-lyrics-animation-settings');
-      if (stored) {
-        try {
-          const settings = JSON.parse(stored);
-          if (!settings.enabled) {
-            setSelectedAnimation('PRECISE_SNAP');
-            console.log('🎨 [动画设置] 初始化：动画已禁用，使用精准快速模式');
-          }
-        } catch (error) {
-          console.warn('Failed to parse lyrics animation settings on init:', error);
-        }
-      }
-    }
-  }, []);
   
   // 🔧 性能优化：动态滚动配置（使用useMemo避免每次重渲染都创建）
-  // ❌ 已弃用：直接使用下面的 scrollConfig
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  // const SCROLL_CONFIG = useMemo(() => createScrollConfig(selectedAnimation), [selectedAnimation]);
-  
   // ✅ 转换为新组件所需的配置格式（直接依赖 selectedAnimation 避免对象引用变化）
   const scrollConfig = useMemo(() => {
     const config = createScrollConfig(selectedAnimation);
@@ -862,12 +828,8 @@ function ImmersiveLyricsView({
     };
   }, [selectedAnimation]);
   
-  // 用户跳转状态
-  // const [isUserJumping, setIsUserJumping] = useState(false);
-  
   const containerRef = useRef<HTMLDivElement>(null);
   const lyricsRef = useRef<HTMLDivElement>(null);
-  // const movingWrapRef = useRef<HTMLDivElement>(null); // ⚠️ [已弃用] 旧系统使用
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   
   // 时间戳数组（二分查找用）
@@ -941,6 +903,7 @@ function ImmersiveLyricsView({
   // 背景渐变状态管理
   const [backgroundPhase] = useState(0);
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
+  const [extractedColors, setExtractedColors] = useState<any>(null);
   
   // 🎯 进度条组件已移至组件外部，避免每次渲染时重新创建
 
@@ -1030,6 +993,18 @@ function ImmersiveLyricsView({
   }, [track]);
 
   // 加载歌词
+  // ✅ 预处理歌词：过滤掉空行（只有时间戳但没有文本的行）
+  const preprocessLyrics = useCallback((lyrics: ParsedLyrics): ParsedLyrics => {
+    return {
+      ...lyrics,
+      lines: lyrics.lines.filter(line => {
+        // 过滤条件：文本必须存在且不为空（去除空格后）
+        const text = line.text?.trim();
+        return text && text.length > 0;
+      })
+    };
+  }, []);
+
   const loadLyrics = useCallback(async (id: number) => {
     if (!id) return;
     
@@ -1050,7 +1025,9 @@ function ImmersiveLyricsView({
           content: (dbLyrics as any).content 
         }) as ParsedLyrics;
         
-        setLyrics(parsed);
+        // ✅ 预处理：过滤空行
+        const filtered = preprocessLyrics(parsed);
+        setLyrics(filtered);
         return;
       }
       
@@ -1062,7 +1039,9 @@ function ImmersiveLyricsView({
         }) as ParsedLyrics | null;
         
         if (searchResult && searchResult.lines && searchResult.lines.length > 0) {
-          setLyrics(searchResult);
+          // ✅ 预处理：过滤空行
+          const filtered = preprocessLyrics(searchResult);
+          setLyrics(filtered);
           return;
         }
       }
@@ -1078,7 +1057,7 @@ function ImmersiveLyricsView({
     } finally {
       setIsLoading(false);
     }
-  }, []); // 空依赖数组，通过ref访问最新的track
+  }, [preprocessLyrics]); // 添加 preprocessLyrics 依赖
 
   // 🔧 性能优化：重新加载歌词按钮处理函数
   const handleReloadLyrics = useCallback(() => {
@@ -1256,15 +1235,6 @@ function ImmersiveLyricsView({
   
   // 组件卸载时 rAF 在对应 effect 中已清理
 
-  // 背景渐变动画 - 暂时禁用以调试重渲染问题
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     setBackgroundPhase(prev => (prev + 0.5) % 360);
-  //   }, 150); // 每150ms更新0.5度，更加平缓
-  //   
-  //   return () => clearInterval(interval);
-  // }, []);
-
   // 🔧 性能优化：提取专辑封面获取函数，避免重复创建
   const fetchAlbumCover = useCallback(async () => {
     try {
@@ -1292,6 +1262,41 @@ function ImmersiveLyricsView({
   useEffect(() => {
     fetchAlbumCover();
   }, [fetchAlbumCover]);
+
+  // 从专辑封面提取颜色
+  useEffect(() => {
+    if (!albumCoverUrl) {
+      setExtractedColors(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    extractColorPaletteWithCache(albumCoverUrl)
+      .then(palette => {
+        if (!isCancelled) {
+          console.log('✅ [颜色提取] 成功提取颜色:', palette);
+          setExtractedColors(palette);
+        }
+      })
+      .catch(error => {
+        console.warn('⚠️ [颜色提取] 失败:', error);
+        // 失败时使用默认颜色（深蓝色）
+        if (!isCancelled) {
+          setExtractedColors({
+            dominant: { r: 30, g: 70, b: 100 },
+            vibrant: { r: 60, g: 120, b: 180 },
+            muted: { r: 50, g: 80, b: 110 },
+            dark: { r: 20, g: 50, b: 70 },
+            light: { r: 80, g: 140, b: 200 }
+          });
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [albumCoverUrl]);
 
   // 组件卸载时清理封面URL
   useEffect(() => {
@@ -1375,54 +1380,47 @@ function ImmersiveLyricsView({
 
   // 布局样式背景配置
   const getLayoutBackground = (layout: string, phase: number) => {
+    // 如果有提取的颜色，使用提取的颜色；否则使用默认配色
+    const defaultColors = {
+      dominant: { r: 30, g: 70, b: 100 },
+      vibrant: { r: 60, g: 120, b: 180 },
+      muted: { r: 50, g: 80, b: 110 },
+      dark: { r: 20, g: 50, b: 70 },
+      light: { r: 80, g: 140, b: 200 }
+    };
+    
+    const colors = extractedColors || defaultColors;
+    
     switch (layout) {
       case 'split':
         return {
-          background: `
-            linear-gradient(
-              90deg,
-              rgba(6, 78, 59, 0.85) 0%,
-              rgba(5, 46, 44, 0.90) 50%,
-              rgba(6, 78, 59, 0.85) 100%
-            ),
-            radial-gradient(
-              circle at ${25 + Math.sin(phase * 0.005) * 10}% ${50 + Math.cos(phase * 0.007) * 15}%,
-              rgba(20, 184, 166, 0.12) 0%,
-              transparent 60%
-            ),
-            radial-gradient(
-              circle at ${75 + Math.cos(phase * 0.006) * 10}% ${50 + Math.sin(phase * 0.008) * 15}%,
-              rgba(34, 197, 94, 0.10) 0%,
-              transparent 55%
-            ),
-            #064e3b
-          `
+          background: generateGradientBackground(colors, phase)
         };
       case 'fullscreen':
         return {
           background: `
             radial-gradient(
               ellipse at center,
-              rgba(236, 72, 153, 0.15) 0%,
-              rgba(147, 51, 234, 0.12) 35%,
-              rgba(59, 130, 246, 0.08) 70%,
+              ${rgbToCss(colors.vibrant, 0.15)} 0%,
+              ${rgbToCss(colors.dominant, 0.12)} 35%,
+              ${rgbToCss(colors.muted, 0.08)} 70%,
               transparent 100%
             ),
             linear-gradient(
               ${phase * 0.5}deg,
-              rgba(251, 113, 133, 0.08) 0%,
-              rgba(236, 72, 153, 0.12) 25%,
-              rgba(147, 51, 234, 0.10) 50%,
-              rgba(79, 70, 229, 0.08) 75%,
-              rgba(59, 130, 246, 0.06) 100%
+              ${rgbToCss(colors.light, 0.08)} 0%,
+              ${rgbToCss(colors.vibrant, 0.12)} 25%,
+              ${rgbToCss(colors.dominant, 0.10)} 50%,
+              ${rgbToCss(colors.muted, 0.08)} 75%,
+              ${rgbToCss(colors.dark, 0.06)} 100%
             ),
             radial-gradient(
               circle at ${30 + Math.sin(phase * 0.003) * 30}% ${40 + Math.cos(phase * 0.004) * 30}%,
-              rgba(168, 85, 247, 0.15) 0%,
+              ${rgbToCss(colors.vibrant, 0.15)} 0%,
               transparent 70%
             ),
-            linear-gradient(180deg, rgba(17, 24, 39, 0.95) 0%, rgba(31, 41, 55, 0.90) 100%),
-            #111827
+            linear-gradient(180deg, ${rgbToCss(colors.dark, 0.95)} 0%, ${rgbToCss(colors.dark, 0.90)} 100%),
+            ${rgbToCss(colors.dark, 1)}
           `
         };
       case 'card':
@@ -1430,26 +1428,26 @@ function ImmersiveLyricsView({
           background: `
             linear-gradient(
               135deg,
-              rgba(245, 158, 11, 0.12) 0%,
-              rgba(251, 146, 60, 0.15) 25%,
-              rgba(249, 115, 22, 0.12) 50%,
-              rgba(234, 88, 12, 0.10) 75%,
-              rgba(194, 65, 12, 0.08) 100%
+              ${rgbToCss(colors.dominant, 0.12)} 0%,
+              ${rgbToCss(colors.vibrant, 0.15)} 25%,
+              ${rgbToCss(colors.dominant, 0.12)} 50%,
+              ${rgbToCss(colors.muted, 0.10)} 75%,
+              ${rgbToCss(colors.dark, 0.08)} 100%
             ),
             repeating-linear-gradient(
               ${phase * 0.2}deg,
               transparent,
               transparent 40px,
-              rgba(251, 191, 36, 0.03) 41px,
-              rgba(251, 191, 36, 0.03) 42px
+              ${rgbToCss(colors.light, 0.03)} 41px,
+              ${rgbToCss(colors.light, 0.03)} 42px
             ),
             radial-gradient(
               circle at ${60 + Math.sin(phase * 0.006) * 20}% ${40 + Math.cos(phase * 0.007) * 20}%,
-              rgba(245, 158, 11, 0.10) 0%,
+              ${rgbToCss(colors.vibrant, 0.10)} 0%,
               transparent 65%
             ),
-            linear-gradient(180deg, rgba(69, 26, 3, 0.88) 0%, rgba(92, 35, 4, 0.85) 100%),
-            #451a03
+            linear-gradient(180deg, ${rgbToCss(colors.dark, 0.88)} 0%, ${rgbToCss(colors.dark, 0.85)} 100%),
+            ${rgbToCss(colors.dark, 1)}
           `
         };
       case 'minimal':
@@ -1457,16 +1455,16 @@ function ImmersiveLyricsView({
           background: `
             linear-gradient(
               180deg,
-              rgba(30, 41, 59, 0.95) 0%,
-              rgba(51, 65, 85, 0.92) 50%,
-              rgba(30, 41, 59, 0.95) 100%
+              ${rgbToCss(colors.dark, 0.95)} 0%,
+              ${rgbToCss(colors.muted, 0.92)} 50%,
+              ${rgbToCss(colors.dark, 0.95)} 100%
             ),
             radial-gradient(
               circle at 50% 50%,
-              rgba(148, 163, 184, 0.05) 0%,
+              ${rgbToCss(colors.light, 0.05)} 0%,
               transparent 70%
             ),
-            #1e293b
+            ${rgbToCss(colors.dark, 1)}
           `
         };
       default:
@@ -1853,7 +1851,7 @@ function ImmersiveLyricsView({
               boxShadow: '0 0 10px rgba(255, 0, 0, 0.8)'
             }}
           >
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-red-400 text-xs font-mono bg-black/50 px-2 py-1 rounded">
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-red-400 dark:text-red-400 text-xs font-mono bg-black/50 px-2 py-1 rounded">
               中轴线 (50%)
             </div>
           </div>
@@ -2150,18 +2148,29 @@ function ImmersiveLyricsView({
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
-            filter: 'blur(60px) brightness(0.6)',
+            filter: 'blur(80px) brightness(0.6) saturate(1.2)',
             transition: 'all 0.6s ease-out'
           }}
         />
       )}
       
-      {/* 额外的暗化遮罩层 */}
+      {/* ✅ 平滑渐变遮罩层，消除色彩断层 */}
       {albumCoverUrl && (
-        <div 
-          className="absolute inset-0 -z-5 bg-black/40"
-          style={{ transition: 'opacity 0.6s ease-out' }}
-        />
+        <>
+          {/* 额外的暗化遮罩层 */}
+          <div 
+            className="absolute inset-0 -z-5 bg-black/40"
+            style={{ transition: 'opacity 0.6s ease-out' }}
+          />
+          {/* 从上到下的平滑渐变，消除断层 */}
+          <div 
+            className="absolute inset-0 -z-4"
+            style={{
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.15) 100%)',
+              transition: 'opacity 0.6s ease-out'
+            }}
+          />
+        </>
       )}
       
       {/* 根据布局样式渲染不同的内容区域 - 使用单一容器避免组件卸载 */}

@@ -50,14 +50,17 @@ export function useScrollAnimation(
   const currentYRef = useRef<number>(0);
   const lastIndexRef = useRef<number | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
-  const isInitialMountRef = useRef<boolean>(true); // 标记是否为首次加载
+  // const isInitialMountRef = useRef<boolean>(true); // 标记是否为首次加载
   const pendingScrollIndexRef = useRef<number | null>(null); // 标记待处理的滚动索引
+  // 🔧 P1修复：添加重试计数器，防止无限重试
+  const retryCountRef = useRef<number>(0);
+  const MAX_RETRIES = 3; // 最多重试3次
 
   // 用户交互控制
   const isUserScrollingRef = useRef<boolean>(false);
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queuedIndexRef = useRef<number | null>(null);
-  const queuedManualIndexRef = useRef<number | null>(null); // 标记待恢复的自动高亮索引
+  // const queuedManualIndexRef = useRef<number | null>(null); // 标记待恢复的自动高亮索引
 
   // 测量行中心位置（相对于容器内容起点，未应用 transform）
   const measureCenter = useCallback((idx: number): number | null => {
@@ -232,8 +235,17 @@ export function useScrollAnimation(
 
     // 如果布局尚未就绪，标记待处理并等待下次重试
     if (!result.isReady) {
-      console.log(`⏳ [滚动延迟] 布局尚未就绪，标记索引 ${targetIndex} 待处理`);
+      // 🔧 P1修复：检查重试次数
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.warn(`⚠️ [滚动] 达到最大重试次数 (${MAX_RETRIES})，放弃滚动到索引 ${targetIndex}`);
+        retryCountRef.current = 0;
+        pendingScrollIndexRef.current = null;
+        return;
+      }
+
+      console.log(`⏳ [滚动延迟] 布局尚未就绪，标记索引 ${targetIndex} 待处理 (重试 ${retryCountRef.current + 1}/${MAX_RETRIES})`);
       pendingScrollIndexRef.current = targetIndex;
+      retryCountRef.current++;
 
       // 设置一个短暂的延迟重试
       const retryTimer = setTimeout(() => {
@@ -245,6 +257,7 @@ export function useScrollAnimation(
             if (retryResult.isReady) {
               applyAnimated(retryResult.targetY, computeDuration(retryResult.targetY - currentYRef.current));
               pendingScrollIndexRef.current = null;
+              retryCountRef.current = 0; // 成功后重置计数器
             }
           }
         }
@@ -265,8 +278,9 @@ export function useScrollAnimation(
     lastIndexRef.current = targetIndex;
     lastUpdateTimeRef.current = Date.now();
 
-    // 清除待处理标记
+    // 清除待处理标记和重试计数器
     pendingScrollIndexRef.current = null;
+    retryCountRef.current = 0; // 成功滚动后重置计数器
   }, [targetIndex, measureCenter, computeTargetY, applyAnimated, applyInstant, computeDuration]);
 
   // 监听字体大小变化导致的重新对齐
@@ -456,4 +470,3 @@ export function useScrollAnimation(
     };
   }, [containerRef, targetIndex, measureCenter, computeTargetY, applyAnimated, applyInstant, computeDuration, options?.resumeDelayMs, options?.onUserScrollChange, options?.onManualFocusChange]);
 }
-

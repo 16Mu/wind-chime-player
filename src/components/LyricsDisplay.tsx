@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ImmersiveLyricsView from './ImmersiveLyricsView';
+import type { Track } from '../types/music';
 
 export interface LyricLine {
   timestamp_ms: number;
@@ -10,15 +11,6 @@ export interface LyricLine {
 export interface ParsedLyrics {
   lines: LyricLine[];
   metadata: { [key: string]: string };
-}
-
-interface Track {
-  id: number;
-  path: string;
-  title?: string;
-  artist?: string;
-  album?: string;
-  duration_ms?: number;
 }
 
 interface LyricsDisplayProps {
@@ -174,6 +166,12 @@ function LyricsDisplay({
               
               // 添加歌词行
               for (const line of searchResult.lines) {
+                // 🔧 验证 timestamp_ms 是否有效
+                if (typeof line.timestamp_ms !== 'number' || isNaN(line.timestamp_ms)) {
+                  console.warn('🎵 跳过无效的歌词行（timestamp无效）:', line);
+                  continue;
+                }
+                
                 const minutes = Math.floor(line.timestamp_ms / 60000);
                 const seconds = Math.floor((line.timestamp_ms % 60000) / 1000);
                 const milliseconds = line.timestamp_ms % 1000;
@@ -255,7 +253,7 @@ function LyricsDisplay({
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-8 h-8 border-2 border-blue-500 dark:border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm text-slate-500 dark:text-dark-700">加载歌词中...</span>
         </div>
       </div>
@@ -267,7 +265,7 @@ function LyricsDisplay({
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
         <div className="text-center">
-          <div className="text-slate-400 mb-3">
+          <div className="text-slate-400 dark:text-dark-700 mb-3">
             <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -292,7 +290,7 @@ function LyricsDisplay({
           <div className="flex gap-2 justify-center mt-4">
             <button
               onClick={() => track?.id && loadLyrics(track.id, track.path)}
-              className="px-3 py-1 text-xs bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              className="px-3 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-white rounded-full hover:bg-blue-600 transition-colors"
             >
               重试
             </button>
@@ -337,7 +335,7 @@ function LyricsDisplay({
                   console.error('手动检查失败:', e);
                 }
               }}
-              className="px-3 py-1 text-xs bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+              className="px-3 py-1 text-xs bg-green-500 dark:bg-green-600 text-white rounded-full hover:bg-green-600 transition-colors"
             >
               手动检查
             </button>
@@ -352,7 +350,7 @@ function LyricsDisplay({
     return (
       <div className={`flex items-center justify-center h-full ${className}`}>
         <div className="text-center">
-          <div className="text-slate-400 mb-3">
+          <div className="text-slate-400 dark:text-dark-700 mb-3">
             <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
@@ -377,10 +375,10 @@ function LyricsDisplay({
         <div className="absolute top-4 right-4 z-10">
           <button
             onClick={() => setShowImmersiveMode(true)}
-            className="w-10 h-10 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group immersive-button-hover"
+            className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-500/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group immersive-button-hover"
             title="沉浸式歌词模式"
           >
-            <svg className="w-5 h-5 text-blue-600 group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
           </button>
@@ -389,7 +387,7 @@ function LyricsDisplay({
         {/* 歌词元数据显示（如果有的话） */}
         {lyrics.metadata.ti && (
           <div className="text-center mb-6 pb-4 border-b border-slate-200 dark:border-dark-400">
-            <h3 className="font-medium text-slate-800 dark:text-dark-800">{lyrics.metadata.ti}</h3>
+            <h3 className="font-medium text-slate-800 dark:text-dark-900">{lyrics.metadata.ti}</h3>
             {lyrics.metadata.ar && (
               <p className="text-sm text-slate-500 dark:text-dark-700 mt-1">{lyrics.metadata.ar}</p>
             )}
@@ -411,7 +409,7 @@ function LyricsDisplay({
               text-center px-6 py-3 rounded-xl transition-all duration-700 ease-out cursor-pointer relative
               ${index === currentLineIndex 
                 ? `
-                  text-blue-700 font-semibold transform scale-110 
+                  text-blue-700 dark:text-blue-300 font-semibold transform scale-110 
                   bg-gradient-to-r from-blue-50 via-blue-100 to-blue-50
                   shadow-lg shadow-blue-200/50
                   before:absolute before:inset-0 before:bg-gradient-to-r 

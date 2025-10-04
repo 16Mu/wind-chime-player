@@ -117,32 +117,6 @@ impl SinkPool {
         })
     }
     
-    /// 获取池统计信息
-    #[allow(dead_code)]
-    pub fn stats(&self) -> SinkPoolStats {
-        let inner = self.inner.lock();
-        SinkPoolStats {
-            available_count: inner.available.len(),
-            in_use_count: inner.in_use_count,
-            max_size: inner.max_size,
-            total_created: inner.total_created,
-            total_reused: inner.total_reused,
-            reuse_rate: if inner.total_created > 0 {
-                inner.total_reused as f64 / (inner.total_created + inner.total_reused) as f64
-            } else {
-                0.0
-            },
-        }
-    }
-    
-    /// 清空池中所有可用Sink
-    #[allow(dead_code)]
-    pub fn clear(&self) {
-        let mut inner = self.inner.lock();
-        inner.available.clear();
-        log::info!("🧹 清空Sink池");
-    }
-    
     /// 预热池（预先创建Sink）
     pub fn warm_up(&self, count: usize) -> Result<()> {
         let mut inner = self.inner.lock();
@@ -197,12 +171,6 @@ impl PooledSink {
     /// 获取Sink可变引用
     pub fn sink_mut(&mut self) -> &mut Sink {
         self.sink.as_mut().expect("Sink已被移出")
-    }
-    
-    /// 获取Sink的唯一标识
-    #[allow(dead_code)]
-    pub fn id(&self) -> SinkId {
-        self.id
     }
 }
 

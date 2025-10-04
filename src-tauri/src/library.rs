@@ -1,9 +1,10 @@
 use crate::db::Database;
 // 使用新的PlayerCore的Track类型
 use crate::player::Track;
+use crate::metadata_extractor::MetadataExtractor;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use lofty::{probe::Probe, prelude::*};
+use lofty::prelude::*;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -53,6 +54,7 @@ pub struct Library {
     command_rx: Receiver<LibraryCommand>,
     event_tx: Sender<LibraryEvent>,
     is_scanning: Arc<Mutex<bool>>,
+    metadata_extractor: MetadataExtractor,
 }
 
 impl Library {
@@ -65,6 +67,7 @@ impl Library {
             command_rx,
             event_tx,
             is_scanning: Arc::new(Mutex::new(false)),
+            metadata_extractor: MetadataExtractor::new(),
         };
 
         Ok((library, command_tx, event_rx))
@@ -275,31 +278,35 @@ impl Library {
         let path_str = path.to_string_lossy().to_string();
         let db = self.db.lock().unwrap();
         let existing_track = db.get_track_by_path(&path_str)?;
+        let track_id = existing_track.as_ref().map(|t| t.id).unwrap_or(0);
+        drop(db); // 释放数据库锁
 
-        // Read metadata
-        let tagged_file = Probe::open(path)?.read()?;
-        let tag = tagged_file.primary_tag();
-        let properties = tagged_file.properties();
-
-        let title = tag.and_then(|t| t.title().map(|s| s.to_string()));
-        let artist = tag.and_then(|t| t.artist().map(|s| s.to_string()));
-        let album = tag.and_then(|t| t.album().map(|s| s.to_string()));
-        let duration_ms = properties.duration().as_millis() as i64;
+        // 使用新的元数据提取器
+        let metadata = self.metadata_extractor.extract_from_file(path)?;
         
-        // 提取专辑封面
-        let (album_cover_data, album_cover_mime) = self.extract_album_cover(&tagged_file, tag);
+        // 保存内嵌歌词到数据库（如果有）
+        if let Some(lyrics_content) = &metadata.embedded_lyrics {
+            if track_id > 0 {
+                let db = self.db.lock().unwrap();
+                if let Err(e) = db.insert_lyrics(track_id, lyrics_content, "lrc", "embedded") {
+                    log::warn!("保存内嵌歌词失败: {}", e);
+                }
+                drop(db);
+            }
+        }
 
         let track = Track {
-            id: existing_track.as_ref().map(|t| t.id).unwrap_or(0),
+            id: track_id,
             path: path_str,
-            title,
-            artist,
-            album,
-            duration_ms: Some(duration_ms),
-            album_cover_data,
-            album_cover_mime,
+            title: metadata.title,
+            artist: metadata.artist,
+            album: metadata.album,
+            duration_ms: metadata.duration_ms.map(|d| d as i64),
+            album_cover_data: metadata.album_cover_data,
+            album_cover_mime: metadata.album_cover_mime,
         };
 
+        let db = self.db.lock().unwrap();
         db.insert_track(&track)?;
 
         Ok(existing_track.is_none()) // true if new track, false if updated
