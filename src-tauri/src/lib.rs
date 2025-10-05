@@ -10,7 +10,6 @@ mod db;
 mod lyrics;
 mod playlist; // 企业级歌单系统
 mod webdav; // 新增：WebDAV客户端模块
-mod config; // 新增：配置管理模块
 mod remote_source; // 新增：远程音乐源统一抽象层
 mod audio_enhancement; // 新增：音质增强设置
 mod metadata_extractor; // 新增：通用元数据提取器
