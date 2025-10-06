@@ -1,0 +1,93 @@
+name: Test Build (All Platforms)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: universal-apple-darwin
+            name: macOS
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            name: Linux
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: Windows
+
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libssl-dev \
+            pkg-config
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build application
+        run: pnpm run tauri:build
+
+      - name: List build artifacts
+        shell: bash
+        run: |
+          echo "=== Build Artifacts ==="
+          if [ "${{ matrix.platform }}" == "macos-latest" ]; then
+            ls -lh src-tauri/target/release/bundle/dmg/ || true
+            ls -lh src-tauri/target/release/bundle/macos/ || true
+          elif [ "${{ matrix.platform }}" == "ubuntu-22.04" ]; then
+            ls -lh src-tauri/target/release/bundle/deb/ || true
+            ls -lh src-tauri/target/release/bundle/appimage/ || true
+          else
+            ls src-tauri/target/release/bundle/msi/ || true
+            ls src-tauri/target/release/bundle/nsis/ || true
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-build-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+          retention-days: 7
+

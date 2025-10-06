@@ -1,0 +1,136 @@
+# 跨平台构建说明
+
+## 自动化构建 (推荐)
+
+使用 GitHub Actions 自动构建所有平台：
+
+### 方式 1: 推送标签触发构建
+```bash
+git tag v0.4.1
+git push origin v0.4.1
+```
+
+### 方式 2: 手动触发
+1. 访问 GitHub 仓库的 Actions 页面
+2. 选择 "Build and Release" workflow
+3. 点击 "Run workflow"
+
+构建完成后，产物会自动上传：
+- **macOS**: .dmg 和 .app.tar.gz
+- **Linux**: .deb 和 .AppImage
+- **Windows**: .msi 和 .exe (NSIS)
+
+---
+
+## 本地构建
+
+### macOS 构建
+在 macOS 系统上运行：
+```bash
+pnpm install
+pnpm run tauri:build:macos
+```
+
+生成文件位置：
+- `src-tauri/target/release/bundle/dmg/*.dmg`
+- `src-tauri/target/release/bundle/macos/*.app`
+
+### Linux 构建
+在 Linux (Ubuntu/Debian) 系统上运行：
+```bash
+# 安装依赖
+sudo apt-get update
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev \
+  libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+# 构建
+pnpm install
+pnpm run tauri:build:linux
+```
+
+生成文件位置：
+- `src-tauri/target/release/bundle/deb/*.deb`
+- `src-tauri/target/release/bundle/appimage/*.AppImage`
+
+### Windows 构建
+在 Windows 系统上运行：
+```bash
+pnpm install
+pnpm run tauri:build:windows
+```
+
+生成文件位置：
+- `src-tauri/target/release/bundle/msi/*.msi`
+- `src-tauri/target/release/bundle/nsis/*.exe`
+
+---
+
+## 平台特定配置
+
+### macOS 配置
+- **最低系统版本**: macOS 10.13 (High Sierra)
+- **签名**: 需要 Apple Developer 账号 (可选)
+- **公证**: 需要 Apple ID 和应用专用密码 (可选)
+
+### Linux 配置
+- **支持格式**: DEB, AppImage
+- **媒体框架**: 已启用 bundleMediaFramework
+- **依赖**: 自动打包到 DEB
+
+### Windows 配置
+- **支持格式**: MSI, NSIS
+- **WebView**: 使用下载引导程序自动安装
+- **架构**: x64
+
+---
+
+## 交叉编译 (高级)
+
+⚠️ **注意**: 交叉编译支持有限，推荐使用 GitHub Actions
+
+### 从 macOS 构建多架构
+```bash
+# Universal Binary (Intel + Apple Silicon)
+pnpm run tauri:build:macos
+```
+
+### 使用 Docker 构建 Linux
+```bash
+docker run --rm -v $(pwd):/app -w /app rust:latest bash -c "
+  apt-get update && \
+  apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev \
+    libappindicator3-dev librsvg2-dev patchelf libasound2-dev && \
+  curl -fsSL https://get.pnpm.io/install.sh | bash - && \
+  pnpm install && \
+  pnpm run tauri:build
+"
+```
+
+---
+
+## 故障排除
+
+### macOS
+- **问题**: 无法打开应用，提示"来自身份不明的开发者"
+- **解决**: 右键点击应用 → 打开，或在系统偏好设置中允许
+
+### Linux
+- **问题**: AppImage 无法运行
+- **解决**: `chmod +x *.AppImage` 添加执行权限
+
+### Windows
+- **问题**: 缺少 WebView2
+- **解决**: 安装程序会自动下载，或手动安装 [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+---
+
+## 版本管理
+
+当前版本: **0.4.1**
+
+更新版本号：
+1. 修改 `package.json` 中的 `version`
+2. 修改 `src-tauri/tauri.conf.json` 中的 `version`
+3. 修改 `src-tauri/Cargo.toml` 中的 `version`
+4. 提交更改并打标签
+

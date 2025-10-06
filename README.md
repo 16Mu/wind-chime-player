@@ -6,6 +6,7 @@
 [![React](https://img.shields.io/badge/react-19-blue.svg)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-56.7%25-blue.svg)](https://www.typescriptlang.org/)
 [![Rust](https://img.shields.io/badge/rust-31.3%25-orange.svg)](https://www.rust-lang.org/)
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/16Mu/wind-chime-player)
 
 > 🎵 现代化跨平台音乐播放器，采用 macOS 风格设计，支持本地+WebDAV混合音乐源，提供沉浸式歌词体验
 
@@ -234,6 +235,7 @@ graph TB
 | **播放历史** | 自动记录、统计分析、实时刷新 | SQLite + React | ✅ 已完成 |
 | **WebDAV客户端** | 远程音乐源、流式播放 | Rust + reqwest | ⚠️ 已实现未测试 |
 | **搜索引擎** | FTS5全文检索 | SQLite + Rust | ✅ 已完成 |
+| **跨平台构建** | Windows/macOS/Linux 自动化构建 | GitHub Actions + Tauri | ✅ 已完成 |
 
 ## 🛠️ 技术栈
 
@@ -295,24 +297,73 @@ pnpm install
 pnpm tauri:dev
 ```
 
-### 打包 Windows 安装程序
+### 多平台打包 (v0.4.1+) 🎉
+
+WindChime Player 现已支持 **Windows、macOS 和 Linux** 三大平台！
+
+#### 自动化构建 (推荐)
+
+使用 GitHub Actions 一键构建所有平台：
+
 ```bash
-# 构建生产版本（带中文安装界面）
-pnpm tauri:build
+# 推送标签触发正式发布
+git tag v0.4.1
+git push origin v0.4.1
+
+# 或在 GitHub 网页上手动触发测试构建
 ```
 
-打包完成后，安装程序位于：
+自动生成的安装包：
+- **Windows**: `.msi` + `.exe` (NSIS)
+- **macOS**: `.dmg` + `.app`
+- **Linux**: `.deb` + `.AppImage`
+
+#### 本地构建
+
+在对应平台上运行：
+
+**Windows:**
+```powershell
+pnpm install
+pnpm run tauri:build:windows
 ```
-src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
+
+**macOS:**
+```bash
+pnpm install
+pnpm run tauri:build:macos  # Universal Binary (Intel + Apple Silicon)
+```
+
+**Linux:**
+```bash
+# 先安装系统依赖
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev \
+  libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+pnpm install
+pnpm run tauri:build:linux
+```
+
+#### 快捷脚本
+
+```bash
+# macOS / Linux
+chmod +x scripts/build-all-platforms.sh
+./scripts/build-all-platforms.sh
+
+# Windows PowerShell
+.\scripts\build-all-platforms.ps1
 ```
 
 #### 安装程序特性
-- ✅ **支持中文**：安装时可选择简体中文或英文
-- ✅ **用户级安装**：无需管理员权限
-- ✅ **自动快捷方式**：桌面和开始菜单
-- ✅ **WebView2 自动下载**：首次运行自动配置
 
-详细打包说明请参考 [BUILD.md](BUILD.md)
+| 平台 | 特性 |
+|------|------|
+| **Windows** | ✅ 中文/英文安装界面<br>✅ 用户级安装（无需管理员）<br>✅ 自动快捷方式<br>✅ WebView2 自动下载 |
+| **macOS** | ✅ Universal Binary (Intel + Apple Silicon)<br>✅ DMG 拖放安装<br>✅ 最低支持 macOS 10.13 |
+| **Linux** | ✅ DEB 包 (Ubuntu/Debian)<br>✅ AppImage (所有发行版)<br>✅ 自动依赖打包 |
+
+📖 **详细构建说明**: [docs/BUILD-MULTI-PLATFORM.md](docs/BUILD-MULTI-PLATFORM.md)
 
 ## 📝 更新日志
 
