@@ -36,8 +36,6 @@ export class HybridPlayer {
   private currentEngine: 'rust' | 'webaudio' = 'rust';
   private isWebAudioReady = false;
   private callbacks: HybridPlayerCallbacks = {};
-  private _currentTrack: Track | null = null;
-  private _playlist: Track[] = [];
   
   // 时间追踪
   private playStartTime = 0;
@@ -91,7 +89,6 @@ export class HybridPlayer {
         
         // 更新状态
         this.currentTrackId = track.id;
-        this._currentTrack = track;
         this.shouldCancelLoading = false;
         this.pendingSeekPosition = null;
         this.playStartTime = performance.now();
@@ -130,8 +127,6 @@ export class HybridPlayer {
       console.log(`🎵 [HybridPlayer] [${timeStr}] T+0ms - 播放: ${track.title || track.path} (ID: ${track.id})`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
-      this._currentTrack = track;
-      this._playlist = playlist;
       this.isWebAudioReady = false;
       this.currentEngine = 'rust';
       
