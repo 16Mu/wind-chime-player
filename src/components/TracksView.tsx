@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import { useHoverAnimation } from '../hooks/useHoverAnimation';
 import { useAlbumCovers } from '../hooks/useAlbumCovers';
-import { useResponsiveDensity } from '../hooks/useResponsiveDensity';
 
 interface Track {
   id: number;
@@ -36,7 +35,7 @@ export default function TracksView({
   onDragEnd
 }: TracksViewProps) {
   // 状态管理
-  const [hoveredRowIndex, setHoveredRowIndex] = useState<number>(-1);
+  const [, setHoveredRowIndex] = useState<number>(-1);
   
   // 拖拽状态
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
