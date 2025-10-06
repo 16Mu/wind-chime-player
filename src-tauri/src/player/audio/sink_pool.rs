@@ -231,7 +231,8 @@ pub struct SinkPoolStats {
 }
 
 impl SinkPoolStats {
-    /// 获取池使用率
+    /// 获取池使用率（监控功能预留）
+    #[allow(dead_code)]
     pub fn utilization(&self) -> f64 {
         if self.max_size > 0 {
             (self.in_use_count + self.available_count) as f64 / self.max_size as f64

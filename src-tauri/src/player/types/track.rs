@@ -50,6 +50,7 @@ impl fmt::Debug for Track {
 
 impl Track {
     /// 创建新曲目
+    #[cfg(test)]
     pub fn new(id: i64, path: String) -> Self {
         Self {
             id,
@@ -63,27 +64,21 @@ impl Track {
         }
     }
     
-    /// 获取显示名称（标题或文件名）
-    pub fn display_name(&self) -> &str {
-        self.title
-            .as_deref()
-            .or_else(|| {
-                self.path
-                    .split(['/', '\\'])
-                    .last()
-                    .and_then(|name| name.rsplit_once('.').map(|(n, _)| n))
-            })
-            .unwrap_or("未知曲目")
-    }
-    
-    /// 获取艺术家显示名称
-    pub fn display_artist(&self) -> &str {
-        self.artist.as_deref().unwrap_or("未知艺术家")
-    }
-    
-    /// 获取专辑显示名称
-    pub fn display_album(&self) -> &str {
-        self.album.as_deref().unwrap_or("未知专辑")
+    /// 获取显示名称（标题或文件名）- UI显示用
+    #[allow(dead_code)]
+    pub fn display_name(&self) -> String {
+        if let Some(title) = &self.title {
+            if !title.trim().is_empty() {
+                return title.clone();
+            }
+        }
+        
+        // 如果没有标题，从路径提取文件名（不含扩展名）
+        std::path::Path::new(&self.path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Unknown")
+            .to_string()
     }
 }
 

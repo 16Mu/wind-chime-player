@@ -62,13 +62,6 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
   };
 
   const handleScanLibrary = async () => {
-    // ✅ 修复：先确认，确认后再执行
-    const confirmed = window.confirm(
-      `确定要扫描 ${currentPath} 目录吗？这可能需要几分钟时间。`
-    );
-    
-    if (!confirmed) return;
-    
     // ✅ 立即关闭对话框
     onClose();
     

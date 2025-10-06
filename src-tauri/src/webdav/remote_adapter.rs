@@ -28,10 +28,12 @@ impl RemoteSourceClient for WebDAVRemoteAdapter {
     async fn list_directory(&self, path: &str) -> Result<Vec<RemoteFileInfo>> {
         let listing = self.client.list_directory(path).await?;
         
-        log::info!("🔍 WebDAV 返回 {} 个原始项目用于路径: '{}'", listing.files.len(), path);
+        let original_count = listing.files.len();
+        log::info!("🔍 WebDAV 返回 {} 个原始项目用于路径: '{}'", original_count, path);
         
         // 规范化路径用于比较（去除末尾斜杠）
         let normalized_request_path = path.trim_end_matches('/');
+        log::info!("🔍 规范化的请求路径: '{}'", normalized_request_path);
         
         // 过滤掉父目录本身（WebDAV PROPFIND 通常会返回当前目录）
         let files: Vec<RemoteFileInfo> = listing.files.into_iter()
@@ -40,6 +42,9 @@ impl RemoteSourceClient for WebDAVRemoteAdapter {
                 
                 log::info!("  📄 检查项目: name='{}', path='{}', is_dir={}, size={:?}", 
                     f.name, f.path, f.is_directory, f.size);
+                log::info!("     规范化后的路径: '{}'", file_path_normalized);
+                log::info!("     比较: '{}' == '{}' ? {}", file_path_normalized, normalized_request_path, 
+                    file_path_normalized == normalized_request_path);
                 
                 // 跳过父目录本身
                 if file_path_normalized == normalized_request_path {
@@ -63,6 +68,13 @@ impl RemoteSourceClient for WebDAVRemoteAdapter {
             .collect();
         
         log::info!("📁 目录 '{}' 最终结果: {} 个项目", path, files.len());
+        
+        // 🚨 如果结果为空但原始返回有项目，这是个问题
+        if files.is_empty() && original_count > 0 {
+            log::error!("⚠️ 警告：WebDAV返回了{}个项目，但过滤后全部被删除！", original_count);
+            log::error!("   这可能是路径匹配的bug。请求路径: '{}'", path);
+        }
+        
         Ok(files)
     }
 

@@ -651,26 +651,6 @@ impl LyricsParser {
             .map(|(index, _)| index)
     }
 
-    /// 获取指定时间点前后的歌词行（用于滚动显示）
-    pub fn get_lines_around<'a>(&self, lines: &'a [LyricLine], position_ms: u64, context: usize) -> Vec<(usize, &'a LyricLine, bool)> {
-        let current_index = self.get_current_line(lines, position_ms);
-        
-        let start = current_index.unwrap_or(0).saturating_sub(context);
-        let end = std::cmp::min(
-            current_index.unwrap_or(0) + context + 1,
-            lines.len()
-        );
-
-        lines[start..end]
-            .iter()
-            .enumerate()
-            .map(|(i, line)| {
-                let actual_index = start + i;
-                let is_current = Some(actual_index) == current_index;
-                (actual_index, line, is_current)
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]

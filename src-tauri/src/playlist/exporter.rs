@@ -180,6 +180,7 @@ impl PlaylistExporter {
     /// # 检查
     /// - 父目录是否存在
     /// - 文件扩展名是否匹配格式（不匹配会记录警告）
+    #[allow(dead_code)]
     pub fn validate_export_path(file_path: &str, format: &ExportFormat) -> Result<()> {
         let path = Path::new(file_path);
         

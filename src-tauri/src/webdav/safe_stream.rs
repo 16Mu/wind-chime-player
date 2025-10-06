@@ -13,6 +13,7 @@ use super::types::WebDAVError;
 
 /// 🛡️ 流错误类型 - 明确的错误分类和处理策略
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum StreamError {
     #[error("缓冲区溢出: 当前 {current} bytes, 限制 {limit} bytes")]
     BufferOverflow { current: usize, limit: usize },
@@ -108,14 +109,17 @@ impl StreamState {
 
 /// 🛡️ 缓冲区管理器 - 防止内存泄漏和溢出
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BufferManager {
     /// 当前缓冲区大小
     current_size: usize,
     /// 最大缓冲区大小
     max_size: usize,
     /// 缓冲区块大小
+    #[allow(dead_code)]
     chunk_size: usize,
     /// 低水位标记 (暂停读取阈值)
+    #[allow(dead_code)]
     low_watermark: usize,
     /// 高水位标记 (恢复读取阈值)
     high_watermark: usize,
@@ -172,6 +176,7 @@ impl BufferManager {
     }
     
     /// 是否可以恢复读取
+    #[allow(dead_code)]
     pub fn can_resume_reading(&self) -> bool {
         self.current_size <= self.low_watermark
     }
@@ -189,11 +194,17 @@ impl BufferManager {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct BufferStats {
+    #[allow(dead_code)]
     pub current_size: usize,
+    #[allow(dead_code)]
     pub max_size: usize,
+    #[allow(dead_code)]
     pub peak_usage: usize,
+    #[allow(dead_code)]
     pub allocation_count: u64,
+    #[allow(dead_code)]
     pub utilization_percent: f32,
 }
 
@@ -244,6 +255,7 @@ impl TimeoutGuard {
     }
     
     /// 获取剩余时间
+    #[allow(dead_code)]
     pub fn remaining_time(&self) -> Duration {
         let elapsed = self.start_time.elapsed();
         self.timeout.saturating_sub(elapsed)
@@ -273,11 +285,13 @@ pub struct SafeWebDAVStream {
 }
 
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct StreamStats {
     pub total_bytes_read: u64,
     pub read_operations: u64,
     pub error_count: u32,
     pub average_chunk_size: f32,
+    #[allow(dead_code)]
     pub start_time: Option<Instant>,
     pub last_read_time: Option<Instant>,
 }

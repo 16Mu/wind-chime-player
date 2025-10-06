@@ -96,17 +96,20 @@ impl AudioDecoder {
         Ok(decoder)
     }
     
-    /// 获取文件路径
+    /// 获取文件路径（用于调试和日志）
+    #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
     }
     
-    /// 获取音频格式
+    /// 获取音频格式（用于调试和日志）
+    #[allow(dead_code)]
     pub fn format(&self) -> AudioFormat {
         self.format
     }
     
-    /// 验证文件是否存在且可读
+    /// 验证文件是否存在且可读（用于预检查）
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<()> {
         if !self.path.exists() {
             return Err(PlayerError::decode_error(
@@ -127,47 +130,6 @@ impl AudioDecoder {
             ))?;
         
         Ok(())
-    }
-}
-
-/// 异步音频解码器
-/// 
-/// 在后台线程中执行解码，避免阻塞
-pub struct AsyncAudioDecoder {
-    decoder: AudioDecoder,
-}
-
-impl AsyncAudioDecoder {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self {
-            decoder: AudioDecoder::new(path),
-        }
-    }
-    
-    /// 异步解码音频文件
-    pub async fn decode(&self) -> Result<Decoder<BufReader<File>>> {
-        let decoder = self.decoder.clone();
-        
-        tokio::task::spawn_blocking(move || {
-            decoder.decode()
-        })
-        .await
-        .map_err(|e| PlayerError::decode_error(
-            format!("解码任务失败: {}", e)
-        ))?
-    }
-    
-    /// 异步验证文件
-    pub async fn validate(&self) -> Result<()> {
-        let decoder = self.decoder.clone();
-        
-        tokio::task::spawn_blocking(move || {
-            decoder.validate()
-        })
-        .await
-        .map_err(|e| PlayerError::decode_error(
-            format!("验证任务失败: {}", e)
-        ))?
     }
 }
 

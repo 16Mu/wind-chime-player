@@ -30,8 +30,9 @@ pub struct Playlist {
     pub play_count: i64,
 }
 
-/// 歌单项（扩展版）
+/// 歌单项（扩展版）- 预留类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PlaylistItem {
     pub id: i64,
     pub playlist_id: i64,

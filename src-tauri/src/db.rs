@@ -128,20 +128,7 @@ impl QueryCache {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Playlist {
-    pub id: i64,
-    pub name: String,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlaylistItem {
-    pub id: i64,
-    pub playlist_id: i64,
-    pub track_id: i64,
-    pub order_index: i64,
-}
+// 注意：Playlist 和 PlaylistItem 定义已移至 playlist/types.rs，避免重复定义
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lyrics {
@@ -159,12 +146,7 @@ pub struct LyricLine {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Favorite {
-    pub id: i64,
-    pub track_id: i64,
-    pub created_at: i64,
-}
+// 注意：Favorite 结构体已移除，改用 favorites 表的直接操作
 
 pub struct Database {
     conn: Connection,
@@ -1014,6 +996,8 @@ impl Database {
         Ok(tracks)
     }
 
+    /// 创建歌单（简化版，已被 create_playlist_extended 替代）
+    #[allow(dead_code)]
     pub fn create_playlist(&self, name: &str) -> Result<i64> {
         let mut stmt = self.conn.prepare(
             "INSERT INTO playlists (name) VALUES (?1)"
@@ -1023,26 +1007,7 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
-    pub fn get_all_playlists(&self) -> Result<Vec<Playlist>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, created_at FROM playlists ORDER BY created_at DESC"
-        )?;
-
-        let playlist_iter = stmt.query_map([], |row| {
-            Ok(Playlist {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                created_at: row.get(2)?,
-            })
-        })?;
-
-        let mut playlists = Vec::new();
-        for playlist in playlist_iter {
-            playlists.push(playlist?);
-        }
-
-        Ok(playlists)
-    }
+    // 注意：get_all_playlists() 已被 get_all_playlists_extended() 替代
 
     pub fn add_track_to_playlist(&self, playlist_id: i64, track_id: i64) -> Result<()> {
         // Get the next order index
@@ -1226,6 +1191,8 @@ impl Database {
         Ok(())
     }
 
+    /// 更新歌词（预留功能）
+    #[allow(dead_code)]
     pub fn update_lyrics(&self, track_id: i64, content: &str) -> Result<()> {
         let mut stmt = self.conn.prepare(
             "UPDATE lyrics SET content = ?2, created_at = strftime('%s', 'now') WHERE track_id = ?1"
@@ -1234,7 +1201,8 @@ impl Database {
         Ok(())
     }
 
-    /// 删除指定来源的歌词（用于清理临时歌词）
+    /// 删除指定来源的歌词（用于清理临时歌词，预留功能）
+    #[allow(dead_code)]
     pub fn delete_lyrics_by_source(&self, track_id: i64, source: &str) -> Result<()> {
         let mut stmt = self.conn.prepare(
             "DELETE FROM lyrics WHERE track_id = ?1 AND source = ?2"
@@ -1243,7 +1211,8 @@ impl Database {
         Ok(())
     }
 
-    /// 检查歌词是否存在
+    /// 检查歌词是否存在（预留功能）
+    #[allow(dead_code)]
     pub fn has_lyrics(&self, track_id: i64) -> Result<bool> {
         let count: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM lyrics WHERE track_id = ?1",
@@ -1449,6 +1418,8 @@ impl Database {
 
     // ========== 缓存管理 ==========
 
+    /// 添加缓存条目（预留功能）
+    #[allow(dead_code)]
     pub fn add_cache_entry(
         &self,
         server_id: &str,
@@ -1469,6 +1440,8 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    /// 获取缓存条目（预留功能）
+    #[allow(dead_code)]
     pub fn get_cache_entry(&self, server_id: &str, remote_path: &str) -> Result<Option<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT local_cache_path FROM remote_cache 
@@ -1948,7 +1921,8 @@ impl Database {
         Ok(())
     }
 
-    /// 从历史中删除某曲目
+    /// 从历史中删除某曲目（预留功能）
+    #[allow(dead_code)]
     pub fn remove_from_history(&self, track_id: i64) -> Result<()> {
         self.conn.execute(
             "DELETE FROM play_history WHERE track_id = ?1",
@@ -1959,7 +1933,8 @@ impl Database {
     
     // 🔧 P2新增：播放历史相关的查询方法
     
-    /// 删除指定时间之前的播放历史
+    /// 删除指定时间之前的播放历史（预留功能）
+    #[allow(dead_code)]
     pub fn delete_play_history_before(&self, timestamp: i64) -> Result<usize> {
         let deleted = self.conn.execute(
             "DELETE FROM play_history WHERE played_at < ?1",
@@ -1968,7 +1943,8 @@ impl Database {
         Ok(deleted)
     }
     
-    /// 获取最近播放历史（返回PlayHistoryEntry结构）
+    /// 获取最近播放历史（返回PlayHistoryEntry结构，预留功能）
+    #[allow(dead_code)]
     pub fn get_recent_play_history(&self, limit: usize) -> Result<Vec<crate::play_history::PlayHistoryEntry>> {
         let history_data = self.get_play_history("last_played", limit as i64)?;
         
@@ -1982,7 +1958,8 @@ impl Database {
         }).collect())
     }
     
-    /// 🔧 修复：获取播放统计信息（返回PlayStatistics结构）
+    /// 🔧 修复：获取播放统计信息（返回PlayStatistics结构，预留功能）
+    #[allow(dead_code)]
     pub fn get_play_statistics_struct(&self) -> Result<crate::play_history::PlayStatistics> {
         let (total_plays, unique_tracks, total_duration_ms) = self.get_play_statistics()?;
         Ok(crate::play_history::PlayStatistics {

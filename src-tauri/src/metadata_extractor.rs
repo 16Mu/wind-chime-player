@@ -12,6 +12,7 @@ pub struct MusicMetadata {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub track_number: Option<u32>,
+    #[allow(dead_code)]
     pub disc_number: Option<u32>,
     pub year: Option<u32>,
     pub genre: Option<String>,
@@ -19,6 +20,7 @@ pub struct MusicMetadata {
     pub sample_rate: Option<u32>,
     pub channels: Option<u16>,
     pub bit_rate: Option<u32>,
+    #[allow(dead_code)]
     pub format: Option<String>,
     pub album_cover_data: Option<Vec<u8>>,
     pub album_cover_mime: Option<String>,

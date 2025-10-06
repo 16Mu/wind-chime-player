@@ -1,0 +1,106 @@
+// 简化版 WebDAV 播放实现（完整下载方案）
+// 复制这段代码替换 playback_actor.rs 中的 decode_streaming 函数
+
+/// WebDAV完整下载播放（方案：先下载再播放，支持完美seek）
+async fn decode_streaming(&self, track_path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>> {
+    use tokio::time::{timeout, Duration};
+    
+    log::info!("🌐 WebDAV: 使用完整下载模式");
+    println!("🌐 [PlaybackActor] WebDAV 完整下载模式");
+    
+    // 只支持WEBDAV
+    if !track_path.starts_with("webdav://") {
+        return Err(PlayerError::decode_error("不支持的协议".to_string()));
+    }
+    
+    // 解析WEBDAV URL（包含完整配置）
+    let (http_url, username, password, http_protocol) = self.parse_webdav_url_with_config(track_path)?;
+    
+    log::info!("📡 WEBDAV HTTP URL: {}", http_url);
+    println!("📡 [PlaybackActor] 开始下载: {}", http_url);
+    
+    // 创建HTTP客户端
+    let mut client_builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60));
+    
+    // 根据协议偏好配置
+    use crate::webdav::types::HttpProtocolPreference;
+    client_builder = match http_protocol {
+        HttpProtocolPreference::Http1Only => client_builder.http1_only(),
+        HttpProtocolPreference::Http2Preferred => client_builder.http2_prior_knowledge(),
+        HttpProtocolPreference::Auto => client_builder,
+    };
+    
+    let client = client_builder.build()
+        .map_err(|e| PlayerError::decode_error(format!("创建客户端失败: {}", e)))?;
+    
+    // 构建请求
+    let mut request = client.get(&http_url);
+    
+    // 添加认证
+    if !username.is_empty() {
+        use base64::Engine;
+        let auth_value = format!("{}:{}", username, password);
+        let encoded = base64::engine::general_purpose::STANDARD.encode(auth_value.as_bytes());
+        request = request.header("Authorization", format!("Basic {}", encoded));
+    }
+    
+    // 发送请求并下载
+    println!("⏬ [PlaybackActor] 发送下载请求...");
+    let download_start = std::time::Instant::now();
+    
+    let response = timeout(Duration::from_secs(30), request.send())
+        .await
+        .map_err(|_| PlayerError::decode_error("下载请求超时".to_string()))?
+        .map_err(|e| PlayerError::decode_error(format!("下载请求失败: {}", e)))?;
+    
+    if !response.status().is_success() {
+        return Err(PlayerError::decode_error(
+            format!("HTTP错误: {}", response.status())
+        ));
+    }
+    
+    // 获取文件大小（用于显示进度）
+    let content_length = response.content_length();
+    if let Some(len) = content_length {
+        println!("📦 [PlaybackActor] 文件大小: {:.2}MB", len as f64 / 1024.0 / 1024.0);
+    }
+    
+    // 读取完整数据
+    println!("📥 [PlaybackActor] 读取数据...");
+    let bytes = timeout(Duration::from_secs(120), response.bytes())
+        .await
+        .map_err(|_| PlayerError::decode_error("读取数据超时".to_string()))?
+        .map_err(|e| PlayerError::decode_error(format!("读取数据失败: {}", e)))?;
+    
+    let elapsed = download_start.elapsed();
+    println!("✅ [PlaybackActor] 下载完成: {:.2}MB, 耗时: {:.1}秒", 
+        bytes.len() as f64 / 1024.0 / 1024.0,
+        elapsed.as_secs_f32()
+    );
+    
+    log::info!("✅ WebDAV下载完成: {} 字节", bytes.len());
+    
+    // 从内存解码
+    println!("🎵 [PlaybackActor] 开始解码...");
+    let cursor = std::io::Cursor::new(bytes);
+    let decoder = rodio::Decoder::new(cursor)
+        .map_err(|e| {
+            let err_msg = format!("解码失败: {}", e);
+            log::error!("❌ {}", err_msg);
+            println!("❌ [PlaybackActor] {}", err_msg);
+            PlayerError::decode_error(err_msg)
+        })?;
+    
+    println!("✅ [PlaybackActor] 解码成功，准备播放");
+    log::info!("✅ 解码器创建成功");
+    
+    Ok(Box::new(decoder))
+}
+
+
+
+
+
+
+

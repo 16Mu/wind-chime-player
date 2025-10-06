@@ -36,10 +36,46 @@ struct AppState {
     player_rx: Arc<Mutex<Receiver<PlayerEvent>>>,
     library_rx: Arc<Mutex<Receiver<LibraryEvent>>>,
     db: Arc<Mutex<Database>>,
+    #[allow(dead_code)]
     player_adapter: Arc<PlayerAdapter>,
 }
 
 // Tauri Commands
+
+/// 读取音频文件的完整数据（用于 Web Audio API）
+#[tauri::command]
+async fn read_audio_file(file_path: String) -> Result<Vec<u8>, String> {
+    println!("📖 [COMMAND] read_audio_file 被调用: {}", file_path);
+    let start = std::time::Instant::now();
+    
+    // 🔥 使用 tokio 异步读取（不阻塞）
+    let data = tokio::fs::read(&file_path)
+        .await
+        .map_err(|e| format!("读取文件失败: {}", e))?;
+    
+    println!("✅ [COMMAND] 文件读取完成: {} 字节, 耗时: {}ms", 
+        data.len(), 
+        start.elapsed().as_millis()
+    );
+    
+    Ok(data)
+}
+
+/// 从数据库获取歌曲信息（用于 Web Audio Player）
+#[tauri::command]
+async fn get_track(track_id: i64, state: State<'_, AppState>) -> Result<Track, String> {
+    println!("📖 [COMMAND] get_track 被调用: track_id={}", track_id);
+    
+    let db = state.db.lock().map_err(|e| format!("数据库锁定失败: {}", e))?;
+    
+    // 从数据库获取歌曲信息
+    let track = db.get_track_by_id(track_id)
+        .map_err(|e| format!("获取歌曲失败: {}", e))?
+        .ok_or_else(|| format!("歌曲不存在: {}", track_id))?;
+    
+    Ok(track)
+}
+
 #[tauri::command]
 async fn player_play(track_id: i64, timestamp: i64) -> Result<(), String> {
     println!("🎵 [COMMAND] player_play 被调用: track_id={}, timestamp={}", track_id, timestamp);
@@ -1161,6 +1197,7 @@ async fn webdav_test_connection(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1199,6 +1236,7 @@ async fn webdav_list_directory(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1230,6 +1268,7 @@ async fn webdav_get_file_info(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1261,6 +1300,7 @@ async fn webdav_file_exists(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1292,6 +1332,7 @@ async fn webdav_create_directory(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1323,6 +1364,7 @@ async fn webdav_delete_file(
         max_redirects: 5,
         verify_ssl: true,
         user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
     };
     
     let client = WebDAVClient::new(config)
@@ -1783,6 +1825,14 @@ fn start_event_listeners(app_handle: AppHandle) {
                         let _ = app_handle_clone.emit("player-state-changed", state);
                     }
                     PlayerEvent::TrackChanged(track) => {
+                        if let Some(ref t) = track {
+                            log::debug!("🎵 TrackChanged事件: title={:?}, duration_ms={:?}", 
+                                t.title, t.duration_ms);
+                            println!("🎵 [EVENT] TrackChanged: title={:?}, duration_ms={:?}ms", 
+                                t.title, t.duration_ms);
+                        } else {
+                            println!("🎵 [EVENT] TrackChanged: None");
+                        }
                         let _ = app_handle_clone.emit("player-track-changed", track);
                     }
                     PlayerEvent::PositionChanged(position) => {
@@ -1797,14 +1847,9 @@ fn start_event_listeners(app_handle: AppHandle) {
                     PlayerEvent::PlaylistCompleted => {
                         let _ = app_handle_clone.emit("playlist-completed", &());
                     }
-                    PlayerEvent::SeekStarted(position) => {
-                        let _ = app_handle_clone.emit("seek-started", position);
-                    }
                     PlayerEvent::SeekCompleted { position, elapsed_ms } => {
+                        log::debug!("⚡ Seek完成: position={}ms, elapsed={}ms", position, elapsed_ms);
                         let _ = app_handle_clone.emit("seek-completed", serde_json::json!({"position": position, "elapsed": elapsed_ms}));
-                    }
-                    PlayerEvent::SeekFailed { position, error } => {
-                        let _ = app_handle_clone.emit("seek-failed", serde_json::json!({"position": position, "error": error}));
                     }
                     PlayerEvent::AudioDeviceReady => {
                         log::info!("🎵 音频设备就绪");
@@ -1813,11 +1858,6 @@ fn start_event_listeners(app_handle: AppHandle) {
                     PlayerEvent::AudioDeviceFailed { error, recoverable } => {
                         log::error!("❌ 音频设备失败: {} (可恢复: {})", error, recoverable);
                         let _ = app_handle_clone.emit("audio-device-failed", serde_json::json!({"error": error, "recoverable": recoverable}));
-                    }
-                    PlayerEvent::PreloadCompleted { track_id } => {
-                        log::debug!("🔄 预加载完成: track_id={}", track_id);
-                        // 可选：向前端发送事件，用于显示缓存状态
-                        let _ = app_handle_clone.emit("preload-completed", serde_json::json!({"track_id": track_id}));
                     }
                 }
             } else {
@@ -1897,7 +1937,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
+            // Audio file reading (for Web Audio API)
+            read_audio_file,
+            get_track,
             // Player commands
             player_play,
             player_pause,

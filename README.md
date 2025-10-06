@@ -192,6 +192,7 @@ graph TB
 ## ⭐ 技术亮点
 
 ### 🧠 创新特性
+- **Web Audio API 播放引擎**：采用浏览器内置的 Web Audio API 解码器，利用硬件加速实现快速解码（< 500ms）和 0 延迟内存 seek
 - **智能音频缓存**：基于LRU的预加载算法，支持即时seek
 - **智能歌单引擎**：SQL优化的规则引擎，支持14种操作符和复杂逻辑组合
 - **单引擎歌词滚动**：事件驱动的状态机，避免React竞态条件
@@ -253,7 +254,7 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 
 ## 📝 更新日志
 
-### v0.4.0 (Current)
+### v0.4.0.1.0 (Current)
 - ✅ **企业级歌单系统** - 完整的CRUD、智能歌单引擎、导入导出功能
 - ✅ **主题系统完善** - 修复浅色/深色模式切换问题，优化品牌色系统
 - ✅ **播放历史优化** - 自动刷新、统计数据优化
@@ -310,6 +311,12 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 感谢以下贡献者对 WindChime Player 的支持：
 
 - **January** - UI/UX审查专家，负责前端页面合理性审查和视觉优化建议
+
+### 🙏 致谢
+
+- **Tauri 社区** - 提供强大的跨平台应用框架
+- **Rust 开源社区** - symphonia, rodio 等优秀的音频处理库
+- **MDN Web Audio API 文档** - 详细的 Web Audio API 技术文档支持
 
 ## 📄 开源协议
 

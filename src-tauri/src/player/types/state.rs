@@ -37,13 +37,6 @@ impl PlayerState {
             shuffle: false,
         }
     }
-    
-    /// 重置到初始状态
-    pub fn reset(&mut self) {
-        self.is_playing = false;
-        self.current_track = None;
-        self.position_ms = 0;
-    }
 }
 
 impl Default for PlayerState {
@@ -64,21 +57,13 @@ pub enum RepeatMode {
 }
 
 impl RepeatMode {
-    /// 切换到下一个模式
+    /// 切换到下一个模式（仅测试使用）
+    #[cfg(test)]
     pub fn next(self) -> Self {
         match self {
             RepeatMode::Off => RepeatMode::All,
             RepeatMode::All => RepeatMode::One,
             RepeatMode::One => RepeatMode::Off,
-        }
-    }
-    
-    /// 获取显示名称
-    pub fn display_name(&self) -> &str {
-        match self {
-            RepeatMode::Off => "不重复",
-            RepeatMode::All => "列表循环",
-            RepeatMode::One => "单曲循环",
         }
     }
 }

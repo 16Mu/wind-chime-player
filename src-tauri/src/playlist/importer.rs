@@ -156,13 +156,14 @@ impl PlaylistImporter {
         (valid, invalid)
     }
 
-    /// 自动检测文件格式
+    /// 自动检测文件格式（预留功能）
     /// 
     /// # 参数
     /// - file_path: 文件路径
     /// 
     /// # 返回
     /// - 格式字符串："M3U", "M3U8", "JSON"
+    #[allow(dead_code)]
     pub fn detect_format(file_path: &str) -> Result<String> {
         let path = Path::new(file_path);
         

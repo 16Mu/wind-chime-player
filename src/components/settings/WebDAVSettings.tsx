@@ -46,23 +46,35 @@ export default function WebDAVSettings() {
       setIsTestingConnection(true);
       await addServer('webdav', config.name, config);
       setShowAddDialog(false);
-      alert('服务器添加成功！');
+      // 刷新列表和统计
+      await Promise.all([
+        refreshServers(),
+        refreshCacheStats()
+      ]);
+      alert('✅ 服务器添加成功！\n\n您现在可以点击"浏览"查看文件，或点击"扫描"将音乐添加到库中。');
     } catch (error) {
       console.error('添加服务器失败:', error);
-      alert(`添加失败: ${error}`);
+      const errorMsg = typeof error === 'string' ? error : String(error);
+      alert(`❌ 添加失败\n\n${errorMsg}\n\n请检查：\n• URL 格式是否正确\n• 用户名和密码是否正确\n• 服务器是否可访问`);
     } finally {
       setIsTestingConnection(false);
     }
   };
 
-  const handleDelete = async (serverId: string) => {
-    if (!confirm('确定要删除此服务器吗？相关缓存也将被清除。')) return;
+  const handleDelete = async (serverId: string, serverName: string) => {
+    if (!confirm(`确定要删除服务器"${serverName}"吗？\n\n注意：相关缓存和扫描记录也将被清除。`)) return;
     
     try {
       await deleteServer(serverId);
+      alert('✅ 服务器已删除');
+      // 刷新列表和统计
+      await Promise.all([
+        refreshServers(),
+        refreshCacheStats()
+      ]);
     } catch (error) {
       console.error('删除服务器失败:', error);
-      alert(`删除失败: ${error}`);
+      alert(`❌ 删除失败: ${error}`);
     }
   };
 
@@ -79,10 +91,10 @@ export default function WebDAVSettings() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-dark-900">
-              WEBDAV开发后使用
+              远程音乐源
             </h2>
             <p className="text-sm text-slate-600 dark:text-dark-700 mt-0.5">
-              已完成的 WebDAV 功能入口
+              通过 WebDAV 协议连接您的云端音乐库
             </p>
           </div>
         </div>
@@ -195,12 +207,39 @@ export default function WebDAVSettings() {
             <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div>
-              <div className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-1">提示</div>
-              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-                添加 WebDAV 服务器后，系统会自动扫描音乐文件并建立缓存，提升播放体验。支持边下边播的流式播放。
-              </p>
+            <div className="flex-1">
+              <div className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-2">使用指南</div>
+              <div className="space-y-2 text-xs text-blue-700 dark:text-blue-300">
+                <p><strong>1. 添加服务器</strong><br/>输入 WebDAV URL 和认证信息，建议先测试连接</p>
+                <p><strong>2. 浏览文件</strong><br/>点击"浏览"按钮查看云端音乐文件</p>
+                <p><strong>3. 扫描入库</strong><br/>点击"扫描"将音乐添加到本地库</p>
+                <p className="text-[11px] opacity-75 pt-1">支持 Nextcloud、ownCloud、Seafile 等服务</p>
+              </div>
             </div>
+          </div>
+        </div>
+        
+        {/* 常见问题 */}
+        <div className="bg-slate-50 dark:bg-dark-300 rounded-xl p-4">
+          <h3 className="font-semibold text-slate-900 dark:text-dark-900 mb-3 flex items-center gap-2 text-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            常见问题
+          </h3>
+          <div className="space-y-2 text-xs text-slate-600 dark:text-dark-700">
+            <details className="cursor-pointer">
+              <summary className="font-medium hover:text-blue-600 dark:hover:text-blue-400">如何获取 WebDAV URL？</summary>
+              <p className="mt-1 pl-4 text-[11px]">在 Nextcloud/ownCloud 的"文件"页面，点击左下角的"设置"，可以看到 WebDAV 地址。通常格式为：https://your-domain/remote.php/dav/files/username/</p>
+            </details>
+            <details className="cursor-pointer">
+              <summary className="font-medium hover:text-blue-600 dark:hover:text-blue-400">连接测试失败怎么办？</summary>
+              <p className="mt-1 pl-4 text-[11px]">请检查：① URL是否正确 ② 用户名密码是否正确 ③ 服务器是否开启了 WebDAV 功能 ④ 网络连接是否正常</p>
+            </details>
+            <details className="cursor-pointer">
+              <summary className="font-medium hover:text-blue-600 dark:hover:text-blue-400">支持哪些音频格式？</summary>
+              <p className="mt-1 pl-4 text-[11px]">支持 MP3、FLAC、WAV、OGG、M4A、AAC 等常见格式。所有格式都支持流式播放。</p>
+            </details>
           </div>
         </div>
       </div>
@@ -230,7 +269,7 @@ export default function WebDAVSettings() {
 function ServerList({ servers, onBrowse, onDelete, onAddClick }: {
   servers: RemoteServer[];
   onBrowse: (server: RemoteServer) => void;
-  onDelete: (serverId: string) => void;
+  onDelete: (serverId: string, serverName: string) => void;
   onAddClick: () => void;
 }) {
   return (
@@ -304,7 +343,7 @@ function ServerList({ servers, onBrowse, onDelete, onAddClick }: {
                     }}
                   />
                   <button
-                    onClick={() => onDelete(server.id)}
+                    onClick={() => onDelete(server.id, server.name)}
                     className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                     title="删除"
                   >
@@ -415,7 +454,9 @@ function AddServerDialog({ onAdd, onClose, isLoading }: any) {
               disabled={isLoading}
             />
             <p className="text-xs text-slate-500 dark:text-dark-700 mt-1">
-              例如：https://cloud.example.com/remote.php/dav/files/username/
+              例如：
+              <br />• Nextcloud: https://cloud.example.com/remote.php/dav/files/username/
+              <br />• ownCloud: https://cloud.example.com/remote.php/webdav/
             </p>
           </div>
 

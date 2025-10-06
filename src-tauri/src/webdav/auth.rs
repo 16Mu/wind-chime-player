@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 /// 认证类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub enum AuthType {
     /// 基本认证 (Basic Auth)
     Basic { username: String, password: String },
@@ -33,6 +34,7 @@ pub enum AuthType {
 }
 
 /// 认证管理器 - 高内聚：专注于认证逻辑
+#[allow(dead_code)]
 pub struct AuthManager {
     auth_type: AuthType,
 }
@@ -204,12 +206,14 @@ impl AuthManager {
         }
     }
     
-    /// 检查是否需要认证
+    /// 检查是否需要认证（WebDAV功能）
+    #[allow(dead_code)]
     pub fn requires_auth(&self) -> bool {
         !matches!(self.auth_type, AuthType::None)
     }
     
-    /// 获取认证类型字符串（用于日志）
+    /// 获取认证类型字符串（用于日志，WebDAV功能）
+    #[allow(dead_code)]
     pub fn get_auth_type_name(&self) -> &'static str {
         match self.auth_type {
             AuthType::Basic { .. } => "Basic",
@@ -253,7 +257,8 @@ impl AuthManager {
         }
     }
     
-    /// 从HTTP响应中提取认证挑战信息
+    /// 从HTTP响应中提取认证挑战信息（WebDAV功能）
+    #[allow(dead_code)]
     pub fn handle_auth_challenge(&mut self, response: &reqwest::Response) -> WebDAVResult<bool> {
         if response.status() == 401 {
             log::warn!("收到401认证失败响应");
@@ -377,7 +382,8 @@ impl AuthManager {
         Ok(response)
     }
     
-    /// 解析Digest挑战头
+    /// 解析Digest挑战头（WebDAV功能）
+    #[allow(dead_code)]
     fn parse_digest_challenge(header: &str) -> WebDAVResult<HashMap<String, String>> {
         let mut params = HashMap::new();
         
@@ -400,7 +406,8 @@ impl AuthManager {
         Ok(params)
     }
     
-    /// 生成客户端nonce (cnonce)
+    /// 生成客户端nonce (cnonce)（WebDAV功能）
+    #[allow(dead_code)]
     fn generate_cnonce() -> String {
         use rand::Rng;
         let random_bytes: Vec<u8> = (0..16)
@@ -409,7 +416,8 @@ impl AuthManager {
         format!("{:x}", md5::compute(&random_bytes))
     }
     
-    /// 测试认证是否有效
+    /// 测试认证是否有效（WebDAV功能）
+    #[allow(dead_code)]
     pub async fn test_authentication(&self, client: &reqwest::Client, base_url: &str) -> WebDAVResult<bool> {
         let mut headers = HeaderMap::new();
         self.add_auth_headers(&mut headers)?;
@@ -440,14 +448,16 @@ impl AuthManager {
 pub mod auth_utils {
     use super::*;
     
-    /// 从用户名密码创建Basic认证头值
+    /// 从用户名密码创建Basic认证头值（WebDAV功能）
+    #[allow(dead_code)]
     pub fn create_basic_auth(username: &str, password: &str) -> String {
         let credentials = format!("{}:{}", username, password);
         let encoded = BASE64_STANDARD.encode(credentials.as_bytes());
         format!("Basic {}", encoded)
     }
     
-    /// 验证Base64编码的认证字符串
+    /// 验证Base64编码的认证字符串（WebDAV功能）
+    #[allow(dead_code)]
     pub fn validate_basic_auth(auth_header: &str) -> WebDAVResult<(String, String)> {
         if !auth_header.starts_with("Basic ") {
             return Err(WebDAVError::AuthenticationFailed("不是Basic认证格式".to_string()));

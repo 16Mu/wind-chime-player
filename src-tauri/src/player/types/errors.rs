@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// 播放器错误
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum PlayerError {
     /// 音频设备错误
     #[error("音频设备错误: {0}")]

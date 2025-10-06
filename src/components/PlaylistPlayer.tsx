@@ -90,6 +90,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragPosition, setDragPosition] = useState(0);
+  const dragPositionRef = useRef(0); // 用于保存最新的拖拽位置
   const progressBarRef = useRef<HTMLDivElement>(null);
   
   const transportControlsRef = useRef<HTMLDivElement>(null);
@@ -183,7 +184,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       console.log('🎵 歌曲播放完成:', event.payload);
       // 🎵 自动播放下一曲
       try {
-        await invoke('player_next');
+        const { webAudioPlayer } = await import('../services/webAudioPlayer');
+        await webAudioPlayer.nextTrack();
         console.log('🎵 自动切换到下一曲');
       } catch (error) {
         console.error('🎵 自动切换下一曲失败:', error);
@@ -298,7 +300,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const handlePause = async () => {
     try {
-      await invoke('player_pause');
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      webAudioPlayer.pause();
+      console.log('⏸️ 已暂停播放');
     } catch (error) {
       console.error('暂停失败:', error);
     }
@@ -306,7 +310,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const handleResume = async () => {
     try {
-      await invoke('player_resume');
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      await webAudioPlayer.play();
+      console.log('▶️ 已继续播放');
     } catch (error) {
       console.error('继续播放失败:', error);
     }
@@ -314,7 +320,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const handleNext = async () => {
     try {
-      await invoke('player_next');
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      await webAudioPlayer.nextTrack();
+      console.log('⏭️ 已切换到下一首');
     } catch (error) {
       console.error('下一首失败:', error);
     }
@@ -322,7 +330,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const handlePrevious = async () => {
     try {
-      await invoke('player_previous');
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      await webAudioPlayer.previousTrack();
+      console.log('⏮️ 已切换到上一首');
     } catch (error) {
       console.error('上一首失败:', error);
     }
@@ -339,17 +349,13 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   }, []);
 
   const handleSeek = async (positionMs: number) => {
-    console.log('🎵 开始跳转到位置:', positionMs, 'ms');
+    console.log('⚡ [Seek] 跳转到位置:', positionMs, 'ms (0 延迟!)');
     try {
-      // 确保传递整数给Rust后端
-      await invoke('player_seek', { positionMs: Math.floor(positionMs) });
-      console.log('🎵 跳转命令发送成功');
-      
-      // If it was playing, ensure it resumes after seek
-      if (playerState.is_playing) {
-        console.log('🎵 跳转后恢复播放');
-        await invoke('player_resume');
-      }
+      // 🔥 使用 Web Audio Player 进行 0 延迟 seek
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      const positionSec = positionMs / 1000;
+      await webAudioPlayer.seek(positionSec);
+      console.log('✅ [Seek] 跳转完成 (0 延迟!)');
     } catch (error) {
       console.error('🎵 跳转失败:', error);
     }
@@ -408,9 +414,11 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       setIsMuted(false);
     }
     
-    // 同步到后端
+    // 🔥 同步到 Web Audio Player
     try {
-      await invoke('player_set_volume', { volume: clampedVolume });
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      webAudioPlayer.setVolume(clampedVolume);
+      console.log(`🔊 [音量] 设置为 ${(clampedVolume * 100).toFixed(0)}%`);
     } catch (error) {
       console.error('设置音量失败:', error);
     }
@@ -796,6 +804,12 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     handleSeek(newPosition);
   };
 
+  // 🔧 修复：使用useMemo稳定displayTrack引用，避免ImmersiveLyricsView无限重渲染
+  // 只在track.id变化时才更新引用，避免对象引用变化导致的闪烁
+  const displayTrack = useMemo(() => {
+    return playerState.current_track || currentTrack;
+  }, [playerState.current_track?.id, currentTrack?.id]);
+
   const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!displayTrack?.duration_ms) return;
     
@@ -803,37 +817,42 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     const rect = progressBarRef.current!.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-    setDragPosition(percentage * displayTrack.duration_ms);
+    const newPosition = percentage * displayTrack.duration_ms;
+    setDragPosition(newPosition);
+    dragPositionRef.current = newPosition; // 同步更新 ref
   };
 
   // 进度条拖拽
   useEffect(() => {
+    if (!isDragging) return;
+
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !progressBarRef.current || !displayTrack?.duration_ms) return;
+      if (!progressBarRef.current || !displayTrack?.duration_ms) return;
       
       const rect = progressBarRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
-      setDragPosition(percentage * displayTrack.duration_ms);
+      const newPosition = percentage * displayTrack.duration_ms;
+      setDragPosition(newPosition);
+      dragPositionRef.current = newPosition; // 同步更新 ref
     };
 
     const handleMouseUp = () => {
-      if (isDragging) {
-        handleSeek(dragPosition);
-        setIsDragging(false);
-      }
+      setIsDragging(false);
+      // 使用 ref 获取最新的拖拽位置，避免闭包陷阱
+      const finalPosition = dragPositionRef.current;
+      console.log('🎵 拖拽结束，执行 seek:', finalPosition);
+      handleSeek(finalPosition);
     };
 
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragPosition, playerState.current_track, currentTrack]);
+  }, [isDragging, displayTrack?.duration_ms]);
 
   // 🔊 音量条拖拽
   useEffect(() => {
@@ -875,12 +894,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const handleAlbumCoverClick = () => {
     setShowLyrics(true);
   };
-
-  // 🔧 修复：使用useMemo稳定displayTrack引用，避免ImmersiveLyricsView无限重渲染
-  // 只在track.id变化时才更新引用，避免对象引用变化导致的闪烁
-  const displayTrack = useMemo(() => {
-    return playerState.current_track || currentTrack;
-  }, [playerState.current_track?.id, currentTrack?.id]);
 
   const getCurrentPosition = () => {
     // 🔧 修复：直接调用 getPosition() 获取实时位置，而不是使用固定的 playerState.position_ms

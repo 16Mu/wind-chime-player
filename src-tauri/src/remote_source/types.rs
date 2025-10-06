@@ -42,6 +42,7 @@ pub enum ConnectionStatus {
 
 /// 健康状态
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct HealthStatus {
     pub is_healthy: bool,
     pub last_check: i64,
@@ -58,7 +59,8 @@ pub trait RemoteSourceClient: Send + Sync {
     /// 列出目录
     async fn list_directory(&self, path: &str) -> Result<Vec<RemoteFileInfo>>;
     
-    /// 获取文件信息
+    /// 获取文件信息（预留功能）
+    #[allow(dead_code)]
     async fn get_file_info(&self, path: &str) -> Result<RemoteFileInfo>;
     
     /// 下载文件流
@@ -68,10 +70,12 @@ pub trait RemoteSourceClient: Send + Sync {
     async fn download_range(&self, path: &str, start: u64, end: Option<u64>) 
         -> Result<Box<dyn AsyncRead + Send + Unpin>>;
     
-    /// 获取健康状态
+    /// 获取健康状态（预留功能）
+    #[allow(dead_code)]
     fn get_health(&self) -> HealthStatus;
     
-    /// 获取源类型
+    /// 获取源类型（预留功能）
+    #[allow(dead_code)]
     fn get_source_type(&self) -> RemoteSourceType;
 }
 

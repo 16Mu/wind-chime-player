@@ -7,7 +7,7 @@
  * - 时间显示
  */
 
-import { useState, useRef, memo, useCallback } from 'react';
+import { useState, useRef, useEffect, memo, useCallback } from 'react';
 
 interface ProgressBarProps {
   position: number; // 当前位置（毫秒）
@@ -24,6 +24,7 @@ const ProgressBar = memo(function ProgressBar({
 }: ProgressBarProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragPosition, setDragPosition] = useState(0);
+  const dragPositionRef = useRef(0); // 用于保存最新的拖拽位置，避免闭包陷阱
   const progressBarRef = useRef<HTMLDivElement>(null);
 
   // 格式化时间
@@ -34,47 +35,49 @@ const ProgressBar = memo(function ProgressBar({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // 处理拖拽
+  // 处理拖拽开始
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (disabled || !progressBarRef.current) return;
 
     setIsDragging(true);
     const rect = progressBarRef.current.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setDragPosition(percent);
+    const newPosition = percent;
+    setDragPosition(newPosition);
+    dragPositionRef.current = newPosition; // 同步更新 ref
   }, [disabled]);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !progressBarRef.current) return;
-
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setDragPosition(percent);
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
+  // 监听全局鼠标事件
+  useEffect(() => {
     if (!isDragging) return;
 
-    setIsDragging(false);
-    const targetMs = Math.floor(dragPosition * duration);
-    onSeek(targetMs);
-  }, [isDragging, dragPosition, duration, onSeek]);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!progressBarRef.current) return;
 
-  // 监听全局鼠标事件
-  useState(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => handleMouseMove(e);
-    const handleGlobalMouseUp = () => handleMouseUp();
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const newPosition = percent;
+      setDragPosition(newPosition);
+      dragPositionRef.current = newPosition; // 同步更新 ref
+    };
 
-    if (isDragging) {
-      document.addEventListener('mousemove', handleGlobalMouseMove);
-      document.addEventListener('mouseup', handleGlobalMouseUp);
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      // 使用 ref 获取最新的拖拽位置，避免闭包陷阱
+      const finalPosition = dragPositionRef.current;
+      const targetMs = Math.floor(finalPosition * duration);
+      console.log('🎵 [ProgressBar] 拖拽结束，执行 seek:', targetMs);
+      onSeek(targetMs);
+    };
 
-      return () => {
-        document.removeEventListener('mousemove', handleGlobalMouseMove);
-        document.removeEventListener('mouseup', handleGlobalMouseUp);
-      };
-    }
-  });
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, duration, onSeek]);
 
   const displayPosition = isDragging ? dragPosition * duration : position;
   const progress = duration > 0 ? (displayPosition / duration) * 100 : 0;
@@ -89,17 +92,39 @@ const ProgressBar = memo(function ProgressBar({
       {/* 进度条 */}
       <div
         ref={progressBarRef}
-        className={`flex-1 h-1.5 bg-slate-200 dark:bg-dark-300 rounded-full overflow-hidden group ${
+        className={`flex-1 h-1.5 bg-slate-200 dark:bg-dark-300 rounded-full overflow-visible group ${
           disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
         }`}
         onMouseDown={handleMouseDown}
       >
         <div
-          className="h-full bg-gradient-to-r from-brand-500 to-brand-600 relative transition-all group-hover:h-2"
-          style={{ width: `${progress}%` }}
+          className="h-full relative transition-all group-hover:h-2"
+          style={{ 
+            width: `${progress}%`,
+            background: 'linear-gradient(90deg, var(--progress-color-from), var(--progress-color-to))',
+            boxShadow: `
+              0 0 0 1px rgba(255, 255, 255, 0.6),
+              0 0 8px rgba(255, 255, 255, 0.3),
+              0 0 12px var(--progress-glow),
+              0 2px 4px var(--progress-shadow)
+            `,
+            borderRadius: '9999px'
+          }}
         >
-          {/* 拖拽手柄 */}
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity" />
+          {/* 拖拽手柄 - 始终轻微可见 */}
+          <div 
+            className="absolute right-0 top-1/2 w-[18px] h-[18px] bg-white rounded-full transition-all group-hover:opacity-100 group-hover:scale-100"
+            style={{
+              border: '2.5px solid var(--progress-color-from)',
+              opacity: 0.6,
+              transform: 'translateY(-50%) scale(0.75)',
+              boxShadow: `
+                0 2px 8px var(--progress-glow),
+                0 4px 16px var(--progress-shadow),
+                0 0 0 2px rgba(255, 255, 255, 0.2)
+              `
+            }}
+          />
         </div>
       </div>
 

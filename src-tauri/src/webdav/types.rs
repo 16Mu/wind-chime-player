@@ -8,6 +8,7 @@ pub type WebDAVResult<T> = Result<T, WebDAVError>;
 
 /// WebDAV错误类型 - 单一职责：统一错误处理
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum WebDAVError {
     #[error("网络错误: {0}")]
     NetworkError(#[from] reqwest::Error),
@@ -46,6 +47,26 @@ pub enum WebDAVError {
     HttpMethodError(#[from] http::method::InvalidMethod),
 }
 
+/// HTTP协议版本偏好
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum HttpProtocolPreference {
+    /// 自动协商（默认）
+    #[serde(rename = "auto")]
+    Auto,
+    /// 仅HTTP/1.1（兼容性最好，适合坚果云等）
+    #[serde(rename = "http1")]
+    Http1Only,
+    /// 优先HTTP/2（性能更好，适合现代服务器）
+    #[serde(rename = "http2_preferred")]
+    Http2Preferred,
+}
+
+impl Default for HttpProtocolPreference {
+    fn default() -> Self {
+        Self::Http1Only // 默认使用HTTP/1.1以提高兼容性
+    }
+}
+
 /// WebDAV服务器配置 - 单一职责：服务器连接信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebDAVConfig {
@@ -58,6 +79,9 @@ pub struct WebDAVConfig {
     pub max_redirects: u32,
     pub verify_ssl: bool,
     pub user_agent: String,
+    /// HTTP协议偏好（可选，默认HTTP/1.1）
+    #[serde(default)]
+    pub http_protocol: HttpProtocolPreference,
 }
 
 impl Default for WebDAVConfig {
@@ -72,6 +96,7 @@ impl Default for WebDAVConfig {
             max_redirects: 5,
             verify_ssl: true,
             user_agent: "WindChimePlayer/1.0".to_string(),
+            http_protocol: HttpProtocolPreference::default(),
         }
     }
 }
@@ -100,6 +125,7 @@ pub struct WebDAVDirectoryListing {
 
 /// WebDAV属性请求 - PROPFIND请求体
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PropfindRequest {
     pub depth: Depth,
     pub properties: Vec<DavProperty>,
@@ -107,6 +133,7 @@ pub struct PropfindRequest {
 
 /// WebDAV深度级别
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub enum Depth {
     Zero,      // 仅当前资源
     One,       // 当前资源和直接子资源
@@ -125,6 +152,7 @@ impl fmt::Display for Depth {
 
 /// WebDAV属性类型
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum DavProperty {
     DisplayName,
     ContentLength,
@@ -157,6 +185,7 @@ impl DavProperty {
 
 /// WebDAV HTTP方法
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum WebDAVMethod {
     Options,
     Propfind,
@@ -193,6 +222,7 @@ impl fmt::Display for WebDAVMethod {
 
 /// WebDAV连接状态
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub enum ConnectionStatus {
     Disconnected,
     Connecting,
@@ -246,9 +276,11 @@ impl fmt::Display for RangeRequest {
 }
 
 /// 文件上传进度回调
+#[allow(dead_code)]
 pub type ProgressCallback = Box<dyn Fn(u64, u64) + Send + Sync>;
 
 /// WebDAV上传选项
+#[allow(dead_code)]
 pub struct UploadOptions {
     pub overwrite: bool,
     pub create_directories: bool,
@@ -298,6 +330,28 @@ impl WebDAVConfig {
     pub fn build_full_url(&self, path: &str) -> String {
         let base = self.get_base_url();
         let clean_path = path.trim_start_matches('/');
+        
+        // 🔧 修复路径重复问题：检查基础URL中是否已包含路径的起始部分
+        // 例如：base="https://dav.jianguoyun.com/dav", path="/dav/MUSIC/"
+        // 应该生成："https://dav.jianguoyun.com/dav/MUSIC/" 而不是 "https://dav.jianguoyun.com/dav/dav/MUSIC/"
+        
+        // 提取基础URL的路径部分
+        if let Ok(parsed_url) = url::Url::parse(&base) {
+            let base_path = parsed_url.path().trim_end_matches('/');
+            
+            // 如果请求路径以基础路径开头，说明路径已经是完整的
+            if !base_path.is_empty() && clean_path.starts_with(base_path.trim_start_matches('/')) {
+                // 构建完整URL，使用原始的domain + path
+                let domain = format!("{}://{}", parsed_url.scheme(), parsed_url.host_str().unwrap_or(""));
+                return if let Some(port) = parsed_url.port() {
+                    format!("{domain}:{port}/{clean_path}")
+                } else {
+                    format!("{domain}/{clean_path}")
+                };
+            }
+        }
+        
+        // 默认行为：简单拼接
         format!("{}/{}", base, clean_path)
     }
 }

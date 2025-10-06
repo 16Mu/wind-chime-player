@@ -10,6 +10,7 @@ use serde::Serialize;
 use tokio::io::AsyncReadExt;
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct ScanProgress {
     pub current_file: String,
     pub files_found: usize,
@@ -190,10 +191,15 @@ impl RemoteScanner {
         
         // 下载并提取元数据
         log::debug!("开始下载并提取元数据: {}", file.path);
+        println!("📊 [Scanner] 提取元数据: {} ({})", file.name, file.size.unwrap_or(0));
         let metadata = match self.download_and_extract_metadata(file).await {
-            Ok(meta) => meta,
+            Ok(meta) => {
+                println!("✅ [Scanner] 元数据提取成功: duration={:?}ms", meta.duration_ms);
+                meta
+            },
             Err(e) => {
                 log::warn!("提取元数据失败 ({}): {}, 使用文件名解析", file.path, e);
+                println!("⚠️ [Scanner] 元数据提取失败: {}, 使用文件名", e);
                 // 如果下载失败，回退到文件名解析
                 let (title, artist) = self.parse_filename(&file.name);
                 crate::metadata_extractor::MusicMetadata {

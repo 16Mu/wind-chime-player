@@ -25,7 +25,7 @@ export default function AboutSettings() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h4 className="text-2xl font-bold text-slate-900 dark:text-dark-900">WindChime Player</h4>
-                <div className="px-2.5 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-md text-sm font-medium">v0.4.0</div>
+                <div className="px-2.5 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-md text-sm font-medium">v0.4.0.1.0</div>
               </div>
               <p className="text-slate-600 dark:text-dark-700 mb-3 leading-relaxed">
                 一款现代化的音乐播放器，采用 Tauri + React 技术栈构建。
@@ -86,7 +86,7 @@ export default function AboutSettings() {
               <span className="font-medium text-slate-900 dark:text-dark-900">开源许可</span>
             </div>
             <p className="text-slate-700 dark:text-dark-800 text-sm">MIT License</p>
-          </div>
+          </div>1
           
           <div className="bg-blue-50 dark:bg-dark-300/50 rounded-lg p-4 border border-blue-200 dark:border-dark-400">
             <div className="flex items-center gap-3 mb-2">

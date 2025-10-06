@@ -9,7 +9,7 @@ pub mod safe_stream;
 pub mod xml_parser;
 pub mod remote_adapter;
 
-pub use auth::*;
+// pub use auth::*; // 未使用
 pub use client::WebDAVClient;
 pub use remote_adapter::WebDAVRemoteAdapter;  // 新增导出
 // 重新导出 Stream 转换相关类型

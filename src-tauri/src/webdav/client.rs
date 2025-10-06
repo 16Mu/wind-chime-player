@@ -232,6 +232,7 @@ impl WebDAVClient {
     }
     
     /// 上传文件
+    #[allow(dead_code)]
     pub async fn upload_file<R>(&self, path: &str, reader: R, options: UploadOptions) -> WebDAVResult<()>
     where
         R: AsyncRead + Send + Sync + 'static,
@@ -333,6 +334,7 @@ impl WebDAVClient {
     }
     
     /// 获取统计信息
+    #[allow(dead_code)]
     pub async fn get_stats(&self) -> WebDAVStats {
         self.stats.read().await.clone()
     }
@@ -400,6 +402,7 @@ impl WebDAVClient {
     }
     
     /// 发送带请求体的WebDAV请求
+    #[allow(dead_code)]
     async fn send_request_with_body(
         &self,
         method: WebDAVMethod,
@@ -470,6 +473,7 @@ impl WebDAVClient {
     }
     
     /// 确保父目录存在（迭代实现，避免栈溢出）
+    #[allow(dead_code)]
     async fn ensure_parent_directories(&self, path: &str) -> WebDAVResult<()> {
         let mut directories_to_create = Vec::new();
         let mut current_path = path;

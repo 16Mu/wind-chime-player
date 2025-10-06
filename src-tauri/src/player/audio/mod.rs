@@ -5,10 +5,10 @@
 pub mod device;
 pub mod decoder;
 pub mod sink_pool;
-pub mod arc_source;
+pub mod symphonia_decoder;
 
 // 公开导出常用类型
 pub use device::{AudioDevice, LazyAudioDevice};
 pub use decoder::{AudioFormat, AudioDecoder};
 pub use sink_pool::{SinkPool, PooledSink};
-pub use arc_source::ArcSliceSource;
+pub use symphonia_decoder::SymphoniaDecoder;

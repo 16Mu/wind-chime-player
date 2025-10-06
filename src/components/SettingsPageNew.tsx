@@ -18,11 +18,9 @@ import AppearanceSettings from './settings/AppearanceSettings';
 import AnimationSettings from './settings/AnimationSettings';
 import PlaybackSettings from './settings/PlaybackSettings';
 import WebDAVSettings from './settings/WebDAVSettings';
-import WebDAVDevelopmentStatus from './settings/WebDAVDevelopmentStatus';
-import AdvancedSettings from './settings/AdvancedSettings';
 import AboutSettings from './settings/AboutSettings';
 
-type SettingsTab = 'library' | 'appearance' | 'animation' | 'playback' | 'webdav' | 'webdav-dev' | 'advanced' | 'about';
+type SettingsTab = 'library' | 'appearance' | 'animation' | 'playback' | 'webdav' | 'about';
 
 interface TabConfig {
   id: SettingsTab;
@@ -56,25 +54,11 @@ const TABS: TabConfig[] = [
     emoji: '📹',
     icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z' 
   },
-  // 🚧 WebDAV 功能开发中，暂时注释
-  // 【临时屏蔽】WEBDAV开发后使用入口 - 还原请参考 docs/WEBDAV开发后必须看.md
-  // { 
-  //   id: 'webdav', 
-  //   label: 'WEBDAV开发后使用', 
-  //   emoji: '📻',
-  //   icon: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z' 
-  // },
   { 
-    id: 'webdav-dev', 
-    label: 'WEBDAV开发中', 
-    emoji: '🛠️',
-    icon: 'M3 7h18M3 12h18M3 17h18' 
-  },
-  { 
-    id: 'advanced', 
-    label: '高级', 
-    emoji: '🔊',
-    icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' 
+    id: 'webdav', 
+    label: '远程音乐源', 
+    emoji: '☁️',
+    icon: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z' 
   },
   { 
     id: 'about', 
@@ -126,12 +110,6 @@ export default function SettingsPageNew() {
       
       case 'webdav':
         return <WebDAVSettings />;
-      
-      case 'webdav-dev':
-        return <WebDAVDevelopmentStatus />;
-      
-      case 'advanced':
-        return <AdvancedSettings />;
       
       case 'about':
         return <AboutSettings />;

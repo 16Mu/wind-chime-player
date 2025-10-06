@@ -31,7 +31,8 @@ import { PlaylistProvider } from './contexts/PlaylistContext';
 import { PlayHistoryProvider } from './contexts/PlayHistoryContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { RemoteSourceProvider } from './contexts/RemoteSourceContext';
-import { ConfigProvider } from './contexts/ConfigContext';
+// ConfigProvider 已移除（高级设置功能已删除）
+// import { ConfigProvider } from './contexts/ConfigContext';
 
 // Types
 import type { Track } from './types/music';
@@ -210,26 +211,37 @@ function AppContent() {
     
     // 执行播放请求
     const executePlay = async () => {
-      if (typeof invoke === 'undefined') return;
-      
       try {
         // 获取最新的目标曲目
         const targetTrack = latestRequestedTrackRef.current;
         if (!targetTrack) return;
         
         const execTimestamp = Date.now();
-        console.log(`▶️ [${execTimestamp}] 执行播放:`, targetTrack.id, targetTrack.title);
+        console.log(`▶️ [${execTimestamp}] 执行播放（使用 Web Audio Player）:`, targetTrack.id, targetTrack.title);
         
-        // 只在首次或曲目列表变化时加载播放列表
+        // 🔥 使用 Web Audio Player 播放
+        const { webAudioPlayer } = await import('./services/webAudioPlayer');
+        
+        // 设置播放列表
         if (!playlistLoadedRef.current && tracks.length > 0) {
-          console.log(`📋 [${execTimestamp}] 加载播放列表 (${tracks.length}首)`);
-          await invoke('player_load_playlist', { tracks });
+          console.log(`📋 [${execTimestamp}] 设置播放列表 (${tracks.length}首)`);
+          const currentIndex = tracks.findIndex(t => t.id === targetTrack.id);
+          webAudioPlayer.setPlaylist(tracks, currentIndex >= 0 ? currentIndex : 0);
           playlistLoadedRef.current = true;
-          console.log(`✅ [${execTimestamp}] 播放列表已加载`);
         }
         
-        // 发送播放命令
-        await invoke('player_play', { trackId: targetTrack.id, timestamp: execTimestamp });
+        // 加载并播放歌曲
+        console.log(`🎵 [${execTimestamp}] 开始加载歌曲...`);
+        const loadSuccess = await webAudioPlayer.loadTrack(targetTrack);
+        if (!loadSuccess) {
+          throw new Error('加载歌曲失败');
+        }
+        
+        const playSuccess = await webAudioPlayer.play();
+        if (!playSuccess) {
+          throw new Error('播放失败');
+        }
+        
         console.log(`✅ [${execTimestamp}] 播放命令完成`);
       } catch (error) {
         console.error(`❌ 播放失败:`, error);
@@ -461,23 +473,21 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <ConfigProvider>
-        <RemoteSourceProvider>
-          <UIProvider initialPage="library">
-            <LibraryProvider>
-              <PlaybackProvider>
-                <PlaylistProvider>
-                  <PlayHistoryProvider>
-                    <ToastProvider>
-                      <AppContent />
-                    </ToastProvider>
-                  </PlayHistoryProvider>
-                </PlaylistProvider>
-              </PlaybackProvider>
-            </LibraryProvider>
-          </UIProvider>
-        </RemoteSourceProvider>
-      </ConfigProvider>
+      <RemoteSourceProvider>
+        <UIProvider initialPage="library">
+          <LibraryProvider>
+            <PlaybackProvider>
+              <PlaylistProvider>
+                <PlayHistoryProvider>
+                  <ToastProvider>
+                    <AppContent />
+                  </ToastProvider>
+                </PlayHistoryProvider>
+              </PlaylistProvider>
+            </PlaybackProvider>
+          </LibraryProvider>
+        </UIProvider>
+      </RemoteSourceProvider>
     </ThemeProvider>
   );
 }

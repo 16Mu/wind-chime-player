@@ -74,6 +74,7 @@ pub struct PlayerCore {
     state_handle: StateActorHandle,
     
     /// 状态观察器
+    #[allow(dead_code)]
     state_watch: watch::Receiver<PlayerState>,
     
     /// 事件接收器（Arc包装，可以独立访问）
@@ -86,6 +87,7 @@ pub struct PlayerCore {
     playback_thread: Option<thread::JoinHandle<()>>,
     
     /// 配置
+    #[allow(dead_code)]
     config: PlayerCoreConfig,
     
     /// 最新播放请求时间戳（用于快速切歌优化）
@@ -266,6 +268,7 @@ impl PlayerCore {
     }
     
     /// 创建默认配置的PlayerCore
+    #[allow(dead_code)]
     pub async fn with_default_config() -> Result<Self> {
         Self::new(PlayerCoreConfig::default()).await
     }
@@ -312,18 +315,8 @@ impl PlayerCore {
                 Ok(())
             }
             PlayerCommand::Seek(position_ms) => {
-                // 🔧 修复：记录seek前的播放状态
-                let was_playing = self.get_state().is_playing;
-                
-                // 执行seek操作
+                // 执行seek操作（方案5：依赖后台缓存）
                 self.playback_handle.seek(position_ms).await?;
-                
-                // 🔧 修复：如果原本在播放，确保seek后状态保持为playing
-                // 因为handle_seek内部会调用sink.play()，但不会更新StateActor
-                if was_playing {
-                    self.state_handle.update_playing_state(true).await;
-                }
-                
                 Ok(())
             }
             PlayerCommand::Next => {
@@ -529,6 +522,7 @@ impl PlayerCore {
     }
     
     /// 订阅状态变化
+    #[allow(dead_code)]
     pub fn subscribe_state(&self) -> watch::Receiver<PlayerState> {
         self.state_watch.clone()
     }
@@ -539,12 +533,14 @@ impl PlayerCore {
     }
     
     /// 接收下一个事件（非阻塞）
+    #[allow(dead_code)]
     pub async fn recv_event(&self) -> Option<PlayerEvent> {
         let mut rx = self.event_rx.lock().await;
         rx.recv().await
     }
     
     /// 尝试接收事件（立即返回）
+    #[allow(dead_code)]
     pub fn try_recv_event(&self) -> Option<PlayerEvent> {
         if let Ok(mut rx) = self.event_rx.try_lock() {
             rx.try_recv().ok()
@@ -554,11 +550,13 @@ impl PlayerCore {
     }
     
     /// 获取播放列表
+    #[allow(dead_code)]
     pub async fn get_playlist(&self) -> Result<Vec<Track>> {
         self.playlist_handle.get_playlist().await
     }
     
     /// 获取当前播放位置
+    #[allow(dead_code)]
     pub async fn get_position(&self) -> Result<Option<u64>> {
         self.playback_handle.get_position().await
     }

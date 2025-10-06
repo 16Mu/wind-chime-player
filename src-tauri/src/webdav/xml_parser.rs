@@ -16,6 +16,7 @@ pub enum ServerHints {
 
 /// PROPFIND响应解析器
 pub struct PropfindParser {
+    #[allow(dead_code)]
     server_hints: ServerHints,
 }
 

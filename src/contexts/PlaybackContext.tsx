@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode, useMemo } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { webAudioPlayer } from '../services/webAudioPlayer';
 
 // ==================== 类型定义 ====================
 
@@ -94,15 +94,21 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
 
   // 高频状态（使用ref存储，变更不触发重渲染）
   const positionRef = useRef<number>(0);
+  
+  // 🎵 Web Audio Player 初始化标志
+  const isPlayerInitialized = useRef<boolean>(false);
 
-  // 提供高频状态访问接口（确保返回值类型安全）
+  // 提供高频状态访问接口（直接从 Web Audio Player 获取）
   const getPosition = useCallback((): number => {
-    // ✅ 类型保护：确保始终返回有效的number
-    const position = positionRef.current;
-    if (typeof position !== 'number' || isNaN(position)) {
-      return 0; // 返回默认值而不是undefined
+    try {
+      // 🔥 从 Web Audio Player 获取实时位置（0 延迟）
+      const position = webAudioPlayer.getPosition();
+      // 转换为毫秒
+      return position * 1000;
+    } catch (error) {
+      console.error('获取播放位置失败:', error);
+      return positionRef.current;
     }
-    return position;
   }, []);
 
   // 状态更新方法
@@ -111,107 +117,75 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
   }, []);
 
   const frameRef = useRef<number | null>(null);
-  const lastTickTimeRef = useRef<number | null>(null);
-  const fallbackActiveRef = useRef<boolean>(false);
-  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [positionVersion, setPositionVersion] = useState(0);
 
-  // 监听Tauri事件同步完整的播放器状态
+  // 🎵 初始化 Web Audio Player
   useEffect(() => {
-    // 监听完整的播放器状态变化（包含所有字段）
-    const unlistenState = listen('player-state-changed', (event: any) => {
-      const rustState = event.payload as any;
-
-      updateState({
-        track: rustState.current_track || null,
-        isPlaying: rustState.is_playing || false,
-        volume: rustState.volume ?? 1.0,
-        repeatMode: rustState.repeat_mode || 'Off',
-        shuffle: rustState.shuffle || false,
-      });
-
-      const position = typeof rustState.position_ms === 'number' && !isNaN(rustState.position_ms)
-        ? rustState.position_ms
-        : 0;
-      positionRef.current = position;
-      lastTickTimeRef.current = performance.now();
-
-      if (rustState.is_playing) {
-        fallbackActiveRef.current = false;
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current);
-          fallbackTimeoutRef.current = null;
-        }
-      }
-    });
-
-    // 监听曲目变化（向后兼容）
-    const unlistenTrack = listen('player-track-changed', (event: any) => {
-      updateState({ track: event.payload || null });
-      // 切歌时重置本地进度，避免沿用上一首的时间
-      positionRef.current = 0;
-      lastTickTimeRef.current = performance.now();
-
-      // 若后端暂未推送播放状态，启用临时补偿，避免等待
-      fallbackActiveRef.current = true;
-      if (fallbackTimeoutRef.current) {
-        clearTimeout(fallbackTimeoutRef.current);
-      }
-      fallbackTimeoutRef.current = setTimeout(() => {
-        fallbackActiveRef.current = false;
-        fallbackTimeoutRef.current = null;
-      }, 10000); // 最多补偿10秒，待后端状态接管
-    });
-
-    // 监听播放位置变化（高频，使用ref存储）
-    const unlistenPosition = listen('player-position-changed', (event: any) => {
-      positionRef.current = event.payload as number;
-      lastTickTimeRef.current = performance.now();
-
-      // 收到真实位置后，可关闭临时补偿
-      if (fallbackActiveRef.current) {
-        fallbackActiveRef.current = false;
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current);
-          fallbackTimeoutRef.current = null;
-        }
-      }
-    });
-
-    return () => {
-      unlistenState.then(fn => fn());
-      unlistenTrack.then(fn => fn());
-      unlistenPosition.then(fn => fn());
-      if (fallbackTimeoutRef.current) {
-        clearTimeout(fallbackTimeoutRef.current);
-        fallbackTimeoutRef.current = null;
-      }
-    };
-  }, [updateState]);
-
-  // 本地补偿：当后端暂未推送位置事件时，使用 rAF 持续推进位置
-  useEffect(() => {
-    if (!state.isPlaying && !fallbackActiveRef.current) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      lastTickTimeRef.current = null;
+    if (isPlayerInitialized.current) {
       return;
     }
 
-    lastTickTimeRef.current = performance.now();
-
-    const tick = () => {
-      const now = performance.now();
-      if (lastTickTimeRef.current !== null) {
-        const delta = now - lastTickTimeRef.current;
-        if (delta > 0) {
-          positionRef.current += delta;
-          setPositionVersion(v => v + 1);
-        }
+    console.log('🎵 [PlaybackContext] 初始化 Web Audio Player...');
+    
+    const initPlayer = async () => {
+      try {
+        await webAudioPlayer.initialize({
+          // 歌曲变化回调
+          onTrackChanged: (track) => {
+            console.log('🎵 [PlaybackContext] 歌曲变化:', track?.title || track?.path);
+            setState(prev => ({ ...prev, track }));
+            positionRef.current = 0;
+          },
+          
+          // 播放状态变化回调
+          onPlaybackStateChanged: (isPlaying) => {
+            console.log('🎵 [PlaybackContext] 播放状态变化:', isPlaying);
+            setState(prev => ({ ...prev, isPlaying }));
+          },
+          
+          // 播放位置变化回调（100ms 一次）
+          onPositionChanged: (position) => {
+            positionRef.current = position * 1000; // 转换为毫秒
+            setPositionVersion(v => v + 1);
+          },
+          
+          // 音量变化回调
+          onVolumeChanged: (volume) => {
+            setState(prev => ({ ...prev, volume }));
+          },
+          
+          // 歌曲结束回调
+          onTrackEnded: () => {
+            console.log('🎵 [PlaybackContext] 歌曲播放结束');
+            // Web Audio Player 会自动播放下一首
+          },
+        });
+        
+        isPlayerInitialized.current = true;
+        console.log('✅ [PlaybackContext] Web Audio Player 初始化完成');
+      } catch (error) {
+        console.error('❌ [PlaybackContext] Web Audio Player 初始化失败:', error);
       }
-      lastTickTimeRef.current = now;
+    };
+    
+    initPlayer();
+    
+    // 清理
+    return () => {
+      // Web Audio Player 会在应用关闭时自动清理
+    };
+  }, []);
+
+  // ✅ Web Audio Player 已经处理了位置更新，不需要本地补偿
+  // 保留 frameRef 用于强制刷新 UI
+  useEffect(() => {
+    if (!state.isPlaying) {
+      return;
+    }
+
+    // 定期强制更新（确保 UI 刷新）
+    const tick = () => {
+      setPositionVersion(v => v + 1);
       frameRef.current = requestAnimationFrame(tick);
     };
 
@@ -223,14 +197,7 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
         frameRef.current = null;
       }
     };
-  }, [state.isPlaying, state.track?.id]);
-
-  useEffect(() => {
-    if (!state.isPlaying && !fallbackActiveRef.current) {
-      const timer = setTimeout(() => setPositionVersion(v => v + 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [state.isPlaying, fallbackActiveRef.current]);
+  }, [state.isPlaying]);
 
   const contextValue = useMemo(() => ({
     state,

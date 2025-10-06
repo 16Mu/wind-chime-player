@@ -65,14 +65,16 @@ impl RemoteClientManager {
         Ok(client)
     }
 
-    /// 移除客户端缓存
+    /// 移除客户端缓存（管理功能）
+    #[allow(dead_code)]
     pub async fn remove_client(&self, server_id: &str) {
         let mut clients = self.clients.write().await;
         clients.remove(server_id);
         log::info!("移除客户端缓存: {}", server_id);
     }
 
-    /// 清空所有客户端缓存
+    /// 清空所有客户端缓存（管理功能）
+    #[allow(dead_code)]
     pub async fn clear_all(&self) {
         let mut clients = self.clients.write().await;
         clients.clear();

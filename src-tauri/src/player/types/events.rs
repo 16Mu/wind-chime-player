@@ -6,6 +6,7 @@ use super::{track::Track, state::PlayerState};
 /// 播放器事件
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data")]
+#[allow(dead_code)]
 pub enum PlayerEvent {
     /// 状态变化
     StateChanged(PlayerState),
@@ -25,19 +26,10 @@ pub enum PlayerEvent {
     /// 播放列表完成
     PlaylistCompleted,
     
-    /// 跳转开始
-    SeekStarted(u64),
-    
     /// 跳转完成（位置，耗时ms）
     SeekCompleted {
         position: u64,
         elapsed_ms: u64,
-    },
-    
-    /// 跳转失败
-    SeekFailed {
-        position: u64,
-        error: String,
     },
     
     /// 音频设备就绪
@@ -48,43 +40,21 @@ pub enum PlayerEvent {
         error: String,
         recoverable: bool,
     },
-    
-    /// 预加载完成
-    PreloadCompleted {
-        track_id: i64,
-    },
 }
 
 impl PlayerEvent {
-    /// 获取事件名称（用于日志）
-    pub fn name(&self) -> &str {
-        match self {
-            PlayerEvent::StateChanged(_) => "StateChanged",
-            PlayerEvent::TrackChanged(_) => "TrackChanged",
-            PlayerEvent::PositionChanged(_) => "PositionChanged",
-            PlayerEvent::PlaybackError(_) => "PlaybackError",
-            PlayerEvent::TrackCompleted(_) => "TrackCompleted",
-            PlayerEvent::PlaylistCompleted => "PlaylistCompleted",
-            PlayerEvent::SeekStarted(_) => "SeekStarted",
-            PlayerEvent::SeekCompleted { .. } => "SeekCompleted",
-            PlayerEvent::SeekFailed { .. } => "SeekFailed",
-            PlayerEvent::AudioDeviceReady => "AudioDeviceReady",
-            PlayerEvent::AudioDeviceFailed { .. } => "AudioDeviceFailed",
-            PlayerEvent::PreloadCompleted { .. } => "PreloadCompleted",
-        }
-    }
-    
-    /// 判断是否为错误事件
+    /// 判断是否为错误事件（仅测试使用）
+    #[cfg(test)]
     pub fn is_error(&self) -> bool {
         matches!(
             self,
             PlayerEvent::PlaybackError(_)
-                | PlayerEvent::SeekFailed { .. }
                 | PlayerEvent::AudioDeviceFailed { .. }
         )
     }
     
-    /// 判断是否为状态更新事件
+    /// 判断是否为状态更新事件（仅测试使用）
+    #[cfg(test)]
     pub fn is_state_update(&self) -> bool {
         matches!(
             self,
@@ -108,6 +78,12 @@ mod tests {
         let state_event = PlayerEvent::PositionChanged(1000);
         assert!(!state_event.is_error());
         assert!(state_event.is_state_update());
+        
+        let device_error = PlayerEvent::AudioDeviceFailed {
+            error: "test".to_string(),
+            recoverable: true,
+        };
+        assert!(device_error.is_error());
     }
 }
 

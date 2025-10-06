@@ -75,6 +75,7 @@ pub struct PlaylistActor {
     max_history: usize,
     
     /// 事件发送器
+    #[allow(dead_code)]
     event_tx: mpsc::Sender<PlayerEvent>,
 }
 

@@ -340,6 +340,7 @@ impl Library {
     }
     
     /// 从音频文件中提取专辑封面
+    #[allow(dead_code)]
     fn extract_album_cover(&self, tagged_file: &lofty::file::TaggedFile, tag: Option<&lofty::tag::Tag>) -> (Option<Vec<u8>>, Option<String>) {
         use lofty::picture::PictureType;
         

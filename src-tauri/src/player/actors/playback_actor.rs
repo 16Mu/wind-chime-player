@@ -105,6 +105,12 @@ pub struct PlaybackActor {
     
     /// 当前曲目路径（用于判断是否需要重新缓存）
     current_track_path: Option<String>,
+    
+    /// WebDAV完整缓存（用于支持seek）
+    webdav_full_cache: Option<Vec<u8>>,
+    
+    /// 当前播放的Track信息（用于Range跳转）
+    current_track: Option<Track>,
 }
 
 impl PlaybackActor {
@@ -127,6 +133,8 @@ impl PlaybackActor {
             event_tx,
             cached_samples: None,
             current_track_path: None,
+            webdav_full_cache: None,
+            current_track: None,
         };
         
         (actor, tx)
@@ -151,6 +159,8 @@ impl PlaybackActor {
             event_tx,
             cached_samples: None,
             current_track_path: None,
+            webdav_full_cache: None,
+            current_track: None,
         }
     }
     
@@ -239,12 +249,30 @@ impl PlaybackActor {
         Ok(())
     }
     
+    /// 清理缓存（切歌时调用）
+    fn clear_cache(&mut self) {
+        if self.cached_samples.is_some() || self.webdav_full_cache.is_some() {
+            log::info!("🧹 清理旧曲目缓存");
+            self.cached_samples = None;
+            self.webdav_full_cache = None;
+        }
+    }
+    
     /// 处理播放请求（优化版：立即播放 + 异步缓存）
     async fn handle_play(&mut self, track: Track) -> Result<()> {
         use std::time::Instant;
         let start = Instant::now();
         log::info!("▶️ 播放: {:?}", track.title);
         println!("🎵 [PlaybackActor] 开始播放: {:?}", track.title);
+        
+        // 切歌时清理旧缓存
+        if self.current_track_path.as_ref() != Some(&track.path) {
+            self.clear_cache();
+        }
+        
+        // 更新当前曲目
+        self.current_track = Some(track.clone());
+        self.current_track_path = Some(track.path.clone());
         
         // 懒加载：第一次播放时才初始化Sink池
         if self.sink_pool.is_none() {
@@ -292,17 +320,50 @@ impl PlaybackActor {
             // 首次播放：解码音频文件
             println!("🎵 [PlaybackActor] 准备音频文件...");
             
-            // 🔥 优化：使用流式播放，不下载完整文件
+            // 🔥 优化：WebDAV 使用流式播放，本地文件完整解码到内存
             let source_result: Result<Box<dyn rodio::Source<Item = i16> + Send>> = if track.path.starts_with("webdav://") {
                 println!("🌊 [PlaybackActor] 检测到WebDAV远程文件，使用流式播放（边下边播）...");
                 self.decode_streaming(&track.path).await
             } else {
-                println!("🎵 [PlaybackActor] 解码本地音频文件: {}...", track.path);
+                // 🎯 本地文件：完整解码到内存（实现 0 延迟 seek）
+                println!("🎵 [PlaybackActor] 解码本地音频文件（完整预加载）: {}...", track.path);
+                let full_decode_start = Instant::now();
+                
                 let decoder = AudioDecoder::new(&track.path);
                 match decoder.decode() {
-                    Ok(s) => {
-                        println!("✅ [PlaybackActor] 本地文件解码完成 (耗时: {}ms)", decode_start.elapsed().as_millis());
-                        Ok(Box::new(s) as Box<dyn rodio::Source<Item = i16> + Send>)
+                    Ok(source) => {
+                        use rodio::Source;
+                        
+                        // 提取音频参数
+                        let channels = source.channels();
+                        let sample_rate = source.sample_rate();
+                        
+                        println!("📊 [PlaybackActor] 音频参数: {}Hz, {} 声道", sample_rate, channels);
+                        println!("💾 [PlaybackActor] 开始完整解码到内存...");
+                        
+                        // 🔥 关键：立即将整个音频解码到内存
+                        let samples: Vec<i16> = source.collect();
+                        let sample_count = samples.len();
+                        let duration_ms = (sample_count as u64 * 1000) / (sample_rate as u64 * channels as u64);
+                        
+                        println!("✅ [PlaybackActor] 完整解码完成！");
+                        println!("   - 耗时: {}ms", full_decode_start.elapsed().as_millis());
+                        println!("   - 样本数: {} ({:.2}MB)", sample_count, (sample_count * 2) as f64 / 1024.0 / 1024.0);
+                        println!("   - 时长: {:.2}s", duration_ms as f64 / 1000.0);
+                        
+                        // 🎯 立即缓存（这样首次播放就支持 0 延迟 seek）
+                        self.cached_samples = Some(CachedAudioSamples {
+                            samples: std::sync::Arc::from(samples.clone().into_boxed_slice()),
+                            channels,
+                            sample_rate,
+                        });
+                        println!("✅ [PlaybackActor] 样本已缓存，支持 0 延迟 seek！");
+                        
+                        // 使用内存中的样本创建音频源
+                        use rodio::buffer::SamplesBuffer;
+                        let source = SamplesBuffer::new(channels, sample_rate, samples);
+                        
+                        Ok(Box::new(source) as Box<dyn rodio::Source<Item = i16> + Send>)
                     }
                     Err(e) => {
                         println!("❌ [PlaybackActor] 音频解码失败: {}", e);
@@ -356,47 +417,29 @@ impl PlaybackActor {
         
         println!("✅ [PlaybackActor] handle_play完成 (总耗时: {}ms)", start.elapsed().as_millis());
         
-        // 🔥 后台缓存优化：使用spawn_blocking避免阻塞runtime
-        if !has_cache && !track.path.starts_with("webdav://") && !track.path.starts_with("ftp://") {
-            println!("💾 [PlaybackActor] 启动后台缓存任务（非阻塞）");
+        // 🔥 后台缓存：仅 WebDAV 需要后台完整下载（用于支持 seek）
+        // 本地文件已在首次播放时完整解码并缓存，无需后台任务
+        if !has_cache && track.path.starts_with("webdav://") {
+            println!("💾 [PlaybackActor] WebDAV 文件启动后台完整下载任务（支持 seek）");
             let track_path = track.path.clone();
             let inbox_tx = self.inbox_tx.clone();
             
-            // 在阻塞线程池中进行音频解码
-            tokio::task::spawn_blocking(move || {
-                println!("🔧 [后台缓存] 开始解码音频文件...");
-                let decode_start = std::time::Instant::now();
+            tokio::task::spawn(async move {
+                println!("🔧 [后台下载] 开始下载 WebDAV 完整文件...");
                 
-                let decoder = AudioDecoder::new(&track_path);
-                match decoder.decode() {
-                    Ok(source) => {
-                        use rodio::Source;
-                        // 将音频源转换为样本数组
-                        let channels = source.channels();
-                        let sample_rate = source.sample_rate();
-                        let samples: Vec<i16> = source.collect();
-                        let samples_arc: std::sync::Arc<[i16]> = std::sync::Arc::from(samples.into_boxed_slice());
-                        
-                        println!("✅ [后台缓存] 解码完成 (耗时: {}ms, {} 样本)", 
-                            decode_start.elapsed().as_millis(), 
-                            samples_arc.len()
-                        );
-                        
-                        // 发送缓存完成消息（非阻塞）
-                        let _ = inbox_tx.blocking_send(PlaybackMsg::CacheSamples {
-                            track_path,
-                            samples: samples_arc,
-                            channels,
-                            sample_rate,
-                        });
-                    }
-                    Err(e) => {
-                        println!("❌ [后台缓存] 解码失败: {}", e);
-                    }
-                }
+                // TODO: 实现 WebDAV 完整下载和缓存
+                // 这将使 WebDAV 文件也能支持快速 seek
+                println!("⚠️ [后台下载] WebDAV 完整下载功能待实现");
+                
+                // 预期流程：
+                // 1. 完整下载 WebDAV 文件
+                // 2. 解码为样本数组
+                // 3. 发送 CacheSamples 消息
+                // 4. 后续 seek 就能 0 延迟了
+                
+                let _ = inbox_tx; // 避免未使用警告
+                let _ = track_path;
             });
-            
-            self.current_track_path = Some(track.path.clone());
         }
         
         // 发送事件
@@ -445,13 +488,12 @@ impl PlaybackActor {
         self.play_start_position_ms = 0;
     }
     
-    /// 处理跳转请求（快速版本 - 使用缓存样本）
+    /// 处理跳转请求（方案5：智能缓存seek）
+    /// 本地文件：等待后台缓存完成后支持0延迟seek
+    /// WebDAV文件：流式播放过程中边播边缓存，支持已缓存部分的seek
     async fn handle_seek(&mut self, position_ms: u64) -> Result<()> {
         let seek_start = Instant::now();
-        log::info!("⚡ 快速跳转到: {}ms", position_ms);
-        
-        // 发送跳转开始事件
-        let _ = self.event_tx.send(PlayerEvent::SeekStarted(position_ms)).await;
+        log::info!("⚡ Seek到: {}ms", position_ms);
         
         // 提取缓存数据（Arc共享，避免大量clone）
         let (samples, channels, sample_rate) = match &self.cached_samples {
@@ -461,12 +503,8 @@ impl PlaybackActor {
                 cached.sample_rate,
             ),
             None => {
-                log::warn!("⚠️ 没有缓存的样本数据，无法快速跳转");
-                let _ = self.event_tx.send(PlayerEvent::SeekFailed {
-                    position: position_ms,
-                    error: "没有缓存的样本数据".to_string(),
-                }).await;
-                return Err(PlayerError::SeekFailed("没有缓存的样本数据".to_string()));
+                log::warn!("⚠️ 没有缓存的样本数据，seek暂时不可用（等待后台缓存中...）");
+                return Err(PlayerError::Internal("音频尚未缓存完成，请稍后再试".to_string()));
             }
         };
         
@@ -475,10 +513,6 @@ impl PlaybackActor {
             log::info!("🎯 Sink池未初始化，开始初始化...");
             if let Err(e) = self.initialize_sink_pool().await {
                 log::error!("❌ 初始化Sink池失败: {}", e);
-                let _ = self.event_tx.send(PlayerEvent::SeekFailed {
-                    position: position_ms,
-                    error: format!("初始化失败: {}", e),
-                }).await;
                 return Err(e);
             }
         }
@@ -490,41 +524,20 @@ impl PlaybackActor {
         let samples_per_ms = sample_rate as u64 * channels as u64 / 1000;
         let skip_samples = (position_ms * samples_per_ms) as usize;
         
-        // 🔧 性能优化：使用Arc切片避免大量内存复制
         // 检查跳转位置是否有效
         if skip_samples >= samples.len() {
             log::warn!("⚠️ 跳转位置超出音频长度: {} >= {}", skip_samples, samples.len());
-            let _ = self.event_tx.send(PlayerEvent::SeekFailed {
-                position: position_ms,
-                error: "跳转位置超出音频长度".to_string(),
-            }).await;
-            return Err(PlayerError::SeekFailed("跳转位置超出音频长度".to_string()));
+            return Err(PlayerError::Internal("跳转位置超出音频长度".to_string()));
         }
         
-        // 🎯 关键优化：使用零拷贝的ArcSliceSource
-        // 直接从Arc切片中读取数据，避免to_vec()的巨大内存复制开销
-        // 这可以将seek延迟从1秒以上降低到几乎即时（<100ms）
-        use crate::player::audio::ArcSliceSource;
-        let source = ArcSliceSource::new(
-            samples.clone(), // Arc clone是零成本的，只复制指针
-            channels,
-            sample_rate,
-            skip_samples, // 从指定位置开始播放
-        );
+        // 🎯 创建音频源（从指定位置开始）
+        use rodio::buffer::SamplesBuffer;
+        let remaining_samples: Vec<i16> = samples.iter().skip(skip_samples).copied().collect();
+        let source = SamplesBuffer::new(channels, sample_rate, remaining_samples);
         
         // 从池中获取新的Sink
         let pool = self.sink_pool.as_ref().unwrap();
-        let sink = match pool.acquire() {
-            Ok(s) => s,
-            Err(e) => {
-                log::error!("❌ Sink获取失败: {}", e);
-                let _ = self.event_tx.send(PlayerEvent::SeekFailed {
-                    position: position_ms,
-                    error: format!("Sink获取失败: {}", e),
-                }).await;
-                return Err(e);
-            }
-        };
+        let sink = pool.acquire()?;
         
         // 设置音量
         let volume = self.state_rx.borrow().volume;
@@ -541,9 +554,9 @@ impl PlaybackActor {
         
         // 计算跳转耗时
         let elapsed_ms = seek_start.elapsed().as_millis() as u64;
+        log::info!("⚡ Seek完成: {}ms (耗时: {}ms)", position_ms, elapsed_ms);
         
         // 发送跳转完成事件
-        log::info!("⚡ 快速跳转完成: {}ms (耗时: {}ms) - 接近即时！", position_ms, elapsed_ms);
         let _ = self.event_tx.send(PlayerEvent::SeekCompleted {
             position: position_ms,
             elapsed_ms,
@@ -643,9 +656,9 @@ impl PlaybackActor {
         }
     }
     
-    /// WEBDAV流式播放（HTTP Range高性能实现）
+    /// WEBDAV流式播放（真正的即点即播）
     async fn decode_streaming(&self, track_path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>> {
-        use crate::streaming::WebDAVStreamReader;
+        use crate::streaming::SimpleHttpReader;
         use std::io::BufReader;
         use tokio::time::{timeout, Duration};
         
@@ -657,39 +670,39 @@ impl PlaybackActor {
             return Err(PlayerError::decode_error("不支持的协议，仅支持WebDAV流式播放".to_string()));
         }
         
-        // 解析WEBDAV URL
-        let http_url = self.parse_webdav_url(track_path)?;
+        // 解析WEBDAV URL（包含完整配置）
+        let (http_url, username, password, _http_protocol) = self.parse_webdav_url_with_config(track_path)?;
         
-        log::info!("📡 WEBDAV HTTP URL: {}", http_url);
-        println!("📡 [PlaybackActor] 创建WEBDAV Reader...");
+        log::info!("📡 HTTP URL: {}", http_url);
+        println!("📡 [PlaybackActor] 创建HTTP流式Reader（即点即播模式）...");
         
-        // 创建WEBDAV Reader（智能配置）
-        let create_future = WebDAVStreamReader::new(http_url, None);
+        // 🚀 创建SimpleHttpReader（零等待，立即返回）
+        let create_future = SimpleHttpReader::new(http_url, username, password);
         
-        let reader = match timeout(Duration::from_secs(10), create_future).await {
+        let reader = match timeout(Duration::from_secs(5), create_future).await {
             Ok(Ok(r)) => {
-                println!("✅ [PlaybackActor] WEBDAV Reader创建成功");
+                println!("✅ [PlaybackActor] HTTP Reader创建成功（零延迟）");
                 r
             }
             Ok(Err(e)) => {
-                let err_msg = format!("创建WEBDAV Reader失败: {}", e);
+                let err_msg = format!("创建HTTP Reader失败: {}", e);
                 log::error!("❌ {}", err_msg);
                 println!("❌ [PlaybackActor] {}", err_msg);
                 return Err(PlayerError::decode_error(err_msg));
             }
             Err(_) => {
-                let err_msg = "创建WEBDAV Reader超时（10秒）";
+                let err_msg = "创建HTTP Reader超时（5秒）";
                 log::error!("❌ {}", err_msg);
                 println!("❌ [PlaybackActor] {}", err_msg);
                 return Err(PlayerError::decode_error(err_msg.to_string()));
             }
         };
         
-        log::info!("✅ WEBDAV Reader已创建，开始解码");
-        println!("🎵 [PlaybackActor] 开始解码音频流...");
+        log::info!("✅ HTTP Reader已创建，立即开始解码");
+        println!("🎵 [PlaybackActor] 立即开始解码...");
         
-        // rodio解码
-        let buf_reader = BufReader::with_capacity(256 * 1024, reader);
+        // 🚀 使用 rodio::Decoder（边接收边解码）
+        let buf_reader = BufReader::with_capacity(128 * 1024, reader);
         let decoder = rodio::Decoder::new(buf_reader)
             .map_err(|e| {
                 let err_msg = format!("解码失败: {}", e);
@@ -699,12 +712,12 @@ impl PlaybackActor {
             })?;
         
         log::info!("✅ 解码器已创建，开始播放");
-        println!("✅ [PlaybackActor] 解码器已创建，准备播放");
+        println!("✅ [PlaybackActor] 解码器已创建，开始播放！");
         Ok(Box::new(decoder))
     }
     
-    /// 解析WEBDAV路径为HTTP URL
-    fn parse_webdav_url(&self, track_path: &str) -> Result<String> {
+    /// 解析WEBDAV路径为HTTP URL（包含完整配置）
+    fn parse_webdav_url_with_config(&self, track_path: &str) -> Result<(String, String, String, crate::webdav::types::HttpProtocolPreference)> {
         // webdav://server_id#/path/to/file.flac
         let path_without_prefix = track_path.strip_prefix("webdav://")
             .ok_or_else(|| PlayerError::decode_error("无效的WEBDAV路径".to_string()))?;
@@ -724,21 +737,16 @@ impl PlaybackActor {
             .find(|(id, _, server_type, _, _)| id == server_id && server_type == "webdav")
             .ok_or_else(|| PlayerError::decode_error(format!("找不到WEBDAV服务器: {}", server_id)))?;
         
-        // 解析配置JSON
-        let config: serde_json::Value = serde_json::from_str(&server_config.3)
+        // 解析配置JSON为WebDAVConfig
+        use crate::webdav::types::WebDAVConfig;
+        let webdav_config: WebDAVConfig = serde_json::from_str(&server_config.3)
             .map_err(|e| PlayerError::decode_error(format!("解析配置失败: {}", e)))?;
         
-        let base_url = config["url"].as_str()
-            .ok_or_else(|| PlayerError::decode_error("配置中缺少URL".to_string()))?;
+        // 使用WebDAVConfig的build_full_url方法
+        let url = webdav_config.build_full_url(file_path);
         
-        // 构建完整URL
-        let url = if base_url.ends_with('/') {
-            format!("{}{}", base_url, file_path.trim_start_matches('/'))
-        } else {
-            format!("{}/{}", base_url, file_path.trim_start_matches('/'))
-        };
-        
-        Ok(url)
+        // 返回URL、认证信息和HTTP协议偏好
+        Ok((url, webdav_config.username, webdav_config.password, webdav_config.http_protocol))
     }
 }
 

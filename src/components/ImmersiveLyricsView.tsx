@@ -917,11 +917,11 @@ function ImmersiveLyricsView({
     const targetPosition = Math.floor(percentage * track.duration_ms);
     
     try {
-      await invoke('player_seek', { positionMs: targetPosition });
-      // 如果原本在播放，确保seek后继续播放
-      if (isPlaying) {
-        await invoke('player_resume');
-      }
+      // 🔥 使用 Web Audio Player 进行 0 延迟 seek
+      const { webAudioPlayer } = await import('../services/webAudioPlayer');
+      const positionSec = targetPosition / 1000;
+      await webAudioPlayer.seek(positionSec);
+      console.log(`⚡ [沉浸式歌词] Seek 到 ${positionSec.toFixed(2)}s (0 延迟!)`);
     } catch (error) {
       console.error('Progress seek failed:', error);
     }
@@ -974,10 +974,12 @@ function ImmersiveLyricsView({
         console.log('🎵 [用户点击] 用户点击第', lineIndex, '行，时间戳:', timestampMs);
       }
       
-      // 跳转到指定时间点（确保是整数）
-      // ✅ 移除自动resume：保持原有播放状态，RAF循环会自动检测位置变化并滚动
-      invoke('player_seek', { positionMs: Math.floor(timestampMs) }).catch((error) => {
-        console.error('Lyrics seek failed:', error);
+      // 🔥 跳转到指定时间点（使用 Web Audio Player，0 延迟！）
+      import('../services/webAudioPlayer').then(({ webAudioPlayer }) => {
+        const positionSec = timestampMs / 1000;
+        webAudioPlayer.seek(positionSec).catch((error) => {
+          console.error('Lyrics seek failed:', error);
+        });
       });
     }
   }, [track?.id]);
@@ -1831,7 +1833,7 @@ function ImmersiveLyricsView({
                </div>
                
                {/* 控制区域 */}
-               <div className="w-full space-y-3 mt-auto">
+               <div className="w-full space-y-4 mt-auto px-4">
                  {renderProgressBar()}
                  {renderPlayControls()}
                </div>
@@ -2003,9 +2005,9 @@ function ImmersiveLyricsView({
                </div>
         
         {/* 底部控制条 */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-black/40 backdrop-blur-sm">
-          {renderProgressBar('px-2')}
-          <div className="mt-3">
+        <div className="absolute bottom-0 left-0 right-0 px-8 py-6 bg-black/40 backdrop-blur-sm">
+          {renderProgressBar()}
+          <div className="mt-4">
             {renderPlayControls('small')}
              </div>
            </div>
@@ -2436,21 +2438,42 @@ const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: Progres
   }, [isPlaying, getPos]);
   
   return (
-    <div className={`space-y-2 ${className || ''}`}>
-      <div className="flex justify-between text-xs text-white/60">
+    <div className={`space-y-3 max-w-2xl mx-auto ${className || ''}`}>
+      <div className="flex justify-between text-sm font-medium text-white/70">
         <span>{formatTime(displayPosition)}</span>
         <span>{formatTime(track?.duration_ms || 0)}</span>
       </div>
       <div 
-        className="relative h-1 bg-white/20 rounded-full backdrop-blur-sm cursor-pointer group"
+        className="relative h-2 bg-white/20 rounded-full backdrop-blur-sm cursor-pointer group"
         onClick={onSeek}
       >
         <div 
-          className="absolute top-0 left-0 h-full bg-gradient-to-r from-white/60 to-white/80 rounded-full transition-all duration-300"
+          className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
           style={{ 
-            width: `${track?.duration_ms ? (displayPosition / track.duration_ms) * 100 : 0}%` 
+            width: `${track?.duration_ms ? (displayPosition / track.duration_ms) * 100 : 0}%`,
+            background: 'linear-gradient(90deg, var(--progress-color-from), var(--progress-color-to))',
+            boxShadow: `
+              0 0 0 1px rgba(255, 255, 255, 0.6),
+              0 0 8px rgba(255, 255, 255, 0.3),
+              0 0 12px var(--progress-glow),
+              0 2px 4px var(--progress-shadow)
+            `
           }}
-        />
+        >
+          {/* 拖拽手柄 */}
+          <div 
+            className="absolute right-0 top-1/2 w-[18px] h-[18px] bg-white rounded-full transition-all group-hover:opacity-100 group-hover:scale-110"
+            style={{
+              transform: 'translateY(-50%) scale(0.85)',
+              opacity: 0.7,
+              border: '2.5px solid var(--progress-color-from)',
+              boxShadow: `
+                0 2px 8px var(--progress-glow),
+                0 0 0 2px rgba(255, 255, 255, 0.3)
+              `
+            }}
+          />
+        </div>
       </div>
     </div>
   );

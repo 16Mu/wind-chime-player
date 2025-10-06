@@ -112,24 +112,9 @@ impl LazyAudioDevice {
     }
     
     /// 检查设备是否已初始化
+    #[allow(dead_code)]
     pub fn is_initialized(&self) -> bool {
         self.inner.get().is_some()
-    }
-    
-    /// 重置设备（清除已初始化的设备，下次访问时重新初始化）
-    /// 
-    /// 注意：由于OnceCell的限制，实际上不能真正重置
-    /// 如需重置功能，应创建新的LazyAudioDevice实例
-    pub fn reset(&self) -> Result<()> {
-        if self.is_initialized() {
-            log::warn!("⚠️ 当前设备已初始化，无法重置");
-            log::warn!("⚠️ 如需重置设备，请创建新的LazyAudioDevice实例");
-            Err(PlayerError::device_error(
-                "设备已初始化，无法重置"
-            ))
-        } else {
-            Ok(())
-        }
     }
 }
 

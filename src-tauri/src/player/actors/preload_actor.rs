@@ -31,6 +31,7 @@ use tokio::task::JoinHandle;
 
 /// PreloadActor的消息类型
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum PreloadMsg {
     /// 内部消息：预加载完成，将数据存入缓存
     CacheLoadedData {
@@ -95,6 +96,7 @@ pub enum PreloadMsg {
 
 /// 预加载优先级
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(dead_code)]
 pub enum PreloadPriority {
     /// 低优先级：预测的可能播放的歌曲
     Low = 0,
@@ -108,6 +110,7 @@ pub enum PreloadPriority {
 
 /// 缓存状态信息
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CacheStatus {
     /// 已缓存的曲目数量
     pub cached_count: usize,
@@ -121,6 +124,7 @@ pub struct CacheStatus {
 
 /// 缓存的音频数据
 #[derive(Clone)]
+#[allow(dead_code)]
 struct CachedAudio {
     /// 曲目ID
     track_id: i64,
@@ -213,6 +217,7 @@ impl AudioCache {
     }
 
     /// 移除缓存
+    #[allow(dead_code)]
     fn remove(&mut self, track_id: i64) -> bool {
         if let Some(audio) = self.cache.pop(&track_id) {
             self.current_size -= audio.size;
@@ -253,6 +258,7 @@ pub struct PreloadActor {
     cache: AudioCache,
 
     /// 事件发送器
+    #[allow(dead_code)]
     event_tx: mpsc::Sender<PlayerEvent>,
 
     /// 当前播放列表
@@ -409,7 +415,6 @@ impl PreloadActor {
         // 启动加载任务
         let track_id = track.id;
         let path = PathBuf::from(&track.path);
-        let event_tx = self.event_tx.clone();
         let inbox_tx = self.inbox_tx.clone();
 
         let handle = tokio::spawn(async move {
@@ -426,11 +431,6 @@ impl PreloadActor {
                         track_id,
                         data,
                     }).await;
-
-                    // 发送预加载完成事件（可选）
-                    let _ = event_tx
-                        .send(PlayerEvent::PreloadCompleted { track_id })
-                        .await;
                 }
                 Err(e) => {
                     log::error!("❌ 预加载失败: {} - {:?}", track_id, e);
@@ -644,6 +644,7 @@ impl PreloadActorHandle {
     }
 
     /// 预加载单个曲目
+    #[allow(dead_code)]
     pub async fn preload_track(&self, track: Track, priority: PreloadPriority) -> Result<()> {
         self.tx
             .send(PreloadMsg::PreloadTrack { track, priority })
@@ -653,6 +654,7 @@ impl PreloadActorHandle {
     }
 
     /// 批量预加载
+    #[allow(dead_code)]
     pub async fn preload_batch(
         &self,
         tracks: Vec<Track>,
@@ -666,6 +668,7 @@ impl PreloadActorHandle {
     }
 
     /// 取消预加载
+    #[allow(dead_code)]
     pub async fn cancel_preload(&self, track_id: i64) -> Result<()> {
         self.tx
             .send(PreloadMsg::CancelPreload { track_id })
@@ -675,6 +678,7 @@ impl PreloadActorHandle {
     }
 
     /// 清空缓存
+    #[allow(dead_code)]
     pub async fn clear_cache(&self) -> Result<()> {
         self.tx
             .send(PreloadMsg::ClearCache)
@@ -684,6 +688,7 @@ impl PreloadActorHandle {
     }
 
     /// 获取缓存状态
+    #[allow(dead_code)]
     pub async fn get_cache_status(&self) -> Result<CacheStatus> {
         let (tx, rx) = oneshot::channel();
         self.tx
@@ -694,6 +699,7 @@ impl PreloadActorHandle {
     }
 
     /// 更新播放模式
+    #[allow(dead_code)]
     pub async fn update_play_mode(&self, repeat_mode: RepeatMode, shuffle: bool) -> Result<()> {
         self.tx
             .send(PreloadMsg::UpdatePlayMode {
@@ -706,6 +712,7 @@ impl PreloadActorHandle {
     }
 
     /// 更新播放列表
+    #[allow(dead_code)]
     pub async fn update_playlist(
         &self,
         playlist: Vec<Track>,
@@ -722,6 +729,7 @@ impl PreloadActorHandle {
     }
 
     /// 通知曲目变化
+    #[allow(dead_code)]
     pub async fn on_track_changed(&self, current_track: Track, current_index: usize) -> Result<()> {
         self.tx
             .send(PreloadMsg::OnTrackChanged {
@@ -734,6 +742,7 @@ impl PreloadActorHandle {
     }
 
     /// 检查是否已缓存
+    #[allow(dead_code)]
     pub async fn has_cached(&self, track_id: i64) -> Result<bool> {
         let (tx, rx) = oneshot::channel();
         self.tx
@@ -747,6 +756,7 @@ impl PreloadActorHandle {
     }
 
     /// 获取缓存的音频数据
+    #[allow(dead_code)]
     pub async fn get_cached(&self, track_id: i64) -> Result<Option<Arc<Vec<u8>>>> {
         let (tx, rx) = oneshot::channel();
         self.tx
@@ -760,6 +770,7 @@ impl PreloadActorHandle {
     }
 
     /// 关闭Actor
+    #[allow(dead_code)]
     pub async fn shutdown(&self) -> Result<()> {
         self.tx
             .send(PreloadMsg::Shutdown)
