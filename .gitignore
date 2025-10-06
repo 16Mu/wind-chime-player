@@ -25,3 +25,5 @@ dist-ssr
 
 # Documentation (local only)
 docs/
+多平台打包配置完成.md
+如何构建macOS和Linux.md
