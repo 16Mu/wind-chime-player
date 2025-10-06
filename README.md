@@ -1,7 +1,7 @@
 # WindChime Player
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.4.0.2-blue.svg)](https://github.com/16Mu/wind-chime-player)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/16Mu/wind-chime-player)
 [![Tauri](https://img.shields.io/badge/tauri-2.0-blue.svg)](https://tauri.app/)
 [![React](https://img.shields.io/badge/react-19-blue.svg)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-56.7%25-blue.svg)](https://www.typescriptlang.org/)
@@ -281,7 +281,7 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 
 ## 📝 更新日志
 
-### v0.4.0.2 (2025-10-06) - Current
+### v0.4.1 (2025-10-06) - Current
 - ✅ **混合播放引擎** - Rust + Web Audio API 双引擎架构，零延迟 seek（< 10ms）
 - ✅ **macOS 风格设计升级** - 完全对齐 Apple Music，iOS 蓝主色调 + 毛玻璃效果
 - ✅ **智能设置搜索** - 模糊搜索 + 智能高亮定位 + 实时下拉结果
@@ -290,6 +290,7 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 - ✅ **进度条实时更新** - 使用 requestAnimationFrame，60fps 流畅更新
 - ✅ **引擎智能切换** - 自动切换播放引擎，状态平滑过渡
 - ✅ **窗口体验优化** - 设置最小尺寸、响应式宽度、拖动性能优化
+- ⚠️ **WebDAV 功能** - 后端已完成，前端未验证，后续版本将完善
 
 ### v0.4.0.1 (2025-10-04)
 - ✅ **企业级歌单系统** - 完整的CRUD、智能歌单引擎、导入导出（M3U/M3U8/JSON）
