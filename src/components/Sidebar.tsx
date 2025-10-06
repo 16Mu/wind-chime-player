@@ -81,7 +81,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
   const sidebarPlaylists = getSidebarPlaylists() || []; // 防御性编程，确保总是返回数组
   
   // 主题管理
-  const { theme, setTheme, isDarkMode } = useTheme();
+  const { theme: _theme, setTheme, isDarkMode } = useTheme();
   
   // UI管理
   const { showSettingsSearch } = useUI();
@@ -251,17 +251,6 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
     onNavigate('playlists' as Page);
   };
 
-  // 获取歌单颜色样式
-  const getPlaylistGradient = (index: number): string => {
-    const gradients = [
-      'from-purple-500 to-pink-500',
-      'from-blue-600 to-indigo-600',
-      'from-green-500 to-teal-500',
-      'from-orange-500 to-red-500',
-      'from-cyan-500 to-blue-500',
-    ];
-    return gradients[index % gradients.length];
-  };
 
   // 🔄 当前页面变化时更新激活指示器
   useEffect(() => {

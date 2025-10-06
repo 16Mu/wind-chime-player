@@ -29,15 +29,14 @@ export default function TracksView({
   onTrackSelect,
   isLoading,
   selectedTrackId,
-  showFavoriteButtons = false,
-  onFavoriteChange,
-  onAddToPlaylist,
+  showFavoriteButtons: _showFavoriteButtons = false,
+  onFavoriteChange: _onFavoriteChange,
+  onAddToPlaylist: _onAddToPlaylist,
   enableDragSort = false,
   onDragEnd
 }: TracksViewProps) {
   // 状态管理
   const [hoveredRowIndex, setHoveredRowIndex] = useState<number>(-1);
-  const [favoriteStates, setFavoriteStates] = useState<{ [trackId: number]: boolean }>({});
   
   // 拖拽状态
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -48,9 +47,8 @@ export default function TracksView({
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
   // 自定义Hooks
-  const { hoverIndicator, indicatorRef, updateIndicator, hideIndicator } = useHoverAnimation(true);
+  const { hoverIndicator: _hoverIndicator, indicatorRef: _indicatorRef, updateIndicator, hideIndicator } = useHoverAnimation(true);
   const { albumCoverUrls } = useAlbumCovers(tracks);
-  const densitySettings = useResponsiveDensity();
 
   // 事件处理
   const handleRowMouseEnter = (index: number) => {
@@ -63,11 +61,6 @@ export default function TracksView({
     hideIndicator();
   };
 
-  const handleFavoriteToggle = (trackId: number) => {
-    const newState = !favoriteStates[trackId];
-    setFavoriteStates(prev => ({ ...prev, [trackId]: newState }));
-    onFavoriteChange?.(trackId, newState);
-  };
 
   // 拖拽事件处理
   const handleDragStart = (index: number) => {
@@ -156,7 +149,6 @@ export default function TracksView({
     >
       {/* 曲目列表 */}
       {tracks.map((track, index) => {
-        const isHovered = hoveredRowIndex === index;
         const isSelected = selectedTrackId === track.id;
         const albumCoverUrl = albumCoverUrls[track.id];
         

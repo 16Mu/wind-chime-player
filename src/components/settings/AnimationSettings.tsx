@@ -11,6 +11,7 @@ import { LyricsAnimationSettings } from '../../types/music';
 interface AnimationSettingsProps {
   lyricsAnimationSettings: LyricsAnimationSettings;
   onUpdateLyricsAnimationSettings: (settings: Partial<LyricsAnimationSettings>) => void;
+  highlightedSettingId?: string | null;
 }
 
 // 歌词动画预设配置 - 重新分类为4大类
@@ -60,7 +61,7 @@ export default function AnimationSettings({
   highlightedSettingId
 }: AnimationSettingsProps) {
   const [activeTab, setActiveTab] = useState<'elastic' | 'smooth' | 'fast' | 'slow'>('elastic');
-  const [previewKey, setPreviewKey] = useState(0); // 用于触发预览动画
+  const [, setPreviewKey] = useState(0); // 用于触发预览动画
   const [currentPreviewLine, setCurrentPreviewLine] = useState(2); // 当前预览行索引
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const previewTimerRef = useRef<number | null>(null);

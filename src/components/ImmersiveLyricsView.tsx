@@ -2480,7 +2480,7 @@ const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: Progres
       const rect = progressBarRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
-      const position = Math.floor(percentage * track.duration_ms);
+      const position = Math.floor(percentage * (track.duration_ms || 0));
       
       // 🔥 同时更新拖拽位置和显示位置，确保实时跟手
       setDragPosition(position);
@@ -2496,15 +2496,6 @@ const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: Progres
       
       // 🔥 立即更新显示位置（在实际 seek 之前）
       setDisplayPosition(finalPosition);
-      
-      // 创建模拟事件对象传递给 onSeek
-      const mockEvent = {
-        currentTarget: progressBarRef.current,
-        clientX: 0, // 我们直接使用 finalPosition，不需要计算
-        target: progressBarRef.current,
-        preventDefault: () => {},
-        stopPropagation: () => {}
-      } as any;
       
       // 执行 seek
       try {

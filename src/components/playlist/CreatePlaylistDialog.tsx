@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePlaylist, CreatePlaylistOptions, UpdatePlaylistOptions, Playlist } from '../../contexts/PlaylistContext';
-import { X, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface CreatePlaylistDialogProps {
   isOpen: boolean;

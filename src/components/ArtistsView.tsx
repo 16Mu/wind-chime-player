@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Track } from '../types/music';
 import { useCoverCache } from '../contexts/CoverCacheContext';
 
@@ -235,13 +235,9 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
                     src={artistCovers.get(artist.name)} 
                     alt={artist.name}
                     className="w-full h-full object-cover"
-                    onError={() => {
-                      // 图片加载失败时移除
-                      setArtistCovers(prev => {
-                        const newMap = new Map(prev);
-                        newMap.delete(artist.name);
-                        return newMap;
-                      });
+                    onError={(e) => {
+                      // 图片加载失败时隐藏
+                      (e.target as HTMLImageElement).style.display = 'none';
                     }}
                   />
                 ) : (

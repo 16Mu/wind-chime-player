@@ -11,7 +11,7 @@ import React, { useState, useMemo } from 'react';
 import { usePlaylist, Playlist } from '../../contexts/PlaylistContext';
 import { PlaylistCard } from './PlaylistCard';
 import { usePlaylistCover } from '../../hooks/usePlaylistCover';
-import { Plus, Grid, List, Search, Filter, Sparkles, Heart, Upload, Music, Pin, TrendingUp, Clock } from 'lucide-react';
+import { Plus, Grid, List, Search, Sparkles, Heart, Upload, Music, Pin, TrendingUp, Clock } from 'lucide-react';
 
 type ViewMode = 'grid' | 'list';
 type SortBy = 'created' | 'name' | 'count' | 'played';

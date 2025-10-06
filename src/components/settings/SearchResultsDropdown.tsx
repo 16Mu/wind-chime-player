@@ -14,8 +14,7 @@ interface SearchResultsDropdownProps {
 export function SearchResultsDropdown({ 
   results, 
   query, 
-  onSelect,
-  onClose 
+  onSelect 
 }: SearchResultsDropdownProps) {
   if (results.length === 0) {
     return (

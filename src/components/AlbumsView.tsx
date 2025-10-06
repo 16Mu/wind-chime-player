@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import type { Track } from '../types/music';
 import { useCoverCache } from '../contexts/CoverCacheContext';
 import '../styles/albums-view.css';
@@ -22,7 +23,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
   const { albumCovers, loadAlbumCover, getAlbumCover } = useCoverCache();
   
   // 封面刷新触发器
-  const [coverRefreshTrigger, setCoverRefreshTrigger] = useState(0);
+  const [, setCoverRefreshTrigger] = useState(0);
   
   // 加载中的专辑（防止重复请求）
   const loadingAlbumsRef = useRef<Set<string>>(new Set());
@@ -126,7 +127,7 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
         // 使用专辑第一首歌的封面
         const firstTrack = album.tracks[0];
         if (firstTrack) {
-          const loadPromise = loadAlbumCover(firstTrack.id, albumKey).finally(() => {
+          const loadPromise = loadAlbumCover(firstTrack.id, albumKey).then(() => {}).finally(() => {
             loadingAlbumsRef.current.delete(albumKey);
           });
           loadingPromises.push(loadPromise);

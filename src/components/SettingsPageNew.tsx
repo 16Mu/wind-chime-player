@@ -14,6 +14,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useUI } from '../contexts/UIContext';
 import { searchSettings } from '../utils/settingsSearch';
 import type { SettingItem } from '../utils/settingsSearch';
+import type { Page } from '../types/music';
 import { SearchResultsDropdown } from './settings/SearchResultsDropdown';
 
 // 设置分类Tab
