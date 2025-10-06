@@ -20,6 +20,11 @@ interface UIContextValue {
   // 搜索状态
   searchQuery: string;
   
+  // 设置搜索状态
+  settingsSearchQuery: string;
+  settingsSearchVisible: boolean;
+  highlightedSettingId: string | null;
+  
   // 侧边栏状态
   sidebarCollapsed: boolean;
   
@@ -27,6 +32,11 @@ interface UIContextValue {
   navigateTo: (page: Page) => void;
   setSearchQuery: (query: string) => void;
   clearSearch: () => void;
+  setSettingsSearchQuery: (query: string) => void;
+  clearSettingsSearch: () => void;
+  showSettingsSearch: () => void;
+  hideSettingsSearch: () => void;
+  setHighlightedSettingId: (id: string | null) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 }
@@ -47,6 +57,11 @@ export function UIProvider({ children, initialPage = 'library' }: UIProviderProp
 
   // ========== 搜索状态 ==========
   const [searchQuery, setSearchQueryState] = useState('');
+
+  // ========== 设置搜索状态 ==========
+  const [settingsSearchQuery, setSettingsSearchQueryState] = useState('');
+  const [settingsSearchVisible, setSettingsSearchVisible] = useState(false);
+  const [highlightedSettingId, setHighlightedSettingIdState] = useState<string | null>(null);
 
   // ========== 侧边栏状态 ==========
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(false);
@@ -83,6 +98,45 @@ export function UIProvider({ children, initialPage = 'library' }: UIProviderProp
     setSearchQueryState('');
   }, []);
 
+  // ========== 设置搜索操作 ==========
+
+  /**
+   * 设置设置搜索查询
+   */
+  const setSettingsSearchQuery = useCallback((query: string) => {
+    setSettingsSearchQueryState(query);
+  }, []);
+
+  /**
+   * 清空设置搜索
+   */
+  const clearSettingsSearch = useCallback(() => {
+    setSettingsSearchQueryState('');
+  }, []);
+
+  /**
+   * 显示设置搜索框
+   */
+  const showSettingsSearch = useCallback(() => {
+    setSettingsSearchVisible(true);
+  }, []);
+
+  /**
+   * 隐藏设置搜索框
+   */
+  const hideSettingsSearch = useCallback(() => {
+    setSettingsSearchVisible(false);
+    setSettingsSearchQueryState('');
+    setHighlightedSettingIdState(null);
+  }, []);
+
+  /**
+   * 设置高亮的设置项ID
+   */
+  const setHighlightedSettingId = useCallback((id: string | null) => {
+    setHighlightedSettingIdState(id);
+  }, []);
+
   // ========== 侧边栏操作 ==========
 
   /**
@@ -109,6 +163,11 @@ export function UIProvider({ children, initialPage = 'library' }: UIProviderProp
     // 搜索
     searchQuery,
     
+    // 设置搜索
+    settingsSearchQuery,
+    settingsSearchVisible,
+    highlightedSettingId,
+    
     // 侧边栏
     sidebarCollapsed,
     
@@ -116,6 +175,11 @@ export function UIProvider({ children, initialPage = 'library' }: UIProviderProp
     navigateTo,
     setSearchQuery,
     clearSearch,
+    setSettingsSearchQuery,
+    clearSettingsSearch,
+    showSettingsSearch,
+    hideSettingsSearch,
+    setHighlightedSettingId,
     toggleSidebar,
     setSidebarCollapsed,
   };

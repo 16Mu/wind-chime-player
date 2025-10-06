@@ -92,8 +92,8 @@ export const MusicLibrarySelectorDialog: React.FC<MusicLibrarySelectorDialogProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-dark-100 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-8 pb-32 overflow-y-auto">
+      <div className="bg-white dark:bg-dark-100 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[calc(100vh-180px)] flex flex-col my-auto">
         {/* 标题栏 */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-dark-400">
           <div>

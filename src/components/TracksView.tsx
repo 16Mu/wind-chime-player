@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import TrackRow from './TrackRow';
 import { useHoverAnimation } from '../hooks/useHoverAnimation';
 import { useAlbumCovers } from '../hooks/useAlbumCovers';
 import { useResponsiveDensity } from '../hooks/useResponsiveDensity';
@@ -13,7 +12,7 @@ interface Track {
   duration_ms?: number;
 }
 
-interface TracksViewProps {
+export interface TracksViewProps {
   tracks: Track[];
   onTrackSelect: (track: Track) => void;
   isLoading: boolean;
@@ -21,6 +20,8 @@ interface TracksViewProps {
   showFavoriteButtons?: boolean;
   onFavoriteChange?: (trackId: number, isFavorite: boolean) => void;
   onAddToPlaylist?: (track: Track) => void;
+  enableDragSort?: boolean;
+  onDragEnd?: (fromIndex: number, toIndex: number) => void;
 }
 
 export default function TracksView({
@@ -30,11 +31,17 @@ export default function TracksView({
   selectedTrackId,
   showFavoriteButtons = false,
   onFavoriteChange,
-  onAddToPlaylist
+  onAddToPlaylist,
+  enableDragSort = false,
+  onDragEnd
 }: TracksViewProps) {
   // 状态管理
   const [hoveredRowIndex, setHoveredRowIndex] = useState<number>(-1);
   const [favoriteStates, setFavoriteStates] = useState<{ [trackId: number]: boolean }>({});
+  
+  // 拖拽状态
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,6 +67,41 @@ export default function TracksView({
     const newState = !favoriteStates[trackId];
     setFavoriteStates(prev => ({ ...prev, [trackId]: newState }));
     onFavoriteChange?.(trackId, newState);
+  };
+
+  // 拖拽事件处理
+  const handleDragStart = (index: number) => {
+    if (!enableDragSort) return;
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (!enableDragSort) return;
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDropTargetIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDropTargetIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    if (!enableDragSort) return;
+    e.preventDefault();
+    
+    if (draggedIndex !== null && draggedIndex !== index && onDragEnd) {
+      onDragEnd(draggedIndex, index);
+    }
+    
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleDragEndEvent = () => {
+    setDraggedIndex(null);
+    setDropTargetIndex(null);
   };
 
   // 加载状态
@@ -91,7 +133,7 @@ export default function TracksView({
           <div className="text-center max-w-md px-6">
             <div className="mb-6 flex justify-center">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center shadow-lg">
-                <svg className="w-10 h-10 text-slate-400 dark:text-dark-700 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-10 h-10 text-slate-400 dark:text-dark-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
               </div>
@@ -109,79 +151,109 @@ export default function TracksView({
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden relative"
+      className="space-y-1 pt-0 pb-[68px]"
       onMouseLeave={handleContainerMouseLeave}
     >
-      {/* 跟随鼠标的简洁悬停背景 */}
-      {hoveredRowIndex >= 0 && hoverIndicator.visible && (
-        <div
-          ref={indicatorRef}
-          className="absolute pointer-events-none z-0"
-          style={{
-            top: `${hoverIndicator.top}px`,
-            height: `${hoverIndicator.height}px`,
-            left: '0',
-            right: '0',
-            width: '100%',
-            background: 'linear-gradient(90deg, rgba(43, 111, 255, 0.03) 0%, rgba(43, 111, 255, 0.06) 50%, rgba(43, 111, 255, 0.03) 100%)',
-            borderRadius: '8px',
-            transition: 'opacity 0.2s ease-out',
-          }}
-        />
-      )}
+      {/* 曲目列表 */}
+      {tracks.map((track, index) => {
+        const isHovered = hoveredRowIndex === index;
+        const isSelected = selectedTrackId === track.id;
+        const albumCoverUrl = albumCoverUrls[track.id];
+        
+        const isDragging = draggedIndex === index;
+        const isDropTarget = dropTargetIndex === index;
+        
+        return (
+          <div
+            key={track.id}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, index)}
+            className={`
+              grid grid-cols-12 gap-3 px-3 py-2 rounded-md group
+              transition-all duration-150 cursor-pointer
+              ${isDragging ? 'opacity-50 scale-95' : ''}
+              ${isDropTarget ? 'bg-brand-100 dark:bg-brand-900/30 ring-2 ring-brand-400 dark:ring-brand-600' : ''}
+              ${isSelected ? 'bg-brand-50 dark:bg-brand-900/20' : 'hover:bg-slate-50 dark:hover:bg-dark-200/50'}
+              animate-fadeInUp
+            `}
+            style={{
+              animationDelay: `${index * 30}ms`
+            }}
+            onClick={() => !isDragging && onTrackSelect(track)}
+            onMouseEnter={() => handleRowMouseEnter(index)}
+          >
+            {/* 封面 + 歌曲信息 */}
+            <div className="col-span-6 flex items-center gap-2.5 min-w-0">
+              {/* 封面 */}
+              <div className="flex-shrink-0 w-11 h-11 rounded-md overflow-hidden bg-slate-100 dark:bg-dark-200">
+                {albumCoverUrl ? (
+                  <img 
+                    src={albumCoverUrl} 
+                    alt={`${track.album || '未知专辑'} 封面`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-dark-700">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              
+              {/* 歌曲信息 */}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-slate-900 dark:text-dark-900 truncate group-hover:text-brand-600 transition-colors leading-snug">
+                  {track.title || '未知标题'}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-dark-700 truncate mt-0.5">
+                  {track.artist || '未知艺术家'}
+                </div>
+              </div>
+            </div>
 
-      {/* 表格 */}
-      <table className="w-full">
-        <thead className="sticky top-0 z-10">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group">
-              <span className="flex items-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
-                <span className="tracking-wide">歌曲</span>
-              </span>
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group hidden md:table-cell">
-              <span className="flex items-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span className="tracking-wide">专辑</span>
-              </span>
-            </th>
-            <th className="px-6 py-3 text-center text-xs font-semibold text-contrast-primary dark:text-dark-800 tracking-wider transition-colors cursor-pointer group min-w-32">
-              <span className="flex items-center justify-center gap-2 whitespace-nowrap">
-                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-dark-600 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="tracking-wide">时长</span>
-              </span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {tracks.map((track, index) => (
-            <TrackRow
-              key={track.id}
-              track={track}
-              index={index}
-              isSelected={selectedTrackId === track.id}
-              isHovered={hoveredRowIndex === index}
-              hoveredIndex={hoveredRowIndex}
-              albumCoverUrl={albumCoverUrls[track.id]}
-              densitySettings={densitySettings}
-              showFavoriteButtons={showFavoriteButtons}
-              isFavorite={favoriteStates[track.id]}
-              onSelect={() => onTrackSelect(track)}
-              onHover={() => handleRowMouseEnter(index)}
-              onFavoriteToggle={() => handleFavoriteToggle(track.id)}
-              onAddToPlaylist={onAddToPlaylist ? () => onAddToPlaylist(track) : undefined}
-              rowRef={(el) => { rowRefs.current[index] = el; }}
-            />
-          ))}
-        </tbody>
-      </table>
+            {/* 专辑 + 拖拽手柄 */}
+            <div className="col-span-4 flex items-center gap-2 min-w-0">
+              {/* 拖拽手柄 - 仅在拖拽模式下显示 */}
+              {enableDragSort && (
+                <div
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    handleDragStart(index);
+                  }}
+                  onDragEnd={(e) => {
+                    e.stopPropagation();
+                    handleDragEndEvent();
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-shrink-0 text-slate-400 dark:text-dark-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-move p-1 hover:text-slate-600 dark:hover:text-dark-800"
+                  title="拖动以调整顺序"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                  </svg>
+                </div>
+              )}
+              
+              <div className="text-xs text-slate-600 dark:text-dark-700 truncate">
+                {track.album || '未知专辑'}
+              </div>
+            </div>
+
+            {/* 时长 */}
+            <div className="col-span-2 flex items-center justify-center">
+              <div className="text-xs text-slate-500 dark:text-dark-700 font-mono">
+                {track.duration_ms 
+                  ? `${Math.floor(track.duration_ms / 60000)}:${String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}`
+                  : '--:--'
+                }
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

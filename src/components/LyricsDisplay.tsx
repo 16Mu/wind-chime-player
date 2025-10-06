@@ -439,11 +439,9 @@ function LyricsDisplay({
                 try {
                   console.log('🎵 [用户点击] LyricsDisplay用户点击第', index, '行，时间戳:', line.timestamp_ms);
                   
-                  // 跳转到指定时间点（确保是整数）
-                  await invoke('player_seek', { positionMs: Math.floor(line.timestamp_ms) });
-                  if (isPlaying) {
-                    await invoke('player_resume');
-                  }
+                  // 🔥 使用混合播放器跳转
+                  const { hybridPlayer } = await import('../services/hybridPlayer');
+                  await hybridPlayer.seek(Math.floor(line.timestamp_ms));
                   
                   // 沉浸式模式的离散滚动会自动处理位置
                 } catch (error) {

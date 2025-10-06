@@ -21,16 +21,18 @@ import PlaylistsPage from './components/PlaylistsPage';
 import FavoritesView from './components/FavoritesView';
 import SettingsPageNew from './components/SettingsPageNew';
 import PlayHistoryPage from './components/PlayHistoryPage';
+import SearchBar from './components/ui/SearchBar';
 
 // Contexts
 import { ThemeProvider } from './contexts/ThemeContext';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { LibraryProvider, useLibrary } from './contexts/LibraryContext';
-import { PlaybackProvider } from './contexts/PlaybackContext';
+import { PlaybackProvider, usePlaybackControl } from './contexts/PlaybackContext';
 import { PlaylistProvider } from './contexts/PlaylistContext';
 import { PlayHistoryProvider } from './contexts/PlayHistoryContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { RemoteSourceProvider } from './contexts/RemoteSourceContext';
+import { CoverCacheProvider } from './contexts/CoverCacheContext';
 // ConfigProvider 已移除（高级设置功能已删除）
 // import { ConfigProvider } from './contexts/ConfigContext';
 
@@ -165,6 +167,7 @@ function AppContent() {
   const { currentPage, pageAnimationKey, searchQuery, sidebarCollapsed } = useUI();
   const { navigateTo, setSearchQuery, clearSearch, setSidebarCollapsed } = useUI();
   const { tracks, searchTracks } = useLibrary();
+  const updatePlaybackState = usePlaybackControl();
 
   // 本地状态：只保留确实需要的
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -181,6 +184,8 @@ function AppContent() {
   const tracksLengthRef = useRef(0);
   const isPlayRequestPendingRef = useRef(false); // 是否有播放请求正在处理
   const latestRequestedTrackRef = useRef<Track | null>(null); // 最新请求的曲目
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null); // 延迟重试定时器
+  const currentPlayingTrackIdRef = useRef<number | null>(null); // 当前正在播放的歌曲ID
   
   // 当tracks变化时重置播放列表加载状态
   useEffect(() => {
@@ -189,12 +194,27 @@ function AppContent() {
       tracksLengthRef.current = tracks.length;
       console.log(`📋 [TRACKS] 曲目数量变化: ${tracks.length}, 重置播放列表状态`);
     }
+    
+    // 清理定时器
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
   }, [tracks]);
   
   // 🎯 终极方案：强制串行化，同时只有一个播放请求
   const handleTrackSelect = useCallback(async (track: Track) => {
     const timestamp = Date.now();
     console.log(`🎯 [${timestamp}] 点击播放:`, track.id, track.title);
+    
+    // 🔥 清除之前的重试定时器
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+      console.log(`🧹 [${timestamp}] 清除之前的重试定时器`);
+    }
     
     // 立即更新UI反馈
     setSelectedTrack(track);
@@ -216,44 +236,56 @@ function AppContent() {
         const targetTrack = latestRequestedTrackRef.current;
         if (!targetTrack) return;
         
+        // 🔥 防止重复播放同一首歌
+        if (currentPlayingTrackIdRef.current === targetTrack.id) {
+          console.log(`⏭️ 跳过重复播放: track ${targetTrack.id} 已经在播放中`);
+          return;
+        }
+        
         const execTimestamp = Date.now();
-        console.log(`▶️ [${execTimestamp}] 执行播放（使用 Web Audio Player）:`, targetTrack.id, targetTrack.title);
+        console.log(`▶️ [${execTimestamp}] 执行播放（使用混合播放器）:`, targetTrack.id, targetTrack.title);
         
-        // 🔥 使用 Web Audio Player 播放
-        const { webAudioPlayer } = await import('./services/webAudioPlayer');
+        // 🔥 使用混合播放器（Rust 流式 + Web Audio 后台加载）
+        const { hybridPlayer } = await import('./services/hybridPlayer');
         
-        // 设置播放列表
-        if (!playlistLoadedRef.current && tracks.length > 0) {
-          console.log(`📋 [${execTimestamp}] 设置播放列表 (${tracks.length}首)`);
-          const currentIndex = tracks.findIndex(t => t.id === targetTrack.id);
-          webAudioPlayer.setPlaylist(tracks, currentIndex >= 0 ? currentIndex : 0);
-          playlistLoadedRef.current = true;
-        }
+        // 播放歌曲（立即使用 Rust 流式播放，后台加载 Web Audio）
+        const playSuccess = await hybridPlayer.play(targetTrack, tracks);
         
-        // 加载并播放歌曲
-        console.log(`🎵 [${execTimestamp}] 开始加载歌曲...`);
-        const loadSuccess = await webAudioPlayer.loadTrack(targetTrack);
-        if (!loadSuccess) {
-          throw new Error('加载歌曲失败');
-        }
-        
-        const playSuccess = await webAudioPlayer.play();
         if (!playSuccess) {
           throw new Error('播放失败');
         }
         
-        console.log(`✅ [${execTimestamp}] 播放命令完成`);
+        // 🔥 立即更新 PlaybackContext 状态（不等待 Rust 事件）
+        updatePlaybackState({
+          track: targetTrack,
+          isPlaying: true,
+        });
+        
+        // 🔥 更新当前播放的歌曲 ID
+        currentPlayingTrackIdRef.current = targetTrack.id;
+        
+        playlistLoadedRef.current = true;
+        console.log(`✅ [${execTimestamp}] 播放命令完成（Rust 已启动，Web Audio 后台加载中...）`);
       } catch (error) {
         console.error(`❌ 播放失败:`, error);
       } finally {
         // 处理完成，检查是否有新的目标
         isPlayRequestPendingRef.current = false;
         
-        // 如果有新的目标，延迟后再次执行
-        if (latestRequestedTrackRef.current !== track) {
-          console.log(`🔄 检测到新目标，500ms后执行`);
-          setTimeout(() => {
-            if (latestRequestedTrackRef.current && !isPlayRequestPendingRef.current) {
+        // 🔥 清除之前的重试定时器
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+        
+        // 如果有新的目标且不是当前播放的歌曲，延迟后再次执行
+        const latestTrack = latestRequestedTrackRef.current;
+        if (latestTrack && latestTrack.id !== currentPlayingTrackIdRef.current) {
+          console.log(`🔄 检测到新目标（${latestTrack.title}），500ms后执行`);
+          retryTimerRef.current = setTimeout(() => {
+            if (latestRequestedTrackRef.current && 
+                !isPlayRequestPendingRef.current &&
+                latestRequestedTrackRef.current.id !== currentPlayingTrackIdRef.current) {
               isPlayRequestPendingRef.current = true;
               executePlay();
             }
@@ -292,22 +324,32 @@ function AppContent() {
     }
   }, []);
 
-  const handleDragStart = useCallback(async (e: React.MouseEvent) => {
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('[data-tauri-drag-region="false"]')) return;
     
-    try {
-      await getCurrentWindow().startDragging();
-    } catch (error) {
-      console.error('拖拽失败:', error);
+    // 优化：使用 dataset 检查，比 closest 更快
+    if (target.dataset.tauriDragRegion === 'false') return;
+    
+    // 检查父元素（最多检查3层，避免深度遍历）
+    let current: HTMLElement | null = target;
+    let depth = 0;
+    while (current && depth < 3) {
+      if (current.dataset.tauriDragRegion === 'false') return;
+      current = current.parentElement;
+      depth++;
     }
+    
+    // 异步启动拖动，不阻塞主线程
+    getCurrentWindow().startDragging().catch(error => {
+      console.error('拖拽失败:', error);
+    });
   }, []);
 
   // ========== 渲染 ==========
 
   return (
     <div className="app-container">
-      {/* 顶部标题栏 */}
+      {/* 顶部标题栏 - 优化性能：移除不必要的样式计算 */}
       <header 
         className="app-header h-16 flex items-center justify-between px-6 relative dark:bg-dark-100/90 dark:border-dark-500/30"
         onMouseDown={handleDragStart}
@@ -325,30 +367,14 @@ function AppContent() {
           </div>
         </div>
 
-        {/* 搜索栏 */}
-        <div className="w-full max-w-md mx-8 relative z-20" data-tauri-drag-region="false">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="搜索音乐、艺术家或专辑..."
-              className="glass-input w-full pr-10 dark:bg-glass-dark-bg dark:border-glass-dark-border dark:text-dark-900"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {searchQuery ? (
-                <button onClick={clearSearch} className="text-slate-400 dark:text-dark-700 hover:text-slate-600">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              ) : (
-                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              )}
-            </div>
-          </div>
+        {/* 搜索栏 - 外层容器允许拖拽，只有搜索框本身不可拖拽 */}
+        <div className="w-full max-w-md mx-8 relative z-20">
+          <SearchBar 
+            value={searchQuery}
+            onChange={handleSearch}
+            onClear={clearSearch}
+            placeholder="搜索音乐、艺术家或专辑..."
+          />
         </div>
 
         {/* 窗口控制按钮 */}
@@ -381,7 +407,7 @@ function AppContent() {
         
         <main className="app-content">
           {currentPage === 'explore' && (
-            <div key={`explore-${pageAnimationKey}`} className="page-transition p-6 pb-28 h-full">
+            <div key={`explore-${pageAnimationKey}`} className="page-transition p-6 h-full overflow-y-auto">
               <div className="glass-card h-full">
                 <ExplorePage />
               </div>
@@ -389,7 +415,7 @@ function AppContent() {
           )}
           
           {currentPage === 'library' && (
-            <div key={`library-${pageAnimationKey}`} className="page-transition p-6 pb-28">
+            <div key={`library-${pageAnimationKey}`} className="page-transition h-full">
               <LibraryPage 
                 onTrackSelect={handleTrackSelect}
                 selectedTrackId={selectedTrack?.id}
@@ -398,7 +424,7 @@ function AppContent() {
           )}
           
           {currentPage === 'playlists' && (
-            <div key={`playlists-${pageAnimationKey}`} className="page-transition p-6 h-full">
+            <div key={`playlists-${pageAnimationKey}`} className="page-transition p-6 h-full overflow-y-auto">
               <PlaylistsPage 
                 onTrackSelect={handleTrackSelect}
                 selectedTrackId={selectedTrack?.id}
@@ -407,13 +433,13 @@ function AppContent() {
           )}
           
           {currentPage === 'history' && (
-            <div key={`history-${pageAnimationKey}`} className="page-transition p-6 pb-28">
+            <div key={`history-${pageAnimationKey}`} className="page-transition p-6 h-full overflow-y-auto">
               <PlayHistoryPage />
             </div>
           )}
           
           {currentPage === 'favorite' && (
-            <div key={`favorite-${pageAnimationKey}`} className="page-transition p-6 pb-28">
+            <div key={`favorite-${pageAnimationKey}`} className="page-transition p-6 h-full overflow-y-auto">
               <FavoritesView 
                 onTrackSelect={handleTrackSelect}
                 selectedTrackId={selectedTrack?.id}
@@ -422,7 +448,7 @@ function AppContent() {
           )}
           
           {currentPage === 'genres' && (
-            <div key={`genres-${pageAnimationKey}`} className="page-transition p-6 pb-28 h-full">
+            <div key={`genres-${pageAnimationKey}`} className="page-transition p-6 h-full overflow-y-auto">
               <div className="glass-card h-full flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-slate-400 dark:text-dark-700 mb-6">
@@ -448,7 +474,7 @@ function AppContent() {
           <div 
             className="content-player-container"
             style={{
-              '--sidebar-width': sidebarCollapsed ? '80px' : '240px'
+              '--sidebar-width': sidebarCollapsed ? '80px' : undefined // 🔥 不展开时为 80px，展开时由 CSS 媒体查询控制
             } as React.CSSProperties}
           >
             <PlaylistPlayer currentTrack={selectedTrack} />
@@ -474,19 +500,21 @@ export default function App() {
   return (
     <ThemeProvider>
       <RemoteSourceProvider>
-        <UIProvider initialPage="library">
-          <LibraryProvider>
-            <PlaybackProvider>
-              <PlaylistProvider>
-                <PlayHistoryProvider>
-                  <ToastProvider>
-                    <AppContent />
-                  </ToastProvider>
-                </PlayHistoryProvider>
-              </PlaylistProvider>
-            </PlaybackProvider>
-          </LibraryProvider>
-        </UIProvider>
+        <CoverCacheProvider>
+          <UIProvider initialPage="library">
+            <LibraryProvider>
+              <PlaybackProvider>
+                <PlaylistProvider>
+                  <PlayHistoryProvider>
+                    <ToastProvider>
+                      <AppContent />
+                    </ToastProvider>
+                  </PlayHistoryProvider>
+                </PlaylistProvider>
+              </PlaybackProvider>
+            </LibraryProvider>
+          </UIProvider>
+        </CoverCacheProvider>
       </RemoteSourceProvider>
     </ThemeProvider>
   );

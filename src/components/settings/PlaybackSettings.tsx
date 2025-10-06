@@ -4,7 +4,11 @@ import { useToast } from '../../contexts/ToastContext';
 import { AudioDiagnosticTool } from '../AudioDiagnosticTool';
 import { SettingSection } from './ui/SettingSection';
 
-export default function PlaybackSettings() {
+interface PlaybackSettingsProps {
+  highlightedSettingId?: string | null;
+}
+
+export default function PlaybackSettings({ highlightedSettingId }: PlaybackSettingsProps = {}) {
   const toast = useToast();
   const [isResettingAudio, setIsResettingAudio] = useState(false);
 
@@ -45,6 +49,8 @@ export default function PlaybackSettings() {
     <div className="space-y-6">
       {/* 音频设备管理 */}
       <SettingSection
+        sectionId="audio-device"
+        isHighlighted={highlightedSettingId === 'playback-audio-device'}
         title="音频设备管理"
         description="诊断和管理音频设备"
         icon={
@@ -105,6 +111,8 @@ export default function PlaybackSettings() {
 
       {/* 音质增强设置 */}
       <SettingSection
+        sectionId="audio-enhancement"
+        isHighlighted={highlightedSettingId === 'playback-quality'}
         title="音质增强"
         description="均衡器和音效设置"
         badge={{ text: '待开发', variant: 'neutral' }}
@@ -123,6 +131,8 @@ export default function PlaybackSettings() {
 
       {/* 播放行为设置 */}
       <SettingSection
+        sectionId="playback-behavior"
+        isHighlighted={highlightedSettingId === 'playback-behavior'}
         title="播放行为"
         description="自动播放和淡入淡出"
         badge={{ text: '即将推出', variant: 'info' }}

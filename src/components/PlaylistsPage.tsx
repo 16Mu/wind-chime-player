@@ -19,7 +19,6 @@ import { PlaylistDetail } from './playlist/PlaylistDetail';
 import { CreatePlaylistDialog } from './playlist/CreatePlaylistDialog';
 import { SmartPlaylistEditor } from './playlist/SmartPlaylistEditor';
 import { MusicLibrarySelectorDialog } from './playlist/MusicLibrarySelectorDialog';
-import { PlaylistStatsCard } from './PlaylistStatsCard';
 import type { Track } from '../types/music';
 
 interface PlaylistsPageProps {
@@ -55,6 +54,10 @@ export default function PlaylistsPage({ onTrackSelect }: PlaylistsPageProps) {
 
   const handleCreateClick = () => {
     setViewMode('create');
+  };
+
+  const handleCreateSmartClick = () => {
+    setViewMode('create-smart');
   };
 
   const handleCreateSuccess = () => {
@@ -114,13 +117,11 @@ export default function PlaylistsPage({ onTrackSelect }: PlaylistsPageProps) {
     <div className="h-full">
       {/* 歌单列表视图 */}
       {viewMode === 'list' && (
-        <div className="h-full animate-fade-in space-y-6">
-          {/* 歌单统计卡片 */}
-          <PlaylistStatsCard />
-          
+        <div className="h-full animate-fade-in">
           {/* 歌单列表 */}
           <PlaylistsView
             onCreateClick={handleCreateClick}
+            onCreateSmartClick={handleCreateSmartClick}
             onPlaylistClick={handlePlaylistClick}
           />
         </div>
@@ -162,6 +163,7 @@ export default function PlaylistsPage({ onTrackSelect }: PlaylistsPageProps) {
       {/* 创建智能歌单对话框 */}
       {viewMode === 'create-smart' && (
         <SmartPlaylistEditor
+          isCreateMode={true}
           onClose={handleBackToList}
           onSuccess={handleCreateSuccess}
         />

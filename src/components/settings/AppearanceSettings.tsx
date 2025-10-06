@@ -12,6 +12,7 @@ interface AppearanceSettingsProps {
   onThemeChange: (theme: 'system' | 'light' | 'dark') => void;
   isHighContrast: boolean;
   onToggleHighContrast: () => void;
+  highlightedSettingId?: string | null;
 }
 
 export default function AppearanceSettings({
@@ -19,12 +20,15 @@ export default function AppearanceSettings({
   onThemeChange,
   isHighContrast,
   onToggleHighContrast,
+  highlightedSettingId
 }: AppearanceSettingsProps) {
 
   return (
     <div className="space-y-6">
       {/* 主题设置 */}
       <SettingSection
+        sectionId="theme-settings"
+        isHighlighted={highlightedSettingId === 'appearance-theme'}
         title="界面主题"
         description="选择你喜欢的界面外观"
         icon={
@@ -82,6 +86,8 @@ export default function AppearanceSettings({
 
       {/* 可访问性 */}
       <SettingSection
+        sectionId="accessibility"
+        isHighlighted={highlightedSettingId === 'appearance-contrast'}
         title="可访问性"
         description="改善视觉体验和可读性"
         icon={

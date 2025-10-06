@@ -304,6 +304,9 @@ impl Library {
             duration_ms: metadata.duration_ms.map(|d| d as i64),
             album_cover_data: metadata.album_cover_data,
             album_cover_mime: metadata.album_cover_mime,
+            artist_photo_data: metadata.artist_photo_data,
+            artist_photo_mime: metadata.artist_photo_mime,
+            embedded_lyrics: metadata.embedded_lyrics,
         };
 
         let db = self.db.lock().unwrap();

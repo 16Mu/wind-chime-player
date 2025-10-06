@@ -7,6 +7,13 @@ import GradualBlurMask from './lyrics/GradualBlurMask';
 // 歌词滚动配置参数（严格按照手册第9章推荐）
 // 🎨 动画效果预设方案
 const ANIMATION_PRESETS = {
+  // 线性系列 📏
+  LINEAR_SMOOTH: {
+    easing: 'linear',
+    durBase: 300, durK: 0.8, durMin: 350, durMax: 800,
+    name: '线性平滑'
+  },
+  
   // Q弹系列 🏀
   BOUNCY_SOFT: {
     easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
@@ -788,8 +795,8 @@ function ImmersiveLyricsView({
         }
       }
     }
-    console.log('🎨 [动画设置] 使用默认: BOUNCY_SOFT');
-    return 'BOUNCY_SOFT';
+    console.log('🎨 [动画设置] 使用默认: LINEAR_SMOOTH（线性平滑）');
+    return 'LINEAR_SMOOTH';
   });
   
   
@@ -917,33 +924,35 @@ function ImmersiveLyricsView({
     const targetPosition = Math.floor(percentage * track.duration_ms);
     
     try {
-      // 🔥 使用 Web Audio Player 进行 0 延迟 seek
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      const positionSec = targetPosition / 1000;
-      await webAudioPlayer.seek(positionSec);
-      console.log(`⚡ [沉浸式歌词] Seek 到 ${positionSec.toFixed(2)}s (0 延迟!)`);
+      // 🔥 使用混合播放器进行 seek
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      await hybridPlayer.seek(targetPosition);
+      console.log(`⚡ [沉浸式歌词] Seek 到 ${(targetPosition / 1000).toFixed(2)}s`);
     } catch (error) {
       console.error('Progress seek failed:', error);
     }
   }, [track?.duration_ms, isPlaying]);
 
   // 播放/暂停控制
-  const handlePlayPause = useCallback(() => {
+  const handlePlayPause = useCallback(async () => {
+    const { hybridPlayer } = await import('../services/hybridPlayer');
     if (isPlaying) {
-      invoke('player_pause').catch(console.error);
+      await hybridPlayer.pause().catch(console.error);
     } else {
-      invoke('player_resume').catch(console.error);
+      await hybridPlayer.resume().catch(console.error);
     }
   }, [isPlaying]);
 
   // 上一首
-  const handlePrevious = useCallback(() => {
-    invoke('player_previous').catch(console.error);
+  const handlePrevious = useCallback(async () => {
+    const { hybridPlayer } = await import('../services/hybridPlayer');
+    await hybridPlayer.previous().catch(console.error);
   }, []);
 
   // 下一首  
-  const handleNext = useCallback(() => {
-    invoke('player_next').catch(console.error);
+  const handleNext = useCallback(async () => {
+    const { hybridPlayer } = await import('../services/hybridPlayer');
+    await hybridPlayer.next().catch(console.error);
   }, []);
 
   // 🔧 性能优化：皮肤面板切换函数
@@ -974,10 +983,9 @@ function ImmersiveLyricsView({
         console.log('🎵 [用户点击] 用户点击第', lineIndex, '行，时间戳:', timestampMs);
       }
       
-      // 🔥 跳转到指定时间点（使用 Web Audio Player，0 延迟！）
-      import('../services/webAudioPlayer').then(({ webAudioPlayer }) => {
-        const positionSec = timestampMs / 1000;
-        webAudioPlayer.seek(positionSec).catch((error) => {
+      // 🔥 跳转到指定时间点（使用混合播放器）
+      import('../services/hybridPlayer').then(({ hybridPlayer }) => {
+        hybridPlayer.seek(timestampMs).catch((error) => {
           console.error('Lyrics seek failed:', error);
         });
       });
@@ -2413,45 +2421,149 @@ interface ProgressBarProps {
 
 const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: ProgressBarProps) => {
   const [displayPosition, setDisplayPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPosition, setDragPosition] = useState(0);
   const getPos = usePlaybackPosition();
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const dragPositionRef = useRef(0);
   
+  // 🔥 使用 rAF 实时更新进度条（流畅显示）
   useEffect(() => {
-    if (!isPlaying) return;
-    
-    // 每秒更新一次进度显示（独立于父组件）
-    const interval = setInterval(() => {
+    if (!isPlaying || isDragging) {
+      // 暂停或拖拽时，立即更新一次
       const pos = getPos();
       if (typeof pos === 'number' && !isNaN(pos)) {
         setDisplayPosition(pos);
       }
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [isPlaying, getPos]);
-  
-  // 播放状态变化时立即更新一次
-  useEffect(() => {
-    const pos = getPos();
-    if (typeof pos === 'number' && !isNaN(pos)) {
-      setDisplayPosition(pos);
+      return;
     }
-  }, [isPlaying, getPos]);
+    
+    let frameId: number;
+    const updatePosition = () => {
+      const pos = getPos();
+      if (typeof pos === 'number' && !isNaN(pos)) {
+        setDisplayPosition(pos);
+      }
+      frameId = requestAnimationFrame(updatePosition);
+    };
+    
+    frameId = requestAnimationFrame(updatePosition);
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying, isDragging, getPos]);
+  
+  // 🔥 进度条拖拽处理
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!track?.duration_ms || !progressBarRef.current) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+    const position = Math.floor(percentage * track.duration_ms);
+    
+    // 🔥 立即更新所有相关状态，确保跟手
+    setIsDragging(true);
+    setDragPosition(position);
+    setDisplayPosition(position);  // 同时更新显示位置
+    dragPositionRef.current = position;
+  }, [track?.duration_ms]);
+  
+  // 🔥 拖拽处理
+  useEffect(() => {
+    if (!isDragging || !track?.duration_ms) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!progressBarRef.current) return;
+      
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, mouseX / rect.width));
+      const position = Math.floor(percentage * track.duration_ms);
+      
+      // 🔥 同时更新拖拽位置和显示位置，确保实时跟手
+      setDragPosition(position);
+      setDisplayPosition(position);  // 立即更新显示
+      dragPositionRef.current = position;
+    };
+    
+    const handleMouseUp = async () => {
+      setIsDragging(false);
+      
+      // 执行 seek（使用 ref 获取最新位置）
+      const finalPosition = dragPositionRef.current;
+      
+      // 🔥 立即更新显示位置（在实际 seek 之前）
+      setDisplayPosition(finalPosition);
+      
+      // 创建模拟事件对象传递给 onSeek
+      const mockEvent = {
+        currentTarget: progressBarRef.current,
+        clientX: 0, // 我们直接使用 finalPosition，不需要计算
+        target: progressBarRef.current,
+        preventDefault: () => {},
+        stopPropagation: () => {}
+      } as any;
+      
+      // 执行 seek
+      try {
+        // 直接调用 hybridPlayer，不通过 onSeek（避免重复计算）
+        const { hybridPlayer } = await import('../services/hybridPlayer');
+        await hybridPlayer.seek(finalPosition);
+        console.log(`⚡ [沉浸式歌词-拖拽] Seek 到 ${(finalPosition / 1000).toFixed(2)}s`);
+      } catch (error) {
+        console.error('Progress drag seek failed:', error);
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, track?.duration_ms]);
+  
+  // 🔥 修改点击处理：立即更新位置，然后执行 seek
+  const handleClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!track?.duration_ms || isDragging) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const targetPosition = Math.floor(percentage * track.duration_ms);
+    
+    // 🔥 立即更新显示位置
+    setDisplayPosition(targetPosition);
+    
+    // 然后执行 seek
+    await onSeek(e);
+  }, [track?.duration_ms, isDragging, onSeek]);
+  
+  // 当前显示的位置（拖拽时用拖拽位置，否则用实际位置）
+  const currentDisplayPosition = isDragging ? dragPosition : displayPosition;
   
   return (
     <div className={`space-y-3 max-w-2xl mx-auto ${className || ''}`}>
       <div className="flex justify-between text-sm font-medium text-white/70">
-        <span>{formatTime(displayPosition)}</span>
+        <span>{formatTime(currentDisplayPosition)}</span>
         <span>{formatTime(track?.duration_ms || 0)}</span>
       </div>
       <div 
+        ref={progressBarRef}
         className="relative h-2 bg-white/20 rounded-full backdrop-blur-sm cursor-pointer group"
-        onClick={onSeek}
+        onClick={handleClick}
+        onMouseDown={handleMouseDown}
       >
         <div 
-          className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
+          className="absolute top-0 left-0 h-full rounded-full"
           style={{ 
-            width: `${track?.duration_ms ? (displayPosition / track.duration_ms) * 100 : 0}%`,
+            width: `${track?.duration_ms ? (currentDisplayPosition / track.duration_ms) * 100 : 0}%`,
             background: 'linear-gradient(90deg, var(--progress-color-from), var(--progress-color-to))',
+            // 🔥 拖拽时禁用过渡，提高跟手性
+            transition: isDragging ? 'none' : 'all 0.15s ease-out',
             boxShadow: `
               0 0 0 1px rgba(255, 255, 255, 0.6),
               0 0 8px rgba(255, 255, 255, 0.3),
@@ -2462,10 +2574,12 @@ const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: Progres
         >
           {/* 拖拽手柄 */}
           <div 
-            className="absolute right-0 top-1/2 w-[18px] h-[18px] bg-white rounded-full transition-all group-hover:opacity-100 group-hover:scale-110"
+            className={`absolute right-0 top-1/2 w-[18px] h-[18px] bg-white rounded-full ${isDragging ? 'opacity-100 scale-125' : 'group-hover:opacity-100 group-hover:scale-110'}`}
             style={{
-              transform: 'translateY(-50%) scale(0.85)',
-              opacity: 0.7,
+              transform: `translateY(-50%) scale(${isDragging ? 1.25 : 0.85})`,
+              opacity: isDragging ? 1 : 0.7,
+              // 🔥 拖拽时禁用过渡，手柄立即跟随
+              transition: isDragging ? 'none' : 'all 0.2s ease-out',
               border: '2.5px solid var(--progress-color-from)',
               boxShadow: `
                 0 2px 8px var(--progress-glow),

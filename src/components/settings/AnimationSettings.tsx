@@ -3,7 +3,7 @@
  * 包含歌词滚动动画等动效配置
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SettingSection } from './ui/SettingSection';
 import { CollapsiblePanel } from './ui/CollapsiblePanel';
 import { LyricsAnimationSettings } from '../../types/music';
@@ -43,12 +43,27 @@ const ANIMATION_PRESETS = {
   ],
 };
 
+// 模拟歌词数据
+const PREVIEW_LYRICS = [
+  { text: 'Lost in the echo', time: 0 },
+  { text: 'But echo voices', time: 1 },
+  { text: 'No no worry', time: 2 },
+  { text: "Don't worry 'bout", time: 3 },
+  { text: 'So breathe like', time: 4 },
+  { text: 'Dancing in the moonlight', time: 5 },
+  { text: 'Feeling so right', time: 6 },
+];
+
 export default function AnimationSettings({
   lyricsAnimationSettings,
   onUpdateLyricsAnimationSettings,
+  highlightedSettingId
 }: AnimationSettingsProps) {
   const [activeTab, setActiveTab] = useState<'elastic' | 'smooth' | 'fast' | 'slow'>('elastic');
   const [previewKey, setPreviewKey] = useState(0); // 用于触发预览动画
+  const [currentPreviewLine, setCurrentPreviewLine] = useState(2); // 当前预览行索引
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const previewTimerRef = useRef<number | null>(null);
   
   // 获取当前动画类型
   const getCurrentAnimationType = (): 'elastic' | 'smooth' | 'fast' | 'slow' => {
@@ -105,15 +120,69 @@ export default function AnimationSettings({
     setActiveTab(currentType);
   }, []); // 空依赖，只在初始化时执行
 
-  // ✅ 修复2：当动画样式改变时，触发预览动画
+  // ✅ 修复2：当动画样式改变时，触发预览动画并重置歌词
   useEffect(() => {
     setPreviewKey(prev => prev + 1);
+    setCurrentPreviewLine(2); // 重置到中间行
   }, [lyricsAnimationSettings.style]);
+
+  // 自动切换预览歌词
+  useEffect(() => {
+    // 启动定时器，每2.5秒切换一次歌词
+    previewTimerRef.current = window.setInterval(() => {
+      setCurrentPreviewLine(prev => {
+        const next = prev + 1;
+        return next >= PREVIEW_LYRICS.length ? 0 : next;
+      });
+    }, 2500);
+
+    return () => {
+      if (previewTimerRef.current) {
+        clearInterval(previewTimerRef.current);
+      }
+    };
+  }, []);
+
+  // 滚动预览容器，使当前行居中
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+
+    const container = previewContainerRef.current;
+    const lines = container.querySelectorAll<HTMLDivElement>('.preview-lyric-line');
+    const currentLine = lines[currentPreviewLine];
+
+    if (currentLine) {
+      const containerHeight = container.clientHeight;
+      const lineTop = currentLine.offsetTop;
+      const lineHeight = currentLine.clientHeight;
+      const targetScroll = lineTop - (containerHeight / 2) + (lineHeight / 2);
+
+      // 获取当前动画配置
+      const animationStyle = lyricsAnimationSettings.style;
+      const animationCSS = getAnimationCSS(animationStyle);
+      
+      // 从动画CSS中提取时长
+      const durationMatch = animationCSS.match(/([\d.]+)s/);
+      const duration = durationMatch ? parseFloat(durationMatch[1]) * 1000 : 800;
+
+      // 从CSS中提取easing函数
+      const easingMatch = animationCSS.match(/cubic-bezier\([^)]+\)|ease-in-out|ease-out|ease-in|linear/);
+      const easing = easingMatch ? easingMatch[0] : 'cubic-bezier(0.4, 0.0, 0.2, 1)';
+
+      // 应用滚动动画
+      container.style.transition = `transform ${duration}ms ${easing}`;
+      container.style.transform = `translateY(-${targetScroll}px)`;
+    }
+  }, [currentPreviewLine, lyricsAnimationSettings.style]);
 
   return (
     <div className="space-y-6">
       {/* 歌词滚动动画 */}
       <SettingSection
+        sectionId="lyrics-animation"
+        isHighlighted={highlightedSettingId === 'animation-lyrics-scroll' || 
+                     highlightedSettingId === 'animation-lyrics-bouncy' ||
+                     highlightedSettingId === 'animation-lyrics-smooth'}
         title="歌词滚动动画"
         description="自定义歌词切换时的滚动效果"
         icon={
@@ -231,29 +300,45 @@ export default function AnimationSettings({
               <div className="sticky top-4 space-y-3">
                 {/* 预览区标题 */}
                 <div className="bg-gradient-to-r from-brand-50 to-sky-50 dark:from-brand-900/20 dark:to-sky-900/20 p-4 rounded-xl border-2 border-brand-200 dark:border-brand-800">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-5 h-5 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    <span className="font-semibold text-brand-700 dark:text-brand-300 text-sm">💫 效果预览</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      <span className="font-semibold text-brand-700 dark:text-brand-300 text-sm">💫 效果预览</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 dark:text-dark-600">🔄 自动循环</span>
                   </div>
 
                   {/* 模拟歌词滚动 - 真实预览动画 */}
-                  <div className="bg-white/50 dark:bg-dark-800/50 rounded-lg p-4 space-y-2 text-center backdrop-blur-sm overflow-hidden">
-                    <div className="text-xs opacity-60">Lost in the echo</div>
-                    <div className="text-xs opacity-75">But echo voices</div>
+                  <div className="bg-white/50 dark:bg-dark-800/50 rounded-lg p-4 text-center backdrop-blur-sm overflow-hidden relative h-[180px]">
+                    {/* 滚动容器 */}
                     <div 
-                      key={previewKey}
-                      className="text-sm font-semibold text-brand-600 dark:text-brand-400"
+                      ref={previewContainerRef}
+                      className="absolute inset-0 py-20"
                       style={{
-                        animation: getAnimationCSS(lyricsAnimationSettings.style)
+                        willChange: 'transform',
                       }}
                     >
-                      ▶ No no worry ◀
+                      {PREVIEW_LYRICS.map((lyric, index) => (
+                        <div 
+                          key={index}
+                          className={`preview-lyric-line py-2 transition-all duration-300 ${
+                            index === currentPreviewLine 
+                              ? 'text-sm font-semibold text-brand-600 dark:text-brand-400 scale-110' 
+                              : index === currentPreviewLine - 1 || index === currentPreviewLine + 1
+                              ? 'text-xs opacity-75 text-slate-700 dark:text-dark-800'
+                              : 'text-xs opacity-50 text-slate-600 dark:text-dark-700'
+                          }`}
+                        >
+                          {index === currentPreviewLine ? '▶ ' : ''}{lyric.text}{index === currentPreviewLine ? ' ◀' : ''}
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-xs opacity-75">Don't worry 'bout</div>
-                    <div className="text-xs opacity-60">So breathe like</div>
+                    
+                    {/* 中心高亮指示器（可选） */}
+                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-12 bg-brand-500/5 dark:bg-brand-400/5 pointer-events-none border-y border-brand-300/20 dark:border-brand-600/20" />
                   </div>
 
                   {/* 当前效果信息 */}

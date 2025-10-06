@@ -43,18 +43,39 @@ export default function CurrentPlaylistView({
 
 
   useEffect(() => {
-    // 监听播放器状态变化
-    const unlistenStateChanged = listen('player-state-changed', (event: any) => {
-      if (event.payload && typeof event.payload === 'object') {
-        setPlayerState(event.payload);
+    let isActive = true; // 标记组件是否处于活动状态
+    let unlistenStateChanged: (() => void) | null = null;
+    
+    const setupListener = async () => {
+      try {
+        // 监听播放器状态变化
+        unlistenStateChanged = await listen('player-state-changed', (event: any) => {
+          if (!isActive) return; // 🔒 检查组件是否仍然挂载
+          
+          if (event.payload && typeof event.payload === 'object') {
+            setPlayerState(event.payload);
+          }
+        });
+        
+        // 最后检查组件是否还活跃
+        if (!isActive && unlistenStateChanged) {
+          unlistenStateChanged();
+        }
+      } catch (err) {
+        console.error('[CurrentPlaylistView] ❌ 设置监听器失败:', err);
       }
-    });
-
+    };
+    
     // 初始化时获取当前播放列表
     loadCurrentPlaylist();
+    setupListener();
 
     return () => {
-      unlistenStateChanged.then(fn => fn());
+      isActive = false; // 🔒 标记组件为非活动状态
+      
+      if (unlistenStateChanged) {
+        unlistenStateChanged();
+      }
     };
   }, []);
   

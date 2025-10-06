@@ -24,7 +24,11 @@ export default function LibraryOverview({
   
   const handlePlayRecent = async (trackId: number) => {
     try {
-      await invoke('player_play', { trackId, timestamp: Date.now() });
+      // 🔥 先获取 track 信息，再使用混合播放器
+      const track = await invoke('get_track', { trackId });
+      const { hybridPlayer } = await import('../../services/hybridPlayer');
+      await hybridPlayer.play(track as any, []);
+      console.log('✅ 播放最近曲目');
     } catch (error) {
       console.error('播放失败:', error);
     }

@@ -325,45 +325,13 @@ impl PlaybackActor {
                 println!("🌊 [PlaybackActor] 检测到WebDAV远程文件，使用流式播放（边下边播）...");
                 self.decode_streaming(&track.path).await
             } else {
-                // 🎯 本地文件：完整解码到内存（实现 0 延迟 seek）
-                println!("🎵 [PlaybackActor] 解码本地音频文件（完整预加载）: {}...", track.path);
-                let full_decode_start = Instant::now();
-                
+                // 🎯 本地文件：流式解码（立即播放，混合播放器会在后台加载 Web Audio）
+                println!("🎵 [PlaybackActor] 解码本地音频文件（流式播放，立即开始）: {}...", track.path);
                 let decoder = AudioDecoder::new(&track.path);
                 match decoder.decode() {
-                    Ok(source) => {
-                        use rodio::Source;
-                        
-                        // 提取音频参数
-                        let channels = source.channels();
-                        let sample_rate = source.sample_rate();
-                        
-                        println!("📊 [PlaybackActor] 音频参数: {}Hz, {} 声道", sample_rate, channels);
-                        println!("💾 [PlaybackActor] 开始完整解码到内存...");
-                        
-                        // 🔥 关键：立即将整个音频解码到内存
-                        let samples: Vec<i16> = source.collect();
-                        let sample_count = samples.len();
-                        let duration_ms = (sample_count as u64 * 1000) / (sample_rate as u64 * channels as u64);
-                        
-                        println!("✅ [PlaybackActor] 完整解码完成！");
-                        println!("   - 耗时: {}ms", full_decode_start.elapsed().as_millis());
-                        println!("   - 样本数: {} ({:.2}MB)", sample_count, (sample_count * 2) as f64 / 1024.0 / 1024.0);
-                        println!("   - 时长: {:.2}s", duration_ms as f64 / 1000.0);
-                        
-                        // 🎯 立即缓存（这样首次播放就支持 0 延迟 seek）
-                        self.cached_samples = Some(CachedAudioSamples {
-                            samples: std::sync::Arc::from(samples.clone().into_boxed_slice()),
-                            channels,
-                            sample_rate,
-                        });
-                        println!("✅ [PlaybackActor] 样本已缓存，支持 0 延迟 seek！");
-                        
-                        // 使用内存中的样本创建音频源
-                        use rodio::buffer::SamplesBuffer;
-                        let source = SamplesBuffer::new(channels, sample_rate, samples);
-                        
-                        Ok(Box::new(source) as Box<dyn rodio::Source<Item = i16> + Send>)
+                    Ok(s) => {
+                        println!("✅ [PlaybackActor] 本地文件流式解码器已创建（立即播放）");
+                        Ok(Box::new(s) as Box<dyn rodio::Source<Item = i16> + Send>)
                     }
                     Err(e) => {
                         println!("❌ [PlaybackActor] 音频解码失败: {}", e);
@@ -417,8 +385,9 @@ impl PlaybackActor {
         
         println!("✅ [PlaybackActor] handle_play完成 (总耗时: {}ms)", start.elapsed().as_millis());
         
-        // 🔥 后台缓存：仅 WebDAV 需要后台完整下载（用于支持 seek）
-        // 本地文件已在首次播放时完整解码并缓存，无需后台任务
+        // 🔥 后台缓存策略：
+        // - 本地文件：不需要后台缓存（混合播放器会使用 Web Audio）
+        // - WebDAV 文件：后台完整下载（支持 seek）
         if !has_cache && track.path.starts_with("webdav://") {
             println!("💾 [PlaybackActor] WebDAV 文件启动后台完整下载任务（支持 seek）");
             let track_path = track.path.clone();
@@ -428,18 +397,14 @@ impl PlaybackActor {
                 println!("🔧 [后台下载] 开始下载 WebDAV 完整文件...");
                 
                 // TODO: 实现 WebDAV 完整下载和缓存
-                // 这将使 WebDAV 文件也能支持快速 seek
                 println!("⚠️ [后台下载] WebDAV 完整下载功能待实现");
                 
-                // 预期流程：
-                // 1. 完整下载 WebDAV 文件
-                // 2. 解码为样本数组
-                // 3. 发送 CacheSamples 消息
-                // 4. 后续 seek 就能 0 延迟了
-                
-                let _ = inbox_tx; // 避免未使用警告
+                let _ = inbox_tx;
                 let _ = track_path;
             });
+        } else if !has_cache {
+            // 本地文件：不启动后台缓存（混合播放器会处理）
+            println!("ℹ️ [PlaybackActor] 本地文件使用混合播放器策略，Rust 仅提供流式播放");
         }
         
         // 发送事件

@@ -16,14 +16,16 @@
         "title": "WindChime Player", 
         "width": 1200,
         "height": 800,
-        "minWidth": 800,
+        "minWidth": 950,
         "minHeight": 600,
         "maxWidth": null,
         "maxHeight": null,
         "decorations": false,
         "resizable": true,
         "transparent": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "skipTaskbar": false,
+        "additionalBrowserArgs": "--enable-gpu-rasterization --enable-zero-copy"
       }
     ],
     "security": {

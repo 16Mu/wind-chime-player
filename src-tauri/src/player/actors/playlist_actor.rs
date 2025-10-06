@@ -177,16 +177,31 @@ impl PlaylistActor {
             return None;
         }
         
-        // 单曲循环模式
+        // 单曲循环模式：不添加历史，直接返回当前曲目
         if self.repeat_mode == RepeatMode::One {
             if let Some(idx) = self.current_index {
                 return self.original_playlist.get(idx).cloned();
             }
         }
         
+        // 🔥 先保存当前曲目到历史（在切换之前）
+        if let Some(current_idx) = self.current_index {
+            if let Some(current_track) = self.original_playlist.get(current_idx).cloned() {
+                log::debug!("⏭️ 保存当前曲目到历史: {}", current_track.title.as_deref().unwrap_or("未知"));
+                self.add_to_history(current_track);
+            }
+        }
+        
         // 随机模式
         if self.shuffle {
-            return self.get_next_shuffle();
+            let track = self.get_next_shuffle();
+            // 更新 current_index 到该曲目在原始列表中的位置
+            if let Some(t) = &track {
+                if let Some(index) = self.original_playlist.iter().position(|item| item.id == t.id) {
+                    self.current_index = Some(index);
+                }
+            }
+            return track;
         }
         
         // 顺序播放
@@ -207,21 +222,21 @@ impl PlaylistActor {
         };
         
         self.current_index = Some(next_index);
-        let track = self.original_playlist.get(next_index).cloned();
-        
-        // 添加到历史
-        if let Some(t) = &track {
-            self.add_to_history(t.clone());
-        }
-        
-        track
+        self.original_playlist.get(next_index).cloned()
     }
     
     /// 处理获取上一曲
     fn handle_get_previous(&mut self) -> Option<Track> {
         // 从历史记录中获取
         if let Some(track) = self.history.pop_back() {
-            log::debug!("⏮️ 从历史获取上一曲");
+            log::debug!("⏮️ 从历史获取上一曲: {}", track.title.as_deref().unwrap_or("未知"));
+            
+            // 🔥 修复：更新 current_index 到该曲目在播放列表中的位置
+            if let Some(index) = self.original_playlist.iter().position(|t| t.id == track.id) {
+                self.current_index = Some(index);
+                log::debug!("⏮️ 更新 current_index 为 {}", index);
+            }
+            
             return Some(track);
         }
         
@@ -328,13 +343,8 @@ impl PlaylistActor {
             }
         }
         
-        let track = self.current_queue.pop_front();
-        
-        if let Some(t) = &track {
-            self.add_to_history(t.clone());
-        }
-        
-        track
+        // 🔥 从队列中弹出下一首（历史记录已在 handle_get_next 中处理）
+        self.current_queue.pop_front()
     }
     
     /// 添加到历史记录

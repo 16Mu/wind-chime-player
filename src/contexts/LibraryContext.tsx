@@ -11,6 +11,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import { invoke } from '@tauri-apps/api/core';
 import type { Track, LibraryStats, ScanProgress } from '../types/music';
 import { useTauriEvent } from '../hooks/useEventManager';
+import { silentSyncArtistCovers } from '../services/artistCoverSync';
 
 // ==================== Context类型定义 ====================
 
@@ -168,6 +169,13 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     setIsLoading(false);
     setHasInitialized(true);
     setIsCached(true);
+    
+    // 🎨 自动同步艺术家封面（后台静默执行）
+    if (payload.length > 0) {
+      silentSyncArtistCovers(payload).catch(error => {
+        console.warn('艺术家封面自动同步失败:', error);
+      });
+    }
   });
 
   /**
@@ -214,6 +222,13 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     // 自动刷新数据
     await loadTracks();
     await loadStats();
+    
+    // 🎨 扫描完成后也触发艺术家封面同步（可能有新艺术家）
+    if (tracks.length > 0) {
+      silentSyncArtistCovers(tracks).catch(error => {
+        console.warn('艺术家封面自动同步失败:', error);
+      });
+    }
   });
 
   // ========== 初始化 ==========

@@ -15,6 +15,7 @@ mod audio_enhancement; // 新增：音质增强设置
 mod metadata_extractor; // 新增：通用元数据提取器
 mod play_history; // 新增：播放历史管理
 mod streaming; // 新增：流式播放服务（高内聚低耦合设计）
+mod network_api; // 新增：网络API服务（LrcApi集成）
 
 // 使用新的PlayerCore（通过适配器）
 use player::{PlayerCommand, PlayerEvent, Track, RepeatMode};
@@ -25,6 +26,7 @@ use db::{Database, Lyrics};
 use lyrics::{LyricsParser, ParsedLyrics};
 use webdav::WebDAVClient;
 use webdav::types::{WebDAVConfig, WebDAVFileInfo};
+use network_api::NetworkApiService;
 
 // Global state
 static PLAYER_TX: OnceLock<Sender<PlayerCommand>> = OnceLock::new();
@@ -74,6 +76,23 @@ async fn get_track(track_id: i64, state: State<'_, AppState>) -> Result<Track, S
         .ok_or_else(|| format!("歌曲不存在: {}", track_id))?;
     
     Ok(track)
+}
+
+/// 获取当前播放位置（用于引擎切换）
+#[tauri::command]
+async fn get_current_position() -> Result<u64, String> {
+    let tx = PLAYER_TX.get().ok_or_else(|| "Player not initialized".to_string())?;
+    
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    
+    tx.send(PlayerCommand::GetPosition(reply_tx))
+        .map_err(|e| format!("发送命令失败: {}", e))?;
+    
+    let position = reply_rx.await
+        .map_err(|e| format!("接收响应失败: {}", e))?
+        .unwrap_or(0);
+    
+    Ok(position)
 }
 
 #[tauri::command]
@@ -608,6 +627,85 @@ async fn lyrics_get_current_line(track_id: i64, position_ms: u64, state: State<'
     }
 }
 
+// Network API commands (LrcApi integration)
+/// 从网络API获取歌词
+#[tauri::command]
+async fn network_fetch_lyrics(
+    title: String,
+    artist: String,
+    album: Option<String>
+) -> Result<(String, String), String> {
+    log::info!("🌐 [COMMAND] 网络获取歌词: {} - {}", title, artist);
+    
+    let service = NetworkApiService::new();
+    let result = service
+        .fetch_lyrics(&title, &artist, album.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok((result.content, result.source))
+}
+
+/// 从网络API获取封面
+#[tauri::command]
+async fn network_fetch_cover(
+    title: Option<String>,
+    artist: String,
+    album: Option<String>
+) -> Result<(Vec<u8>, String, String), String> {
+    log::info!("🌐 [COMMAND] 网络获取封面: {} - {:?}", artist, album);
+    
+    let service = NetworkApiService::new();
+    let result = service
+        .fetch_cover(title.as_deref(), &artist, album.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok((result.data, result.mime_type, result.source))
+}
+
+/// 保存艺术家封面到数据库
+#[tauri::command]
+async fn artist_cover_save(
+    state: State<'_, AppState>,
+    artist_name: String,
+    cover_data: Vec<u8>,
+    cover_mime: String
+) -> Result<(), String> {
+    log::info!("💾 [COMMAND] 保存艺术家封面: {}", artist_name);
+    
+    let db = state.db.lock().unwrap();
+    db.save_artist_cover(&artist_name, &cover_data, &cover_mime)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+/// 从数据库获取艺术家封面
+#[tauri::command]
+async fn artist_cover_get(
+    state: State<'_, AppState>,
+    artist_name: String
+) -> Result<Option<(Vec<u8>, String)>, String> {
+    log::info!("📖 [COMMAND] 获取艺术家封面: {}", artist_name);
+    
+    let db = state.db.lock().unwrap();
+    db.get_artist_cover(&artist_name)
+        .map_err(|e| e.to_string())
+}
+
+/// 批量获取所有艺术家封面
+#[tauri::command]
+async fn artist_covers_get_all(
+    state: State<'_, AppState>
+) -> Result<Vec<(String, Vec<u8>, String)>, String> {
+    log::info!("📚 [COMMAND] 批量获取所有艺术家封面");
+    
+    let db = state.db.lock().unwrap();
+    db.get_all_artist_covers()
+        .map_err(|e| e.to_string())
+}
+
 // Playlist generation commands
 #[tauri::command]
 async fn generate_sequential_playlist(state: State<'_, AppState>) -> Result<Vec<Track>, String> {
@@ -1097,6 +1195,48 @@ async fn get_album_cover(track_id: i64, state: State<'_, AppState>) -> Result<Op
             } else {
                 log::warn!("❌ 数据库中无封面数据: track_id={}, path={}", track_id, track.path);
                 Ok(None)
+            }
+        }
+        None => {
+            log::error!("❌ 未找到曲目: track_id={}", track_id);
+            Err("Track not found".to_string())
+        }
+    }
+}
+
+// 重新提取单个曲目的封面
+#[tauri::command]
+async fn refresh_track_cover(track_id: i64, state: State<'_, AppState>) -> Result<bool, String> {
+    use crate::metadata_extractor::MetadataExtractor;
+    use std::path::Path;
+    
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    
+    match db.get_track_by_id(track_id).map_err(|e| e.to_string())? {
+        Some(track) => {
+            log::info!("🔄 重新提取封面: track_id={}, path={}", track_id, track.path);
+            
+            let extractor = MetadataExtractor::new();
+            let path = Path::new(&track.path);
+            
+            match extractor.extract_from_file(path) {
+                Ok(metadata) => {
+                    if let (Some(cover_data), Some(mime)) = (metadata.album_cover_data, metadata.album_cover_mime) {
+                        // 更新数据库中的封面
+                        db.update_track_cover(track_id, Some(cover_data), Some(mime))
+                            .map_err(|e| e.to_string())?;
+                        
+                        log::info!("✅ 封面更新成功: track_id={}", track_id);
+                        Ok(true)
+                    } else {
+                        log::warn!("⚠️ 文件中未找到封面: track_id={}", track_id);
+                        Ok(false)
+                    }
+                }
+                Err(e) => {
+                    log::error!("❌ 提取元数据失败: track_id={}, error={}", track_id, e);
+                    Err(format!("提取元数据失败: {}", e))
+                }
             }
         }
         None => {
@@ -1942,6 +2082,7 @@ pub fn run() {
             // Audio file reading (for Web Audio API)
             read_audio_file,
             get_track,
+            get_current_position,
             // Player commands
             player_play,
             player_pause,
@@ -1983,6 +2124,12 @@ pub fn run() {
             lyrics_auto_detect,
             lyrics_format_as_lrc,
             lyrics_get_current_line,
+            // Network API commands (LrcApi)
+            network_fetch_lyrics,
+            network_fetch_cover,
+            artist_cover_save,
+            artist_cover_get,
+            artist_covers_get_all,
             // Favorites commands
             favorites_add,
             favorites_remove,
@@ -2029,6 +2176,7 @@ pub fn run() {
             debug_audio_system,
             // Album cover commands
             get_album_cover,
+            refresh_track_cover,
             // Audio enhancement commands
             get_audio_enhancement_settings,
             set_audio_enhancement_settings,

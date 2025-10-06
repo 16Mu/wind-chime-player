@@ -39,11 +39,10 @@ const LyricLine = React.memo(
               : Math.max(0.4, 0.8 - distance * 0.04);  // 很远的行：保持基本可读性
       
       // ✅ 使用 scale() 进行缩放（不触发重排）
+      // 🔥 只有当前播放的歌词放大，其他歌词保持正常大小
       const scale = isCurrent 
         ? 1.2        // 当前行：放大20%
-        : distance === 1
-          ? 1.08     // 相邻行：放大8%
-          : 1;       // 其他行：正常大小
+        : 1;         // 其他所有行：正常大小
 
       return (
         <div 
@@ -65,10 +64,10 @@ const LyricLine = React.memo(
                 : distance === 2
                   ? 'blur(0.2px) brightness(0.92)'
                   : `blur(${Math.min(distance * 0.12, 0.4)}px) brightness(0.90)`,
-            // ✅ 使用更长的过渡时间和丝滑的缓动曲线
-            transition: isCurrent || distance === 1
+            // ✅ 外层容器的过渡
+            transition: isCurrent
               ? `opacity 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), filter 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)`
-              : `opacity 0.9s cubic-bezier(0.33, 0, 0.67, 1), filter 0.9s cubic-bezier(0.33, 0, 0.67, 1)`,
+              : `opacity 0.9s cubic-bezier(0.33, 0, 0.67, 1)`,  // 🔥 非当前歌词只需 opacity 过渡
             // 🔍 调试：当前行添加背景色便于识别
             ...(isCurrent && (import.meta as any).env?.DEV ? {
               background: 'rgba(255, 0, 0, 0.1)',
@@ -94,19 +93,14 @@ const LyricLine = React.memo(
                   : distance === 2
                     ? 'rgba(255, 255, 255, 0.80)' 
                     : `rgba(255, 255, 255, ${Math.max(0.55, 0.85 - distance * 0.05)})`,
-              // ✅ 发光效果：渐进式衰减，避免突然消失
+              // ✅ 发光效果：只有当前播放的歌词发光
               textShadow: isCurrent 
                 ? `0 0 20px rgba(255, 255, 255, 0.7), 0 0 35px rgba(255, 255, 255, 0.5), 0 2px 12px rgba(255, 255, 255, 0.4)` 
-                : distance === 1
-                  ? '0 0 10px rgba(255, 255, 255, 0.35), 0 0 20px rgba(255, 255, 255, 0.2), 0 1px 6px rgba(255, 255, 255, 0.15)'
-                  : distance === 2
-                    ? '0 0 5px rgba(255, 255, 255, 0.2), 0 1px 3px rgba(255, 255, 255, 0.1)'
-                    : distance === 3
-                      ? '0 0 3px rgba(255, 255, 255, 0.12), 0 1px 2px rgba(255, 255, 255, 0.06)'
-                      : '0 1px 2px rgba(255, 255, 255, 0.04)',
+                : 'none',  // 🔥 其他歌词不发光
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-              fontWeight: isCurrent ? 600 : distance === 1 ? 500 : 400,
-              letterSpacing: isCurrent ? '0.02em' : distance === 1 ? '0.012em' : '0.005em',
+              // 🔥 只有当前歌词加粗和增加字间距
+              fontWeight: isCurrent ? 600 : 400,
+              letterSpacing: isCurrent ? '0.02em' : '0.005em',
               // ✅ 行内换行紧凑间距（1.3），使其明显小于歌词行之间的间距（1.2倍字体大小）
               lineHeight: '1.3',
               // ✅ 允许文本自动换行（在80%固定宽度内）
@@ -114,20 +108,14 @@ const LyricLine = React.memo(
               overflowWrap: 'break-word',
               whiteSpace: 'normal',
               textAlign: 'center',
-              // ✅ 使用丝滑的缓动曲线，让缩放更流畅自然
-              transition: isCurrent || distance === 1
+              // ✅ 使用丝滑的缓动曲线，只为当前歌词添加完整过渡
+              transition: isCurrent
                 ? 'transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), text-shadow 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), font-weight 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), letter-spacing 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), filter 0.8s cubic-bezier(0.25, 0.1, 0.25, 1)' 
-                : 'transform 0.6s cubic-bezier(0.33, 0, 0.67, 1), color 0.5s ease-out, text-shadow 0.6s ease-out, font-weight 0.5s ease-out, letter-spacing 0.5s ease-out, filter 0.6s ease-out',
-              // ✅ drop-shadow 渐进式衰减，避免突然消失
+                : 'color 0.5s ease-out',  // 🔥 其他歌词只需颜色过渡
+              // ✅ drop-shadow 只有当前歌词有发光效果
               filter: isCurrent 
                 ? 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.3))' 
-                : distance === 1
-                  ? 'drop-shadow(0 0 5px rgba(255, 255, 255, 0.15))'
-                  : distance === 2
-                    ? 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.08))'
-                    : distance === 3
-                      ? 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.04))'
-                      : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.02))',
+                : 'none',  // 🔥 其他歌词不发光
             }}
           >
             {text || '♪'}

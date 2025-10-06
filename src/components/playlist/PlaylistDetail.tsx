@@ -9,6 +9,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { usePlaylist } from '../../contexts/PlaylistContext';
+import { usePlaylistCover } from '../../hooks/usePlaylistCover';
 import {
   ArrowLeft,
   Play,
@@ -60,6 +61,13 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
 
   const [showMenu, setShowMenu] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+
+  // 使用自定义 Hook 加载封面（必须在所有条件判断之前调用，遵循 Hooks 规则）
+  const coverImage = usePlaylistCover(
+    currentPlaylist?.playlist?.id || 0,
+    currentPlaylist?.playlist?.cover_path,
+    currentPlaylist?.playlist?.track_count || 0
+  );
 
   // 加载歌单详情
   useEffect(() => {
@@ -265,11 +273,14 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
         <div className="p-8 flex gap-6">
           {/* 封面 */}
           <div className="flex-none w-48 h-48 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-500/20 dark:to-pink-500/20 shadow-2xl border border-purple-200 dark:border-transparent">
-            {playlist.cover_path ? (
+            {coverImage ? (
               <img
-                src={playlist.cover_path}
+                src={coverImage}
                 alt={playlist.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -528,9 +539,9 @@ const ExportPlaylistDialog: React.FC<ExportPlaylistDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-16 pb-32 overflow-y-auto" onClick={onClose}>
       <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[calc(100vh-180px)] overflow-hidden flex flex-col my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-slate-200 dark:border-gray-700">

@@ -437,17 +437,14 @@ export class WebAudioPlayer {
     this.isPlaying = false;
     this.isPaused = false;
     
-    // 触发回调
+    // 🔥 只触发回调，不自动播放下一首
+    // 让混合播放器或外部控制器决定是否播放下一首
     if (this.callbacks.onTrackEnded) {
       this.callbacks.onTrackEnded();
     }
     
-    // 自动播放下一首
-    if (this.playlist.length > 0) {
-      setTimeout(() => {
-        this.nextTrack();
-      }, 100);
-    }
+    // 注意：不再自动播放下一首，避免与混合播放器冲突
+    // 如果需要自动播放，应该在 onTrackEnded 回调中处理
   }
   
   /**

@@ -95,6 +95,9 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   
   const transportControlsRef = useRef<HTMLDivElement>(null);
   
+  // 🔥 实时位置更新（用于进度条流畅显示）
+  const [realTimePosition, setRealTimePosition] = useState(0);
+  
   // 🔊 音量控制状态
   const [volume, setVolume] = useState(1); // 0-1 范围
   const [isMuted, setIsMuted] = useState(false);
@@ -111,6 +114,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const [currentLyric, setCurrentLyric] = useState<string>('');
   const [lyrics, setLyrics] = useState<Array<{ time: number; text: string }>>([]);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [hasPlayedLyric, setHasPlayedLyric] = useState(false); // 🎵 跟踪是否已经播放过歌词
   
   // 歌词动画状态
   const [lyricAnimation, setLyricAnimation] = useState<'slide-in' | 'slide-out' | 'none'>('none');
@@ -125,6 +129,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   
   // 专辑封面状态
   const [albumCoverUrl, setAlbumCoverUrl] = useState<string | null>(null);
+  const [nextAlbumCoverUrl, setNextAlbumCoverUrl] = useState<string | null>(null);
+  const [prevAlbumCoverUrl, setPrevAlbumCoverUrl] = useState<string | null>(null);
   
   // 收藏状态
   const [isFavorite, setIsFavorite] = useState(false);
@@ -136,25 +142,198 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // const [shuffleAnimating, setShuffleAnimating] = useState(false);
   // const [repeatAnimating, setRepeatAnimating] = useState(false);
   const [progressRipples, setProgressRipples] = useState<{x: number; key: number}[]>([]);
+  
+  // 切歌动画状态
+  const [coverFlipAnimation, setCoverFlipAnimation] = useState<'flip-next' | 'flip-prev' | ''>('');
+  const [infoSlideAnimation, setInfoSlideAnimation] = useState<'slide-out-next' | 'slide-out-prev' | 'slide-in-next' | 'slide-in-prev' | ''>('');
+  const [lastFlipDirection, setLastFlipDirection] = useState<'next' | 'prev'>('next'); // 记录上次翻转方向
+  const [isAnimatingTrackChange, setIsAnimatingTrackChange] = useState(false); // 标记正在进行切歌动画
+  const previousTrackIdRef = useRef<number | null>(null);
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const coverAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 等待后端就绪
   useEffect(() => {
     if (typeof listen === 'undefined') return;
 
-    const setupReadyListener = async () => {
-      const unlistenAppReady = await listen('app-ready', () => {
-        console.log('✅ PlaylistPlayer：后端就绪');
-        setIsAppReady(true);
-      });
+    let isActive = true;
+    let unlistenAppReady: (() => void) | null = null;
 
-      return () => {
-        if (typeof unlistenAppReady === 'function') unlistenAppReady();
-      };
+    const setupReadyListener = async () => {
+      try {
+        unlistenAppReady = await listen('app-ready', () => {
+          if (!isActive) return;
+          console.log('✅ PlaylistPlayer：后端就绪');
+          setIsAppReady(true);
+        });
+        
+        if (!isActive && unlistenAppReady) {
+          unlistenAppReady();
+        }
+      } catch (err) {
+        console.error('[PlaylistPlayer] ❌ 设置后端就绪监听器失败:', err);
+      }
     };
 
-    const cleanup = setupReadyListener();
+    setupReadyListener();
+    
     return () => {
-      cleanup.then(fn => fn && fn());
+      isActive = false;
+      if (unlistenAppReady) {
+        unlistenAppReady();
+      }
+    };
+  }, []);
+
+  // 🔥 监听歌曲切换事件，启动后台 Web Audio 加载 + 触发切歌动画
+  useEffect(() => {
+    let isActive = true; // 标记组件是否处于活动状态
+    let lastLoadedTrackId: number | null = null;
+    let unlistenTrackChanged: (() => void) | null = null;
+    
+    const setupListener = async () => {
+      try {
+        unlistenTrackChanged = await listen('player-track-changed', async (event: any) => {
+          if (!isActive) return; // 🔒 检查组件是否仍然挂载
+          
+          const newTrack = event.payload;
+          if (newTrack && newTrack.id) {
+            console.log('🔄 [PlaylistPlayer] 歌曲切换:', newTrack.title, 'ID:', newTrack.id);
+            
+            // 🎬 检测切歌方向（通过比较track ID）
+            const direction = previousTrackIdRef.current !== null && newTrack.id > previousTrackIdRef.current ? 'next' : 'prev';
+            previousTrackIdRef.current = newTrack.id;
+            setLastFlipDirection(direction); // 记录方向
+            
+            // 🎬 打断之前的动画
+            if (animationTimeoutRef.current) {
+              clearTimeout(animationTimeoutRef.current);
+            }
+            if (coverAnimationTimeoutRef.current) {
+              clearTimeout(coverAnimationTimeoutRef.current);
+            }
+            
+            // 🎬 确保背面封面已准备好，如果没有则等待加载
+            const backCoverUrl = direction === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
+            if (!backCoverUrl) {
+              console.warn('⚠️ 背面封面未准备好，立即加载...');
+              // 立即加载缺失的封面
+              const coverUrl = await loadCoverUrl(newTrack.id);
+              if (coverUrl) {
+                if (direction === 'next') {
+                  setNextAlbumCoverUrl(coverUrl);
+                } else {
+                  setPrevAlbumCoverUrl(coverUrl);
+                }
+              }
+            }
+            
+            // 🎬 标记正在进行切歌动画（阻止 useEffect 中的 loadAlbumCover）
+            setIsAnimatingTrackChange(true);
+            
+            // 🎬 启动滑出动画（歌曲信息）
+            setInfoSlideAnimation(direction === 'next' ? 'slide-out-next' : 'slide-out-prev');
+            
+            // 🎬 启动封面翻转动画（使用预加载的封面）
+            setCoverFlipAnimation(direction === 'next' ? 'flip-next' : 'flip-prev');
+            
+            // 🎬 300ms后结束滑出，启动滑入
+            animationTimeoutRef.current = setTimeout(() => {
+              setInfoSlideAnimation(direction === 'next' ? 'slide-in-next' : 'slide-in-prev');
+              
+              // 🎬 再400ms后清除动画类
+              animationTimeoutRef.current = setTimeout(() => {
+                setInfoSlideAnimation('');
+              }, 400);
+            }, 300);
+            
+            // 🎬 600ms后清除封面动画并交换封面
+            coverAnimationTimeoutRef.current = setTimeout(() => {
+              // 🎬 根据方向选择对应的预加载封面
+              const newCoverUrl = direction === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
+              
+              if (newCoverUrl) {
+                const oldCover = albumCoverUrl;
+                setAlbumCoverUrl(newCoverUrl);
+                
+                // 清空已使用的预加载封面
+                if (direction === 'next') {
+                  setNextAlbumCoverUrl(null);
+                } else {
+                  setPrevAlbumCoverUrl(null);
+                }
+                
+                // 🎬 使用requestAnimationFrame确保DOM更新后再清除动画
+                requestAnimationFrame(() => {
+                  setCoverFlipAnimation('');
+                  // 清理旧封面
+                  if (oldCover) {
+                    URL.revokeObjectURL(oldCover);
+                  }
+                  
+                  // 🎬 标记动画完成
+                  setIsAnimatingTrackChange(false);
+                  
+                  // 🎬 重新预加载邻近封面
+                  setTimeout(() => {
+                    preloadNeighborCovers();
+                  }, 100);
+                });
+              } else {
+                setCoverFlipAnimation('');
+                setIsAnimatingTrackChange(false);
+              }
+            }, 600);
+            
+            // 🔥 避免重复加载同一首歌
+            if (newTrack.id !== lastLoadedTrackId) {
+              lastLoadedTrackId = newTrack.id;
+              
+              // 🔥 延迟 100ms 后启动后台加载（让 Rust 先开始播放）
+              setTimeout(async () => {
+                if (!isActive) return; // 🔒 再次检查组件是否仍然挂载
+                
+                try {
+                  const { hybridPlayer } = await import('../services/hybridPlayer');
+                  // 🔥 使用 skipRustPlay=true 仅启动后台加载，不重新播放
+                  console.log('🎵 [PlaylistPlayer] 启动后台 Web Audio 加载...');
+                  await hybridPlayer.play(newTrack, [], true);
+                } catch (error) {
+                  console.error('❌ [PlaylistPlayer] 启动后台加载失败:', error);
+                  // 🔥 加载失败时重置 lastLoadedTrackId，允许下次重试
+                  lastLoadedTrackId = null;
+                }
+              }, 100);
+            } else {
+              console.log('🔄 [PlaylistPlayer] 跳过重复加载 track', newTrack.id);
+            }
+          }
+        });
+        
+        // 最后检查组件是否还活跃
+        if (!isActive && unlistenTrackChanged) {
+          unlistenTrackChanged();
+          console.log('[PlaylistPlayer] ⚠️ 组件已卸载，取消刚设置的监听器');
+        }
+      } catch (err) {
+        console.error('[PlaylistPlayer] ❌ 设置监听器失败:', err);
+      }
+    };
+    
+    setupListener();
+    
+    return () => {
+      isActive = false; // 🔒 标记组件为非活动状态
+      
+      if (unlistenTrackChanged) {
+        unlistenTrackChanged();
+      }
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+      if (coverAnimationTimeoutRef.current) {
+        clearTimeout(coverAnimationTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -184,8 +363,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       console.log('🎵 歌曲播放完成:', event.payload);
       // 🎵 自动播放下一曲
       try {
-        const { webAudioPlayer } = await import('../services/webAudioPlayer');
-        await webAudioPlayer.nextTrack();
+        const { hybridPlayer } = await import('../services/hybridPlayer');
+        await hybridPlayer.next();
         console.log('🎵 自动切换到下一曲');
       } catch (error) {
         console.error('🎵 自动切换下一曲失败:', error);
@@ -251,33 +430,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     return () => clearTimeout(timer);
   }, [isAppReady]);
 
-  const handlePlay = async () => {
-    try {
-      if (currentTrack) {
-        console.log('🎵 开始播放曲目:', currentTrack);
-        
-        // 在播放前确保播放列表已加载
-        await ensurePlaylistLoaded();
-        
-        await invoke('player_play', { trackId: currentTrack.id, timestamp: Date.now() });
-        console.log('🎵 播放命令发送成功');
-        
-        // 清除任何之前的错误
-        setAudioDeviceError(null);
-        setShowAudioTroubleshooter(false);
-      } else {
-        console.warn('🎵 没有选中的曲目无法播放');
-      }
-    } catch (error) {
-      console.error('🎵 播放失败:', error);
-      
-      // 显示播放错误
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setAudioDeviceError(errorMessage);
-      setShowAudioTroubleshooter(true);
-    }
-  };
-
   // 确保播放列表已加载
   const ensurePlaylistLoaded = async () => {
     try {
@@ -298,30 +450,29 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     }
   };
 
-  const handlePause = async () => {
+  // 🔥 统一的播放/暂停切换（替代单独的 pause/resume 函数）
+  const handlePlayPauseToggle = async () => {
     try {
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      webAudioPlayer.pause();
-      console.log('⏸️ 已暂停播放');
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      
+      if (playerState.is_playing) {
+        // 正在播放 → 暂停
+        await hybridPlayer.pause();
+        console.log('⏸️ [PlaylistPlayer] 已暂停');
+      } else if (playerState.current_track) {
+        // 有歌曲但暂停 → 继续播放
+        await hybridPlayer.resume();
+        console.log('▶️ [PlaylistPlayer] 已继续播放');
+      }
     } catch (error) {
-      console.error('暂停失败:', error);
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      await webAudioPlayer.play();
-      console.log('▶️ 已继续播放');
-    } catch (error) {
-      console.error('继续播放失败:', error);
+      console.error('播放/暂停切换失败:', error);
     }
   };
 
   const handleNext = async () => {
     try {
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      await webAudioPlayer.nextTrack();
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      await hybridPlayer.next();
       console.log('⏭️ 已切换到下一首');
     } catch (error) {
       console.error('下一首失败:', error);
@@ -330,8 +481,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
   const handlePrevious = async () => {
     try {
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      await webAudioPlayer.previousTrack();
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      await hybridPlayer.previous();
       console.log('⏮️ 已切换到上一首');
     } catch (error) {
       console.error('上一首失败:', error);
@@ -349,15 +500,27 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   }, []);
 
   const handleSeek = async (positionMs: number) => {
-    console.log('⚡ [Seek] 跳转到位置:', positionMs, 'ms (0 延迟!)');
+    console.log('⚡ [Seek] 跳转到位置:', positionMs, 'ms');
+    
+    // 🔥 立即更新本地位置状态（避免歌词显示错误）
+    setRealTimePosition(positionMs);
+    
     try {
-      // 🔥 使用 Web Audio Player 进行 0 延迟 seek
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      const positionSec = positionMs / 1000;
-      await webAudioPlayer.seek(positionSec);
-      console.log('✅ [Seek] 跳转完成 (0 延迟!)');
+      // 🔥 使用混合播放器（智能选择引擎）
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      await hybridPlayer.seek(positionMs);
+      console.log('✅ [Seek] 跳转完成');
     } catch (error) {
       console.error('🎵 跳转失败:', error);
+      
+      // 如果是 Rust seek 失败（流式播放不支持），提示用户
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('音频尚未缓存') || errorMessage.includes('seek暂时不可用')) {
+        console.log('💡 [Seek] 提示：Web Audio 引擎正在后台加载，稍后即可支持快速跳转');
+        toast.info('正在加载高速跳转功能，请稍候...', 2000);
+      } else {
+        toast.error(`跳转失败: ${errorMessage}`, 3000);
+      }
     }
   };
 
@@ -414,10 +577,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       setIsMuted(false);
     }
     
-    // 🔥 同步到 Web Audio Player
+    // 🔥 同步到混合播放器
     try {
-      const { webAudioPlayer } = await import('../services/webAudioPlayer');
-      webAudioPlayer.setVolume(clampedVolume);
+      const { hybridPlayer } = await import('../services/hybridPlayer');
+      await hybridPlayer.setVolume(clampedVolume);
       console.log(`🔊 [音量] 设置为 ${(clampedVolume * 100).toFixed(0)}%`);
     } catch (error) {
       console.error('设置音量失败:', error);
@@ -503,6 +666,61 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       setAlbumCoverUrl(null);
     }
   };
+  
+  // 🎬 加载指定曲目的封面并返回URL
+  const loadCoverUrl = async (trackId: number): Promise<string | null> => {
+    try {
+      const result = await invoke('get_album_cover', { trackId }) as [number[], string] | null;
+      if (result) {
+        const [imageData, mimeType] = result;
+        const blob = new Blob([new Uint8Array(imageData)], { type: mimeType });
+        return URL.createObjectURL(blob);
+      }
+      return null;
+    } catch (error) {
+      console.error('加载封面失败:', error);
+      return null;
+    }
+  };
+  
+  // 🎬 预加载上一首和下一首的封面
+  const preloadNeighborCovers = async () => {
+    try {
+      // 获取播放列表
+      const playlist = await invoke('player_get_playlist') as Track[];
+      const currentIndex = playlist.findIndex(t => t.id === displayTrack?.id);
+      
+      if (currentIndex === -1) return;
+      
+      // 预加载下一首封面
+      const nextIndex = (currentIndex + 1) % playlist.length;
+      if (playlist[nextIndex]) {
+        const nextUrl = await loadCoverUrl(playlist[nextIndex].id);
+        if (nextUrl) {
+          if (nextAlbumCoverUrl) {
+            URL.revokeObjectURL(nextAlbumCoverUrl);
+          }
+          setNextAlbumCoverUrl(nextUrl);
+          console.log('✅ 预加载下一首封面:', playlist[nextIndex].title);
+        }
+      }
+      
+      // 预加载上一首封面
+      const prevIndex = currentIndex === 0 ? playlist.length - 1 : currentIndex - 1;
+      if (playlist[prevIndex]) {
+        const prevUrl = await loadCoverUrl(playlist[prevIndex].id);
+        if (prevUrl) {
+          if (prevAlbumCoverUrl) {
+            URL.revokeObjectURL(prevAlbumCoverUrl);
+          }
+          setPrevAlbumCoverUrl(prevUrl);
+          console.log('✅ 预加载上一首封面:', playlist[prevIndex].title);
+        }
+      }
+    } catch (error) {
+      console.error('预加载邻近封面失败:', error);
+    }
+  };
 
   // 检查曲目收藏状态
   const checkFavoriteStatus = async (trackId: number) => {
@@ -527,12 +745,13 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       
       // 显示反馈消息
       if (newFavoriteState) {
-        console.log(`✨ 已收藏: ${track.title || '未知歌曲'}`);
+        toast.success(`✨ 已收藏: ${track.title || '未知歌曲'}`);
       } else {
-        console.log(`💔 已取消收藏: ${track.title || '未知歌曲'}`);
+        toast.info(`💔 已取消收藏: ${track.title || '未知歌曲'}`);
       }
     } catch (error) {
       console.error('切换收藏状态失败:', error);
+      toast.error('收藏操作失败');
     }
   };
 
@@ -572,15 +791,39 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       // 🔧 生成新的歌词请求ID
       const lyricsRequestId = ++lyricsRequestIdRef.current;
       console.log(`🎵 [歌词调试] 开始加载 trackId=${trackId}, requestId=${lyricsRequestId}`);
-      loadAlbumCover(trackId);
+      
+      // 🎬 如果正在进行切歌动画，跳过 loadAlbumCover（使用预加载的封面）
+      if (!isAnimatingTrackChange) {
+        loadAlbumCover(trackId);
+      } else {
+        console.log('🎬 切歌动画进行中，跳过立即加载封面，使用预加载封面');
+      }
+      
       checkFavoriteStatus(trackId);
       loadLyrics(trackId, lyricsRequestId);
+      setHasPlayedLyric(false); // 🎵 重置歌词播放状态
+      
+      // 🎬 预加载上一首和下一首的封面（延迟执行，避免阻塞当前歌曲加载）
+      setTimeout(() => {
+        preloadNeighborCovers();
+      }, 500);
     } else {
       console.log('🎵 [歌词调试] 无有效 track ID，清空状态');
       setIsFavorite(false);
       setLyrics([]);
       setCurrentLyric('');
       setIsLoadingLyrics(false);
+      setHasPlayedLyric(false);
+      
+      // 清理预加载封面
+      if (nextAlbumCoverUrl) {
+        URL.revokeObjectURL(nextAlbumCoverUrl);
+        setNextAlbumCoverUrl(null);
+      }
+      if (prevAlbumCoverUrl) {
+        URL.revokeObjectURL(prevAlbumCoverUrl);
+        setPrevAlbumCoverUrl(null);
+      }
     }
   }, [playerState.current_track?.id, currentTrack?.id]);
 
@@ -588,10 +831,12 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const loadLyrics = async (trackId: number, requestId: number) => {
     try {
       console.log(`🎵 [LRC#${requestId}] 开始加载歌词，trackId:`, trackId);
+      setIsLoadingLyrics(true);
       
       // 🔧 检查请求是否已过期
       if (requestId !== lyricsRequestIdRef.current) {
         console.log(`⏭️ [LRC#${requestId}] 歌词请求已过期，跳过`);
+        setIsLoadingLyrics(false);
         return;
       }
       
@@ -599,6 +844,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       if (!track) {
         console.warn('❌ 没有当前曲目信息');
         setLyrics([]);
+        setIsLoadingLyrics(false);
         return;
       }
       
@@ -617,6 +863,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           if (parsedLyrics.length > 0) {
             console.log(`✅ [LRC#${requestId}] 从数据库加载歌词成功，共 ${parsedLyrics.length} 行`);
             setLyrics(parsedLyrics);
+            setIsLoadingLyrics(false);
             return;
           }
         }
@@ -638,6 +885,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
         }));
         
         setLyrics(lyrics);
+        setIsLoadingLyrics(false);
+        console.log(`🔧 [LRC#${requestId}] 已重置加载状态: isLoadingLyrics = false`);
         return;
       }
       
@@ -645,11 +894,13 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       console.log(`❌ [LRC#${requestId}] 未找到歌词`);
       setLyrics([]);
       setCurrentLyric('');
+      setIsLoadingLyrics(false);
       
     } catch (error) {
       console.error(`❌ [LRC#${requestId}] 加载歌词失败:`, error);
       setLyrics([]);
       setCurrentLyric('');
+      setIsLoadingLyrics(false);
     }
   };
 
@@ -685,13 +936,20 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     }
 
     console.log(`🎵 [歌词更新] 启动定时器，共 ${lyrics.length} 行歌词`);
+    console.log(`🎵 [歌词信息] 第一行: ${lyrics[0]?.time}ms "${lyrics[0]?.text}"`);
     
     // 追踪上一次的歌词索引，避免重复日志
     let lastIndex = -1;
 
     // 使用定时器持续更新歌词
     const updateLyric = () => {
-      const currentPosition = getCurrentPosition();
+      // 🔥 直接读取最新的位置（解决闭包陷阱）
+      const currentPosition = isDragging ? dragPosition : getPosition();
+      
+      // 🔧 调试：输出当前状态
+      if (lastIndex === -1) {
+        console.log(`🎵 [歌词定时器] 当前位置: ${Math.floor(currentPosition/1000)}s`);
+      }
       
       // 找到当前应该显示的歌词
       let currentIndex = -1;
@@ -706,9 +964,15 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       if (currentIndex >= 0 && currentIndex !== lastIndex) {
         const lyricText = lyrics[currentIndex].text;
         setCurrentLyric(lyricText);
+        setHasPlayedLyric(true); // 🎵 标记已经播放过歌词
         console.log(`🎵 [歌词更新] ${Math.floor(currentPosition/1000)}s -> [${currentIndex}/${lyrics.length}] ${lyricText.substring(0, 20)}...`);
         lastIndex = currentIndex;
       } else if (currentIndex < 0) {
+        // 🔧 调试：歌词未开始（位置早于第一行歌词）
+        if (lastIndex !== -1) {
+          console.log(`🎵 [歌词更新] ${Math.floor(currentPosition/1000)}s -> 等待第一行歌词 (${Math.floor(lyrics[0].time/1000)}s)`);
+          lastIndex = -1;
+        }
         setCurrentLyric('');
       }
     };
@@ -723,7 +987,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       console.log(`🎵 [歌词更新] 清理定时器`);
       clearInterval(interval);
     };
-  }, [lyrics, playerState.is_playing, isDragging, dragPosition]);
+  }, [lyrics, getPosition, isDragging, dragPosition]); // 添加必要的依赖项
 
   // 🎬 歌词切换动画
   useEffect(() => {
@@ -759,8 +1023,14 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       if (albumCoverUrl) {
         URL.revokeObjectURL(albumCoverUrl);
       }
+      if (nextAlbumCoverUrl) {
+        URL.revokeObjectURL(nextAlbumCoverUrl);
+      }
+      if (prevAlbumCoverUrl) {
+        URL.revokeObjectURL(prevAlbumCoverUrl);
+      }
     };
-  }, [albumCoverUrl]);
+  }, [albumCoverUrl, nextAlbumCoverUrl, prevAlbumCoverUrl]);
 
   // 删除复杂的动画逻辑
 
@@ -895,9 +1165,31 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     setShowLyrics(true);
   };
 
+  // 🔥 实时更新位置（用于流畅的进度条）
+  useEffect(() => {
+    if (!playerState.is_playing) {
+      // 暂停时使用静态位置
+      setRealTimePosition(getPosition());
+      return;
+    }
+    
+    let frameId: number;
+    const updatePosition = () => {
+      const pos = getPosition();
+      setRealTimePosition(pos);
+      frameId = requestAnimationFrame(updatePosition);
+    };
+    
+    frameId = requestAnimationFrame(updatePosition);
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [playerState.is_playing, getPosition]);
+
   const getCurrentPosition = () => {
     // 🔧 修复：直接调用 getPosition() 获取实时位置，而不是使用固定的 playerState.position_ms
-    const position = isDragging ? dragPosition : getPosition();
+    // 拖拽时使用拖拽位置，否则使用实时位置
+    const position = isDragging ? dragPosition : realTimePosition;
     return position;
   };
 
@@ -906,7 +1198,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       <div className="modern-player">
         {/* 上行：主控制区 */}
         <div className="player-container">
-          
           {/* 左侧区域 - 水平布局：封面 + 信息区 */}
           <div className="player-left-section">
             {/* 专辑缩略图 */}
@@ -916,21 +1207,54 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               onClick={handleAlbumCoverClick}
               title="点击查看歌词"
             >
-              <div className="album-cover-container">
-                {albumCoverUrl ? (
-                  <img 
-                    src={albumCoverUrl} 
-                    alt={displayTrack?.album || '专辑封面'}
-                    className="album-image"
-                    onError={() => setAlbumCoverUrl(null)}
-                  />
-                ) : (
-                  <div className="album-placeholder">
-                    <svg className="w-5 h-5 text-slate-400 dark:text-dark-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                    </svg>
-                  </div>
-                )}
+              <div className={`album-cover-container ${coverFlipAnimation}`}>
+                {/* 正面封面 */}
+                <div className="album-cover-front">
+                  {albumCoverUrl ? (
+                    <img 
+                      src={albumCoverUrl} 
+                      alt={displayTrack?.album || '专辑封面'}
+                      className="album-image"
+                      onError={() => setAlbumCoverUrl(null)}
+                    />
+                  ) : (
+                    <div className="album-placeholder">
+                      <svg className="w-5 h-5 text-slate-400 dark:text-dark-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 背面封面（根据翻转方向智能选择） */}
+                <div className="album-cover-back">
+                  {(() => {
+                    // 如果正在翻转，显示对应方向的封面；否则显示下一首封面作为默认
+                    let backCoverUrl;
+                    if (coverFlipAnimation === 'flip-next') {
+                      backCoverUrl = nextAlbumCoverUrl;
+                    } else if (coverFlipAnimation === 'flip-prev') {
+                      backCoverUrl = prevAlbumCoverUrl;
+                    } else {
+                      // 不翻转时，默认准备下一首封面在背面
+                      backCoverUrl = lastFlipDirection === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
+                    }
+                    
+                    return backCoverUrl ? (
+                      <img 
+                        src={backCoverUrl} 
+                        alt="新歌曲专辑封面"
+                        className="album-image"
+                      />
+                    ) : (
+                      <div className="album-placeholder">
+                        <svg className="w-5 h-5 text-slate-400 dark:text-dark-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 
@@ -938,13 +1262,21 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             <div className="left-info-wrapper">
               {/* 第一行：歌名 - 歌手 */}
               <div className="left-top-area">
-                <div className="left-song-info">
-                  <span className="track-title">
-                    {displayTrack?.title || '如果当时'}
-                  </span>
-                  <span className="track-artist">
-                    - {displayTrack?.artist || '许嵩'}
-                  </span>
+                <div className={`left-song-info ${infoSlideAnimation}`}>
+                  {displayTrack ? (
+                    <>
+                      <span className="track-title">
+                        {displayTrack.title || '未知曲目'}
+                      </span>
+                      <span className="track-artist">
+                        - {displayTrack.artist || '未知艺术家'}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="track-title text-slate-400 dark:text-dark-600">
+                      未播放
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -953,33 +1285,57 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 ref={lyricContainerRef}
                 className={`current-lyric-display ${!currentLyric ? 'empty' : ''}`}
               >
-                {isLoadingLyrics ? (
-                  <span className="loading-lyrics">
-                    <svg className="animate-spin h-3 w-3 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <circle cx="12" cy="12" r="10" strokeWidth="3" strokeDasharray="32" strokeDashoffset="8" opacity="0.25"/>
-                      <path d="M12 2a10 10 0 0 1 10 10" strokeWidth="3" strokeLinecap="round"/>
-                    </svg>
-                    正在加载歌词...
-                  </span>
-                ) : currentLyric ? (
-                  <LyricContent 
-                    text={currentLyric} 
-                    animation={lyricAnimation}
-                    containerRef={lyricContainerRef}
-                  />
-                ) : lyrics.length > 0 ? (
-                  '♪'
-                ) : (
-                  '暂无歌词'
-                )}
+                {(() => {
+                  if (isLoadingLyrics) {
+                    return (
+                      <span className="loading-lyrics">
+                        <svg className="animate-spin h-3 w-3 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <circle cx="12" cy="12" r="10" strokeWidth="3" strokeDasharray="32" strokeDashoffset="8" opacity="0.25"/>
+                          <path d="M12 2a10 10 0 0 1 10 10" strokeWidth="3" strokeLinecap="round"/>
+                        </svg>
+                        正在加载歌词...
+                      </span>
+                    );
+                  }
+                  
+                  if (currentLyric) {
+                    return (
+                      <LyricContent 
+                        text={currentLyric} 
+                        animation={lyricAnimation}
+                        containerRef={lyricContainerRef}
+                      />
+                    );
+                  }
+                  
+                  // 🎵 只在歌曲开始且未播放过歌词时显示"等待歌词..."
+                  if (lyrics.length > 0 && !hasPlayedLyric) {
+                    return (
+                      <span className="text-[#86868B] dark:text-dark-600 text-sm">
+                        ♪ 等待歌词...
+                      </span>
+                    );
+                  }
+                  
+                  return '暂无歌词';
+                })()}
               </div>
+            </div>
+          </div>
 
-              {/* 第三行：按钮组（与歌词容器重叠） */}
-              <div className="left-bottom-buttons">
-                {/* 收藏 */}
+          {/* 中间区域 - 垂直布局：上层播放控制 + 下层进度条 */}
+          <div className="transport-area">
+            {/* 上层：播放控制 + 功能按钮 */}
+            <div 
+              ref={transportControlsRef}
+              className="transport-controls"
+            >
+              {/* 左侧按钮组 */}
+              <div className="controls-left">
+                {/* 收藏按钮 */}
                 <button 
-                  className={`function-square-btn ${isFavorite ? 'active' : ''}`} 
                   onClick={toggleFavorite}
+                  className={`control-icon-btn ${isFavorite ? 'text-red-500' : ''}`}
                   title={isFavorite ? '取消收藏' : '收藏'}
                 >
                   <svg className="w-4 h-4" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
@@ -987,51 +1343,21 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                   </svg>
                 </button>
 
-                {/* 评论 */}
-                <button className="function-square-btn" title="评论">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </button>
-
-                {/* 更多 */}
-                <button className="function-square-btn" title="更多">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                {/* 上一首 */}
+                <button
+                  onClick={handlePrevious}
+                  className="control-medium-btn"
+                  title="上一首"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                   </svg>
                 </button>
               </div>
-            </div>
-          </div>
 
-          {/* 中间区域 - 垂直布局：上层播放控制 + 下层进度条 */}
-          <div className="transport-area">
-            {/* 上层：播放控制 */}
-            <div 
-              ref={transportControlsRef}
-              className="transport-controls"
-            >
-              {/* 投屏 */}
-              <button className="control-small-btn" title="投屏">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </button>
-
-              {/* 上一首 */}
+              {/* 中间：播放/暂停按钮 */}
               <button
-                onClick={handlePrevious}
-                className="control-medium-btn"
-                title="上一首"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-                </svg>
-              </button>
-
-              {/* 播放/暂停 */}
-              <button
-                onClick={playerState.is_playing ? handlePause : (displayTrack ? handlePlay : handleResume)}
+                onClick={handlePlayPauseToggle}
                 className="control-main-btn"
                 title={playerState.is_playing ? '暂停' : '播放'}
               >
@@ -1047,29 +1373,38 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 )}
               </button>
 
-              {/* 下一首 */}
-              <button
-                onClick={handleNext}
-                className="control-medium-btn"
-                title="下一首"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-                </svg>
-              </button>
+              {/* 右侧按钮组 */}
+              <div className="controls-right">
+                {/* 下一首 */}
+                <button
+                  onClick={handleNext}
+                  className="control-medium-btn"
+                  title="下一首"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                  </svg>
+                </button>
 
-              {/* 音效 */}
-              <button className="control-small-btn" title="音效">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M6 10h2a2 2 0 012 2v0a2 2 0 01-2 2H6v-4zm0 0V6a2 2 0 012-2h10a2 2 0 012 2v4m-6 4v4m-4-4v4" />
-                </svg>
-              </button>
+                {/* 歌词按钮 */}
+                {displayTrack && (
+                  <button
+                    onClick={() => setShowLyricsManager(true)}
+                    className="control-icon-btn"
+                    title="歌词"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* 下层：进度条 */}
+            {/* 下层：进度条 - Apple Music 风格 */}
             <div className="progress-area">
               <span className="time-current">
-                {formatTime(getCurrentPosition())}
+                {displayTrack ? formatTime(getCurrentPosition()) : '--:--'}
               </span>
               
               <div 
@@ -1078,16 +1413,17 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 onClick={handleProgressClick}
                 onMouseDown={handleProgressMouseDown}
               >
-                <div className="progress-track" />
-                <div 
-                  className="progress-bar"
-                  style={{
-                    width: displayTrack?.duration_ms 
-                      ? `${(getCurrentPosition() / displayTrack.duration_ms) * 100}%`
-                      : '35%'
-                  }}
-                >
-                  <div className={`progress-handle ${isDragging ? 'active' : ''}`} />
+                <div className="progress-track">
+                  <div 
+                    className="progress-fill"
+                    style={{
+                      width: displayTrack?.duration_ms
+                        ? `${(getCurrentPosition() / displayTrack.duration_ms) * 100}%`
+                        : '0%'
+                    }}
+                  >
+                    <div className={`progress-handle ${isDragging ? 'active' : ''}`} />
+                  </div>
                 </div>
                 {progressRipples.map(ripple => (
                   <div
@@ -1099,7 +1435,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               </div>
               
               <span className="time-total">
-                {displayTrack?.duration_ms ? formatTime(displayTrack.duration_ms) : '2:56'}
+                {displayTrack?.duration_ms ? formatTime(displayTrack.duration_ms) : '--:--'}
               </span>
             </div>
           </div>
@@ -1140,13 +1476,6 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
               </div>
             </div>
 
-            {/* 均衡器 */}
-            <button className="function-square-btn" title="音效均衡器">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-              </svg>
-            </button>
-            
             {/* 歌词 */}
             {displayTrack && (
               <button
@@ -1199,8 +1528,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
       {/* 音频设备故障排除弹窗 */}
       {showAudioTroubleshooter && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="liquid-glass liquid-glass-advanced liquid-glass-depth w-full max-w-lg mx-4 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-start justify-center z-50 pt-16 pb-32 overflow-y-auto">
+          <div className="liquid-glass liquid-glass-advanced liquid-glass-depth w-full max-w-xl mx-4 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden my-auto">
             {/* 故障排除标题栏 */}
             <div className="liquid-glass-content p-6 border-b border-white/20 bg-gradient-to-r from-red-100/20 to-orange-100/20">
               <div className="flex items-center justify-between">

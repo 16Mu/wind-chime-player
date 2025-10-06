@@ -350,6 +350,9 @@ mod tests {
             duration_ms: Some(duration_ms),
             album_cover_data: None,
             album_cover_mime: None,
+            artist_photo_data: None,
+            artist_photo_mime: None,
+            embedded_lyrics: None,
         }
     }
 

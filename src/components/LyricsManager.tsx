@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { ParsedLyrics } from './LyricsDisplay';
 import type { Track } from '../types/music';
+import { fetchLyricsFromNetwork } from '../services/networkApiService';
 
 interface LyricsManagerProps {
   track: Track;
@@ -101,6 +102,36 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
     }
   };
 
+  // 从网络API获取歌词
+  const handleFetchFromNetwork = async () => {
+    if (!track.title || !track.artist) {
+      setError('缺少歌曲信息，无法从网络获取歌词');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await fetchLyricsFromNetwork(
+        track.title,
+        track.artist,
+        track.album
+      );
+
+      if (result && result.content) {
+        setLyricsContent(result.content);
+        console.log(`✅ 从网络获取歌词成功 (来源: ${result.source})`);
+      } else {
+        setError('未找到歌词，请尝试手动输入或导入文件');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '网络获取歌词失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 导入本地歌词文件
   const handleImportFile = async () => {
     try {
@@ -154,8 +185,8 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-32 pb-32">
+        <div className="bg-white rounded-lg p-6 max-w-xl w-full mx-4 my-auto">
           <div className="text-center">
             <div className="w-8 h-8 border-2 border-blue-500 dark:border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p>加载歌词中...</p>
@@ -166,8 +197,8 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50">
-      <div className="liquid-glass liquid-glass-advanced liquid-glass-depth w-full max-w-4xl max-h-[90vh] mx-4 flex flex-col rounded-2xl shadow-2xl shadow-black/20">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-start justify-center z-50 pt-8 pb-32 overflow-y-auto">
+      <div className="liquid-glass liquid-glass-advanced liquid-glass-depth w-full max-w-5xl max-h-[calc(100vh-180px)] mx-4 flex flex-col rounded-2xl shadow-2xl shadow-black/20 my-auto">
         {/* 标题栏 */}
         <div className="liquid-glass-content p-6 border-b border-white/20">
           <div className="flex items-center justify-between">
@@ -195,6 +226,13 @@ export default function LyricsManager({ track, onClose, onSave }: LyricsManagerP
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-slate-800 dark:text-dark-900">歌词编辑</h3>
               <div className="flex gap-2">
+                <button
+                  onClick={handleFetchFromNetwork}
+                  disabled={isLoading}
+                  className="px-3 py-1 text-sm liquid-glass liquid-glass-interactive rounded-full transition-colors hover:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? '获取中...' : '从网络获取'}
+                </button>
                 <button
                   onClick={handleImportFile}
                   className="px-3 py-1 text-sm liquid-glass liquid-glass-interactive rounded-full transition-colors hover:bg-white/30"

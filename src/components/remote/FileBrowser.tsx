@@ -184,8 +184,8 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
   const pathParts = currentPath.split('/').filter(Boolean);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-dark-200 rounded-2xl w-full max-w-4xl h-[600px] mx-4 flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-8 pb-32 overflow-y-auto">
+      <div className="bg-white dark:bg-dark-200 rounded-2xl w-full max-w-6xl max-h-[calc(100vh-180px)] mx-4 flex flex-col my-auto">
         {/* 标题栏 */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-dark-400">
           <div>
@@ -376,8 +376,8 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
 
       {/* 创建文件夹对话框 */}
       {showCreateDirDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateDirDialog(false)}>
-          <div className="bg-white dark:bg-dark-200 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-32 pb-32" onClick={() => setShowCreateDirDialog(false)}>
+          <div className="bg-white dark:bg-dark-200 rounded-xl p-6 max-w-xl w-full mx-4 my-auto" onClick={(e) => e.stopPropagation()}>
             <h4 className="text-lg font-bold text-slate-900 dark:text-dark-900 mb-4">
               新建文件夹
             </h4>

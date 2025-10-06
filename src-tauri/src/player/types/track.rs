@@ -31,6 +31,18 @@ pub struct Track {
     /// 专辑封面MIME类型
     #[serde(skip_serializing_if = "Option::is_none")]
     pub album_cover_mime: Option<String>,
+    
+    /// 艺术家照片数据（可选，用于缓存）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artist_photo_data: Option<Vec<u8>>,
+    
+    /// 艺术家照片MIME类型
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artist_photo_mime: Option<String>,
+    
+    /// 嵌入的歌词（来自元数据或外部.lrc文件）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedded_lyrics: Option<String>,
 }
 
 // 🔧 修复：自定义Debug实现，避免输出大量封面二进制数据
@@ -61,6 +73,9 @@ impl Track {
             duration_ms: None,
             album_cover_data: None,
             album_cover_mime: None,
+            artist_photo_data: None,
+            artist_photo_mime: None,
+            embedded_lyrics: None,
         }
     }
     

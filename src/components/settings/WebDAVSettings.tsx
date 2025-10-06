@@ -419,8 +419,8 @@ function AddServerDialog({ onAdd, onClose, isLoading }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && !isLoading && onClose()}>
-      <div className="bg-white dark:bg-dark-200 rounded-2xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-16 pb-32 overflow-y-auto" onClick={e => e.target === e.currentTarget && !isLoading && onClose()}>
+      <div className="bg-white dark:bg-dark-200 rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[calc(100vh-180px)] overflow-y-auto my-auto">
         <h3 className="text-xl font-bold text-slate-900 dark:text-dark-900 mb-4">
           添加 WebDAV 服务器
         </h3>

@@ -319,6 +319,12 @@ impl PlayerCore {
                 self.playback_handle.seek(position_ms).await?;
                 Ok(())
             }
+            PlayerCommand::GetPosition(reply) => {
+                // 获取当前播放位置
+                let position = self.playback_handle.get_position().await?;
+                let _ = reply.send(position);
+                Ok(())
+            }
             PlayerCommand::Next => {
                 self.handle_next().await
             }

@@ -287,7 +287,7 @@ export class AlbumCoverService {
 }
 
 /**
- * Tauri封面提供者实现
+ * Tauri封面提供者实现（带网络API降级）
  */
 export class TauriAlbumCoverProvider implements AlbumCoverProvider {
   async getCoverData(trackId: number): Promise<CoverData | null> {
@@ -309,18 +309,85 @@ export class TauriAlbumCoverProvider implements AlbumCoverProvider {
   }
 }
 
+/**
+ * 增强的封面提供者（支持网络API降级）
+ * 策略：本地提取 → 网络API
+ */
+export class EnhancedAlbumCoverProvider implements AlbumCoverProvider {
+  private localProvider: TauriAlbumCoverProvider;
+  private trackCache: Map<number, { title?: string; artist?: string; album?: string }> = new Map();
+
+  constructor() {
+    this.localProvider = new TauriAlbumCoverProvider();
+  }
+
+  /**
+   * 缓存曲目信息以便网络查询
+   */
+  cacheTrackInfo(trackId: number, title?: string, artist?: string, album?: string) {
+    this.trackCache.set(trackId, { title, artist, album });
+  }
+
+  async getCoverData(trackId: number): Promise<CoverData | null> {
+    // 1. 首先尝试本地提取
+    const localData = await this.localProvider.getCoverData(trackId);
+    if (localData) {
+      return localData;
+    }
+
+    // 2. 如果本地没有，尝试从网络API获取
+    const trackInfo = this.trackCache.get(trackId);
+    if (!trackInfo || !trackInfo.artist) {
+      console.log(`⚠️ 曲目 ${trackId} 缺少艺术家信息，跳过网络获取`);
+      return null;
+    }
+
+    try {
+      const { fetchCoverFromNetwork } = await import('./networkApiService');
+      console.log(`🌐 尝试从网络获取封面: ${trackInfo.artist} - ${trackInfo.album || trackInfo.title || ''}`);
+      
+      const networkData = await fetchCoverFromNetwork(
+        trackInfo.artist,
+        trackInfo.title,
+        trackInfo.album
+      );
+
+      if (networkData && networkData.data.length > 0) {
+        console.log(`✅ 网络封面获取成功 (来源: ${networkData.source})`);
+        return {
+          data: networkData.data,
+          mimeType: networkData.mimeType,
+        };
+      }
+    } catch (error) {
+      console.warn(`网络封面获取失败:`, error);
+    }
+
+    return null;
+  }
+}
+
 // 全局单例实例（可选，也可以在需要的地方创建）
 let globalService: AlbumCoverService | null = null;
 
 /**
- * 获取全局封面服务实例
+ * 获取全局封面服务实例（支持网络API降级）
  */
 export function getAlbumCoverService(): AlbumCoverService {
   if (!globalService) {
-    const provider = new TauriAlbumCoverProvider();
+    const provider = new EnhancedAlbumCoverProvider();
     globalService = new AlbumCoverService(provider);
   }
   return globalService;
+}
+
+/**
+ * 获取增强的封面提供者实例
+ */
+export function getEnhancedProvider(): EnhancedAlbumCoverProvider | null {
+  const service = getAlbumCoverService();
+  // @ts-ignore - 访问私有属性
+  return service.provider instanceof EnhancedAlbumCoverProvider ? service.provider : null;
 }
 
 /**

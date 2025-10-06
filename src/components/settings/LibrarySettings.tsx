@@ -1,11 +1,17 @@
 import { SettingSection } from './ui/SettingSection';
 import MusicFolderManager from '../MusicFolderManager';
 
-export default function LibrarySettings() {
+interface LibrarySettingsProps {
+  highlightedSettingId?: string | null;
+}
+
+export default function LibrarySettings({ highlightedSettingId }: LibrarySettingsProps = {}) {
   return (
     <div className="space-y-6">
       {/* 文件夹管理 */}
       <SettingSection
+        sectionId="music-folders"
+        isHighlighted={highlightedSettingId === 'library-folders'}
         title="音乐文件夹管理"
         description="添加和管理音乐库文件夹"
         icon={
@@ -19,6 +25,8 @@ export default function LibrarySettings() {
 
       {/* 扫描设置 */}
       <SettingSection
+        sectionId="scan-settings"
+        isHighlighted={highlightedSettingId === 'library-scan'}
         title="扫描设置"
         description="配置音乐库扫描选项"
         badge={{ text: '即将推出', variant: 'info' }}
@@ -37,6 +45,8 @@ export default function LibrarySettings() {
 
       {/* 元数据设置 */}
       <SettingSection
+        sectionId="metadata"
+        isHighlighted={highlightedSettingId === 'library-metadata'}
         title="元数据管理"
         description="管理音乐文件的标签和元数据"
         badge={{ text: '即将推出', variant: 'info' }}

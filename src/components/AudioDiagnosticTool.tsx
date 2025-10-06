@@ -196,8 +196,8 @@ export function AudioDiagnosticTool() {
 
       {/* 诊断面板 */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-dark-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-16 pb-32 overflow-y-auto">
+          <div className="bg-white dark:bg-dark-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[calc(100vh-180px)] overflow-hidden flex flex-col my-auto">
             {/* 标题栏 */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-dark-700">
               <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">

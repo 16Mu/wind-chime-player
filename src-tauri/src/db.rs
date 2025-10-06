@@ -199,6 +199,12 @@ impl Database {
         // Migrate existing schema: Add album cover columns if they don't exist
         self.migrate_album_cover_columns()?;
         
+        // Migrate existing schema: Add embedded lyrics column
+        self.migrate_lyrics_column()?;
+        
+        // Migrate existing schema: Add artist photo columns
+        self.migrate_artist_photo_columns()?;
+        
         // Migrate existing schema: Add WebDAV and sync support columns
         self.migrate_webdav_support_columns()?;
 
@@ -466,6 +472,20 @@ impl Database {
             [],
         )?;
 
+        // 艺术家封面表 - 存储从网络获取的艺术家封面
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS artist_covers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                artist_name TEXT NOT NULL UNIQUE,
+                cover_data BLOB NOT NULL,
+                cover_mime TEXT NOT NULL,
+                source TEXT DEFAULT 'network',
+                created_at INTEGER DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+            )",
+            [],
+        )?;
+        
         // 同步任务表
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS sync_tasks (
@@ -601,6 +621,51 @@ impl Database {
             )?;
             
             log::info!("专辑封面字段添加成功");
+        }
+        
+        Ok(())
+    }
+    
+    /// 迁移歌词字段到现有数据库
+    fn migrate_lyrics_column(&self) -> Result<()> {
+        // 检查是否需要添加歌词字段
+        let column_exists = self.conn.prepare("SELECT embedded_lyrics FROM tracks LIMIT 1");
+        
+        if column_exists.is_err() {
+            // 字段不存在，需要添加
+            log::info!("添加embedded_lyrics字段到现有数据库");
+            
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN embedded_lyrics TEXT",
+                [],
+            )?;
+            
+            log::info!("embedded_lyrics字段添加成功");
+        }
+        
+        Ok(())
+    }
+    
+    /// 迁移艺术家照片字段到现有数据库
+    fn migrate_artist_photo_columns(&self) -> Result<()> {
+        // 检查是否需要添加艺术家照片字段
+        let column_exists = self.conn.prepare("SELECT artist_photo_data FROM tracks LIMIT 1");
+        
+        if column_exists.is_err() {
+            // 字段不存在，需要添加
+            log::info!("添加艺术家照片字段到现有数据库");
+            
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN artist_photo_data BLOB",
+                [],
+            )?;
+            
+            self.conn.execute(
+                "ALTER TABLE tracks ADD COLUMN artist_photo_mime TEXT",
+                [],
+            )?;
+            
+            log::info!("艺术家照片字段添加成功");
         }
         
         Ok(())
@@ -762,8 +827,8 @@ impl Database {
 
     pub fn insert_track(&self, track: &Track) -> Result<i64> {
         let mut stmt = self.conn.prepare(
-            "INSERT INTO tracks (path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, last_modified)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "INSERT INTO tracks (path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics, last_modified)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(path) DO UPDATE SET
                 title = excluded.title,
                 artist = excluded.artist,
@@ -771,6 +836,9 @@ impl Database {
                 duration_ms = excluded.duration_ms,
                 album_cover_data = excluded.album_cover_data,
                 album_cover_mime = excluded.album_cover_mime,
+                artist_photo_data = excluded.artist_photo_data,
+                artist_photo_mime = excluded.artist_photo_mime,
+                embedded_lyrics = excluded.embedded_lyrics,
                 last_modified = excluded.last_modified"
         )?;
 
@@ -787,6 +855,9 @@ impl Database {
             track.duration_ms,
             track.album_cover_data,
             track.album_cover_mime,
+            track.artist_photo_data,
+            track.artist_photo_mime,
+            track.embedded_lyrics,
             last_modified
         ])?;
 
@@ -800,7 +871,7 @@ impl Database {
 
     pub fn get_track_by_id(&self, id: i64) -> Result<Option<Track>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime FROM tracks WHERE id = ?1"
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics FROM tracks WHERE id = ?1"
         )?;
 
         let track = stmt.query_row([id], |row| {
@@ -813,6 +884,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         });
 
@@ -825,7 +899,7 @@ impl Database {
 
     pub fn get_track_by_path(&self, path: &str) -> Result<Option<Track>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime FROM tracks WHERE path = ?1"
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics FROM tracks WHERE path = ?1"
         )?;
 
         let track = stmt.query_row([path], |row| {
@@ -838,6 +912,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         });
 
@@ -850,7 +927,7 @@ impl Database {
 
     pub fn get_all_tracks(&self) -> Result<Vec<Track>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime FROM tracks ORDER BY artist, album, title"
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics FROM tracks ORDER BY artist, album, title"
         )?;
 
         let track_iter = stmt.query_map([], |row| {
@@ -863,6 +940,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         })?;
 
@@ -887,7 +967,7 @@ impl Database {
         // 尝试多种搜索策略，按相关性排序
         for (search_query, _priority) in fuzzy_queries {
             let mut stmt = self.conn.prepare(
-                "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime 
+                "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime, t.artist_photo_data, t.artist_photo_mime, t.embedded_lyrics 
                  FROM tracks t
                  JOIN tracks_fts fts ON t.id = fts.rowid 
                  WHERE tracks_fts MATCH ?1
@@ -904,6 +984,9 @@ impl Database {
                     duration_ms: row.get(5)?,
                     album_cover_data: row.get(6)?,
                     album_cover_mime: row.get(7)?,
+                    artist_photo_data: row.get(8)?,
+                    artist_photo_mime: row.get(9)?,
+                    embedded_lyrics: row.get(10)?,
                 })
             });
 
@@ -960,7 +1043,7 @@ impl Database {
         let pattern = format!("%{}%", query.trim().to_lowercase());
         
         let mut stmt = self.conn.prepare(
-            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics
              FROM tracks 
              WHERE LOWER(title) LIKE ?1 
                 OR LOWER(artist) LIKE ?1 
@@ -985,6 +1068,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         })?;
 
@@ -1027,7 +1113,7 @@ impl Database {
 
     pub fn get_playlist_tracks(&self, playlist_id: i64) -> Result<Vec<Track>> {
         let mut stmt = self.conn.prepare(
-            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime
+            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime, t.artist_photo_data, t.artist_photo_mime, t.embedded_lyrics
              FROM tracks t
              JOIN playlist_items pi ON t.id = pi.track_id
              WHERE pi.playlist_id = ?1
@@ -1044,6 +1130,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         })?;
 
@@ -1184,6 +1273,57 @@ impl Database {
             Err(e) => Err(e.into()),
         }
     }
+    
+    // ========== 艺术家封面相关操作 ==========
+    
+    /// 保存艺术家封面到数据库
+    pub fn save_artist_cover(&self, artist_name: &str, cover_data: &[u8], cover_mime: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO artist_covers (artist_name, cover_data, cover_mime, updated_at)
+             VALUES (?1, ?2, ?3, strftime('%s', 'now'))
+             ON CONFLICT(artist_name) DO UPDATE SET
+                cover_data = excluded.cover_data,
+                cover_mime = excluded.cover_mime,
+                updated_at = excluded.updated_at",
+            params![artist_name, cover_data, cover_mime],
+        )?;
+        
+        log::info!("✅ 艺术家封面已保存到数据库: {}", artist_name);
+        Ok(())
+    }
+    
+    /// 从数据库获取艺术家封面
+    pub fn get_artist_cover(&self, artist_name: &str) -> Result<Option<(Vec<u8>, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT cover_data, cover_mime FROM artist_covers WHERE artist_name = ?1"
+        )?;
+        
+        let result = stmt.query_row([artist_name], |row| {
+            let cover_data: Vec<u8> = row.get(0)?;
+            let cover_mime: String = row.get(1)?;
+            Ok((cover_data, cover_mime))
+        }).optional()?;
+        
+        Ok(result)
+    }
+    
+    /// 批量获取艺术家封面（用于初始加载）
+    pub fn get_all_artist_covers(&self) -> Result<Vec<(String, Vec<u8>, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT artist_name, cover_data, cover_mime FROM artist_covers ORDER BY artist_name"
+        )?;
+        
+        let covers = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+            ))
+        })?.collect::<Result<Vec<_>, _>>()?;
+        
+        log::info!("📚 从数据库加载了 {} 个艺术家封面", covers.len());
+        Ok(covers)
+    }
 
     pub fn delete_lyrics(&self, track_id: i64) -> Result<()> {
         let mut stmt = self.conn.prepare("DELETE FROM lyrics WHERE track_id = ?1")?;
@@ -1198,6 +1338,15 @@ impl Database {
             "UPDATE lyrics SET content = ?2, created_at = strftime('%s', 'now') WHERE track_id = ?1"
         )?;
         stmt.execute(params![track_id, content])?;
+        Ok(())
+    }
+
+    /// 更新曲目的专辑封面
+    pub fn update_track_cover(&self, track_id: i64, cover_data: Option<Vec<u8>>, mime_type: Option<String>) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "UPDATE tracks SET album_cover_data = ?2, album_cover_mime = ?3 WHERE id = ?1"
+        )?;
+        stmt.execute(params![track_id, cover_data, mime_type])?;
         Ok(())
     }
 
@@ -1332,7 +1481,7 @@ impl Database {
 
     pub fn get_all_favorites(&self) -> Result<Vec<Track>> {
         let mut stmt = self.conn.prepare(
-            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime
+            "SELECT t.id, t.path, t.title, t.artist, t.album, t.duration_ms, t.album_cover_data, t.album_cover_mime, t.artist_photo_data, t.artist_photo_mime, t.embedded_lyrics
              FROM tracks t
              JOIN favorites f ON t.id = f.track_id
              ORDER BY f.created_at DESC"
@@ -1348,6 +1497,9 @@ impl Database {
                 duration_ms: row.get(5)?,
                 album_cover_data: row.get(6)?,
                 album_cover_mime: row.get(7)?,
+                artist_photo_data: row.get(8)?,
+                artist_photo_mime: row.get(9)?,
+                embedded_lyrics: row.get(10)?,
             })
         })?;
 
@@ -1877,6 +2029,9 @@ impl Database {
                     duration_ms: row.get(5).ok(),
                     album_cover_data: None,
                     album_cover_mime: None,
+                    artist_photo_data: None,
+                    artist_photo_mime: None,
+                    embedded_lyrics: None,
                 },
                 row.get(6)?, // play_count
                 row.get(7)?, // last_played
@@ -2020,7 +2175,7 @@ impl Database {
         let limit_clause = limit.map(|l| format!(" LIMIT {}", l)).unwrap_or_default();
         
         let sql = format!(
-            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime 
+            "SELECT id, path, title, artist, album, duration_ms, album_cover_data, album_cover_mime, artist_photo_data, artist_photo_mime, embedded_lyrics 
              FROM tracks 
              WHERE {} 
              ORDER BY artist, album, title{}",
@@ -2045,6 +2200,9 @@ impl Database {
                 duration_ms: row.get(5).ok(),
                 album_cover_data: row.get(6).ok(),
                 album_cover_mime: row.get(7).ok(),
+                artist_photo_data: row.get(8).ok(),
+                artist_photo_mime: row.get(9).ok(),
+                embedded_lyrics: row.get(10).ok(),
             })
         })?.collect::<Result<Vec<_>, _>>()?;
         

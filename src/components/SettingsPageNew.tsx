@@ -9,8 +9,12 @@
  * - ✅ 统一的设计系统
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useUI } from '../contexts/UIContext';
+import { searchSettings } from '../utils/settingsSearch';
+import type { SettingItem } from '../utils/settingsSearch';
+import { SearchResultsDropdown } from './settings/SearchResultsDropdown';
 
 // 设置分类Tab
 import LibrarySettings from './settings/LibrarySettings';
@@ -81,11 +85,127 @@ export default function SettingsPageNew() {
     updateLyricsAnimationSettings 
   } = useTheme();
 
+  // 从UIContext获取搜索状态
+  const {
+    settingsSearchQuery,
+    settingsSearchVisible,
+    setSettingsSearchQuery,
+    clearSettingsSearch,
+    hideSettingsSearch,
+    highlightedSettingId,
+    setHighlightedSettingId,
+    navigateTo
+  } = useUI();
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchResults, setSearchResults] = useState<SettingItem[]>([]);
+
+  // 当搜索框可见时自动聚焦
+  useEffect(() => {
+    if (settingsSearchVisible && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [settingsSearchVisible]);
+
+  // 实时搜索设置项
+  useEffect(() => {
+    if (settingsSearchQuery.trim()) {
+      const results = searchSettings(settingsSearchQuery);
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  }, [settingsSearchQuery]);
+
+  // ESC键关闭搜索框
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && settingsSearchVisible) {
+        hideSettingsSearch();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settingsSearchVisible, hideSettingsSearch]);
+
+  // 根据搜索查询过滤Tab
+  const getFilteredTabs = () => {
+    if (!settingsSearchQuery.trim()) {
+      return TABS;
+    }
+
+    const query = settingsSearchQuery.toLowerCase();
+    return TABS.filter(tab => 
+      tab.label.toLowerCase().includes(query) ||
+      tab.id.toLowerCase().includes(query)
+    );
+  };
+
+  const filteredTabs = getFilteredTabs();
+
+  // 检查Tab是否匹配搜索
+  const isTabMatched = (tabId: SettingsTab) => {
+    if (!settingsSearchQuery.trim()) return false;
+    return filteredTabs.some(tab => tab.id === tabId);
+  };
+
+  // 处理搜索结果选择
+  const handleSelectSearchResult = (item: SettingItem) => {
+    // 跳转到对应的Tab
+    setActiveTab(item.tab);
+    
+    // 设置高亮的设置项ID
+    setHighlightedSettingId(item.id);
+    
+    // 等待Tab切换和渲染完成后滚动到目标位置
+    setTimeout(() => {
+      const element = document.getElementById(item.sectionId || '');
+      if (element) {
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center'
+        });
+      }
+    }, 100);
+    
+    // 3秒后自动取消高亮
+    setTimeout(() => {
+      setHighlightedSettingId(null);
+    }, 3000);
+  };
+
   // 渲染对应的设置内容
   const renderContent = () => {
+    // 如果有搜索查询但当前Tab不匹配，显示提示
+    if (settingsSearchQuery.trim() && !isTabMatched(activeTab)) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <svg className="w-16 h-16 text-slate-300 dark:text-dark-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <h3 className="text-lg font-semibold text-slate-700 dark:text-dark-800 mb-2">
+            当前分类不匹配搜索条件
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-dark-600 mb-4">
+            请切换到高亮的分类标签查看搜索结果
+          </p>
+          {filteredTabs.length > 0 && (
+            <button
+              onClick={() => setActiveTab(filteredTabs[0].id)}
+              className="px-4 py-2 bg-brand-500 dark:bg-brand-600 text-white rounded-lg
+                       hover:bg-brand-600 dark:hover:bg-brand-700 transition-colors duration-200"
+            >
+              跳转到 {filteredTabs[0].label}
+            </button>
+          )}
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'library':
-        return <LibrarySettings />;
+        return <LibrarySettings highlightedSettingId={highlightedSettingId} />;
       
       case 'appearance':
         return (
@@ -94,6 +214,7 @@ export default function SettingsPageNew() {
             onThemeChange={setTheme}
             isHighContrast={isHighContrast}
             onToggleHighContrast={toggleHighContrast}
+            highlightedSettingId={highlightedSettingId}
           />
         );
       
@@ -102,11 +223,12 @@ export default function SettingsPageNew() {
           <AnimationSettings
             lyricsAnimationSettings={lyricsAnimationSettings}
             onUpdateLyricsAnimationSettings={updateLyricsAnimationSettings}
+            highlightedSettingId={highlightedSettingId}
           />
         );
       
       case 'playback':
-        return <PlaybackSettings />;
+        return <PlaybackSettings highlightedSettingId={highlightedSettingId} />;
       
       case 'webdav':
         return <WebDAVSettings />;
@@ -124,7 +246,7 @@ export default function SettingsPageNew() {
       {/* 顶部导航栏 */}
       <div className="settings-header bg-white dark:bg-dark-200 border-b border-slate-200 dark:border-dark-400 px-6 py-4">
         <div className="max-w-6xl mx-auto">
-          {/* 小标题 + Tab导航 */}
+          {/* 小标题 + 搜索框 */}
           <div className="flex items-center justify-between mb-4">
             {/* 左侧小标题 */}
             <div className="flex items-center gap-3">
@@ -141,40 +263,140 @@ export default function SettingsPageNew() {
                 应用设置
               </h1>
             </div>
+
+            {/* 右侧搜索框 */}
+            {settingsSearchVisible && (
+              <div className="relative flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="relative w-96">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={settingsSearchQuery}
+                    onChange={(e) => setSettingsSearchQuery(e.target.value)}
+                    placeholder="搜索设置项，例如：歌词动画、主题、音频..."
+                    className="w-full px-4 py-2 pr-10 rounded-lg
+                             text-sm
+                             bg-slate-50 dark:bg-dark-100
+                             border border-slate-200 dark:border-dark-400
+                             text-slate-900 dark:text-dark-900
+                             placeholder-slate-400 dark:placeholder-dark-600
+                             focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400
+                             transition-all duration-200"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {settingsSearchQuery ? (
+                      <button
+                        onClick={clearSettingsSearch}
+                        className="w-5 h-5 flex items-center justify-center
+                                 text-slate-400 dark:text-dark-600
+                                 hover:text-slate-600 dark:hover:text-dark-800
+                                 transition-colors duration-200"
+                        aria-label="清除搜索"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <svg 
+                        className="w-4 h-4 text-slate-400 dark:text-dark-600"
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* 搜索结果下拉 */}
+                  {settingsSearchQuery.trim() && (
+                    <SearchResultsDropdown
+                      results={searchResults}
+                      query={settingsSearchQuery}
+                      onSelect={handleSelectSearchResult}
+                      onClose={hideSettingsSearch}
+                    />
+                  )}
+                </div>
+                <button
+                  onClick={hideSettingsSearch}
+                  className="p-2 rounded-lg
+                           text-slate-400 dark:text-dark-600
+                           hover:text-slate-600 dark:hover:text-dark-800
+                           hover:bg-slate-100 dark:hover:bg-dark-200
+                           transition-all duration-200"
+                  aria-label="关闭搜索"
+                  title="关闭搜索 (ESC)"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* 搜索结果提示 */}
+          {settingsSearchQuery.trim() && (
+            <div className="mb-3 text-center">
+              <p className="text-xs text-slate-500 dark:text-dark-600">
+                {filteredTabs.length > 0 ? (
+                  <>
+                    找到 <span className="font-semibold text-amber-600 dark:text-amber-400">{filteredTabs.length}</span> 个匹配的设置分类
+                  </>
+                ) : (
+                  <span className="text-slate-400 dark:text-dark-700">未找到匹配的设置分类</span>
+                )}
+              </p>
+            </div>
+          )}
 
           {/* Tab导航 - 横向滑动指示器 */}
           <div className="relative flex justify-center">
             <div className="relative flex">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    flex flex-col items-center gap-1.5 px-6 py-3
-                    whitespace-nowrap transition-colors duration-300 relative z-10
-                    ${activeTab === tab.id
-                      ? 'text-brand-600 dark:text-brand-400'
-                      : 'text-slate-400 dark:text-dark-600'
-                    }
-                  `}
-                >
-                  {/* SVG图标 */}
-                  <svg 
-                    className="w-7 h-7"
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth={1.5}
-                    viewBox="0 0 24 24"
+              {TABS.map((tab) => {
+                const isMatched = isTabMatched(tab.id);
+                const isFiltered = settingsSearchQuery.trim() && !isMatched;
+                
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`
+                      flex flex-col items-center gap-1.5 px-6 py-3
+                      whitespace-nowrap transition-all duration-300 relative z-10
+                      ${activeTab === tab.id
+                        ? 'text-brand-600 dark:text-brand-400'
+                        : isMatched
+                          ? 'text-amber-500 dark:text-amber-400'
+                          : isFiltered
+                            ? 'opacity-30 text-slate-300 dark:text-dark-700'
+                            : 'text-slate-400 dark:text-dark-600'
+                      }
+                    `}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
-                  </svg>
-                  {/* 文字 */}
-                  <span className="text-sm font-medium">
-                    {tab.label}
-                  </span>
-                </button>
-              ))}
+                    {/* SVG图标 */}
+                    <svg 
+                      className="w-7 h-7"
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth={1.5}
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
+                    </svg>
+                    {/* 文字 */}
+                    <span className="text-sm font-medium relative">
+                      {tab.label}
+                      {/* 搜索匹配标记 */}
+                      {isMatched && (
+                        <span className="absolute -top-1 -right-3 w-1.5 h-1.5 bg-amber-500 dark:bg-amber-400 rounded-full"></span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
               
               {/* 底部横向指示器 */}
               <div 

@@ -8,11 +8,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // 主品牌色系统
+        // 主品牌色系统 - 优化后的蓝色体系
         brand: {
           400: '#7FB0FF',  // 浅品牌蓝
           500: '#4D86FF',  // 中等品牌蓝
-          600: '#2B6FFF',  // 主品牌蓝 ⭐ 主要使用
+          600: '#3A7AFE',  // 主品牌蓝 ⭐ 主要使用（Apple Music风格）
           700: '#1E56E0',  // 深品牌蓝
         },
         accent: {
@@ -26,17 +26,23 @@ module.exports = {
         'bg-light': '#FDFDFB',
         card: '#FDFDFB',
         muted: '#6B7280',
-        // 温柔米白颜色系统（护眼配色）
-        'text-primary': '#0F172A',
-        'text-secondary': '#334155',
-        'text-muted': '#64748B',
-        'text-disabled': '#94A3B8',
-        'surface-primary': '#FDFDFB',
-        'surface-secondary': '#F8F7F4',
-        'surface-tertiary': '#F2F1ED',
-        'border-primary': '#D9D6D0',
-        'border-secondary': '#E8E6E2',
-        'border-focus': '#2563EB',
+        // 🎨 优化后的颜色系统 - 层次分明
+        'text-primary': '#1E293B',      // 主要文字 - 加深对比度
+        'text-secondary': '#475569',    // 次要文字 - 高对比度
+        'text-muted': '#64748B',        // 辅助文字 - 中等对比度
+        'text-disabled': '#94A3B8',     // 禁用文字
+        
+        // 背景色系统 - 建立明确层次
+        'surface-primary': '#FFFFFF',   // 主要表面 - 纯白
+        'surface-secondary': '#F8FAFC', // 次要表面 - 极浅灰（页面背景）
+        'surface-tertiary': '#F1F5F9',  // 三级表面 - 浅灰（侧边栏）
+        'surface-elevated': '#FFFFFF',  // 提升表面（卡片）
+        
+        // 边框系统
+        'border-primary': '#E2E8F0',    // 主要边框 - 更柔和
+        'border-secondary': '#F1F5F9',  // 次要边框
+        'border-focus': '#3A7AFE',      // 焦点边框
+        
         // 深色模式专用色彩
         dark: {
           50: '#0B1220',   // 深蓝黑 - 主要表面
@@ -50,7 +56,7 @@ module.exports = {
           800: '#C7D2FE',  // 次要文字
           900: '#E5EAF3',  // 主要文字
         },
-        // 深色模式卡片色彩（去除玻璃效果）
+        // 深色模式卡片色彩
         'card-dark': {
           bg: '#0F172A',
           'bg-secondary': '#111827',
@@ -80,9 +86,25 @@ module.exports = {
         'none': '0px',
       },
       boxShadow: {
+        // 优化后的阴影系统 - 更柔和的层次
+        'card': '0 4px 12px rgba(0, 0, 0, 0.05)',              // 卡片默认阴影
+        'card-hover': '0 8px 24px rgba(0, 0, 0, 0.08)',        // 卡片悬停
         'subtle': '0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08)',
         'moderate': '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
         'prominent': '0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)',
+      },
+      borderRadius: {
+        'card': '16px',      // 统一的卡片圆角
+        'button': '12px',    // 按钮圆角
+      },
+      spacing: {
+        // 额外的间距选项
+        '18': '4.5rem',   // 72px
+        '88': '22rem',    // 352px
+      },
+      maxWidth: {
+        'content': '2000px',  // 内容最大宽度
+        'ultra': '2400px',    // 超宽屏最大宽度
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',

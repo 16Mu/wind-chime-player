@@ -38,6 +38,9 @@ pub enum PlayerCommand {
     /// 加载播放列表
     LoadPlaylist(Vec<Track>),
     
+    /// 获取当前播放位置（毫秒）
+    GetPosition(tokio::sync::oneshot::Sender<Option<u64>>),
+    
     /// 重置音频设备
     ResetAudioDevice,
     
@@ -60,6 +63,7 @@ impl PlayerCommand {
             PlayerCommand::SetRepeatMode(_) => "SetRepeatMode",
             PlayerCommand::SetShuffle(_) => "SetShuffle",
             PlayerCommand::LoadPlaylist(_) => "LoadPlaylist",
+            PlayerCommand::GetPosition(_) => "GetPosition",
             PlayerCommand::ResetAudioDevice => "ResetAudioDevice",
             PlayerCommand::Shutdown => "Shutdown",
         }
@@ -74,6 +78,7 @@ impl PlayerCommand {
                 | PlayerCommand::Resume
                 | PlayerCommand::Stop
                 | PlayerCommand::Seek(_)
+                | PlayerCommand::GetPosition(_)
         )
     }
     
