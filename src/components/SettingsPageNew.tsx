@@ -152,13 +152,19 @@ export default function SettingsPageNew() {
 
   // 处理搜索结果选择
   const handleSelectSearchResult = (item: SettingItem) => {
-    // 跳转到对应的Tab
+    // 1. 先确保导航到设置页面（如果不在的话）
+    navigateTo('settings' as Page);
+    
+    // 2. 切换到对应的Tab
     setActiveTab(item.tab);
     
-    // 设置高亮的设置项ID
+    // 3. 设置高亮的设置项ID
     setHighlightedSettingId(item.id);
     
-    // 等待Tab切换和渲染完成后滚动到目标位置
+    // 4. 关闭搜索框
+    hideSettingsSearch();
+    
+    // 5. 等待页面导航和Tab切换渲染完成后滚动到目标位置
     setTimeout(() => {
       const element = document.getElementById(item.sectionId || '');
       if (element) {
@@ -167,12 +173,12 @@ export default function SettingsPageNew() {
           block: 'center'
         });
       }
-    }, 100);
+    }, 300); // 增加延迟时间，确保导航完成
     
-    // 3秒后自动取消高亮
+    // 6. 3秒后自动取消高亮
     setTimeout(() => {
       setHighlightedSettingId(null);
-    }, 3000);
+    }, 3300);
   };
 
   // 渲染对应的设置内容
@@ -432,7 +438,7 @@ export default function SettingsPageNew() {
 
       {/* 内容区 - 单列垂直布局 */}
       <div className="settings-content flex-1 overflow-y-auto">
-        <div className={`${activeTab === 'webdav' ? 'h-full' : 'max-w-4xl mx-auto'} px-6 py-8`}>
+        <div className={`${activeTab === 'webdav' ? 'h-full' : 'max-w-4xl mx-auto'} px-6 pt-8 pb-32`}>
           {renderContent()}
         </div>
       </div>

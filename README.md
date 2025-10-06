@@ -88,7 +88,6 @@
 
 ### 🔧 开发者功能
 - **智能设置搜索** - 模糊搜索设置项，智能高亮定位
-- **性能监控** - 实时监控缓存、音频、系统性能
 - **FTS5搜索** - SQLite 全文搜索，快速定位音乐
 - **跨平台** - Windows, macOS, Linux 一键运行
 - **类型安全** - 全栈TypeScript + Rust类型检查
@@ -234,7 +233,6 @@ graph TB
 | **设置搜索** | 模糊搜索、智能高亮、平滑定位 | TypeScript + React | ✅ 已完成 |
 | **播放历史** | 自动记录、统计分析、实时刷新 | SQLite + React | ✅ 已完成 |
 | **WebDAV客户端** | 远程音乐源、流式播放 | Rust + reqwest | ⚠️ 已实现未测试 |
-| **性能监控** | 实时性能数据展示 | Rust + React | 🚧 UI完成 |
 | **搜索引擎** | FTS5全文检索 | SQLite + Rust | ✅ 已完成 |
 
 ## 🛠️ 技术栈
@@ -341,7 +339,6 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 
 ### v0.3.1
 - ✅ **WebDAV后端完成** - Stream到AsyncRead转换，支持远程音频流式播放
-- ✅ **性能监控UI** - 完整的性能监控面板界面
 - ✅ **Actor架构优化** - 基于Actor模型的播放引擎重构
 - ✅ **智能缓存系统** - PreloadActor实现，LRU预加载算法
 - ✅ **沉浸式歌词优化** - 修复闪动问题，优化滚动动画
@@ -365,7 +362,6 @@ src-tauri/target/release/bundle/nsis/WindChime Player_0.4.0_x64-setup.exe
 - **🌐 WebDAV完善**：前端集成、用户体验优化
 - **🎤 歌词增强**：更多歌词格式支持、同步算法优化
 - **🎨 界面优化**：主题系统、界面组件完善
-- **📊 性能监控**：后端数据采集、可视化增强
 
 ### 🛠️ 开发指南
 

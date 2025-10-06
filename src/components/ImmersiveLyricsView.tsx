@@ -2551,43 +2551,37 @@ const ProgressBar = React.memo(({ className, track, isPlaying, onSeek }: Progres
         <span>{formatTime(currentDisplayPosition)}</span>
         <span>{formatTime(track?.duration_ms || 0)}</span>
       </div>
+      {/* 🍎 Apple 风格进度条 */}
       <div 
         ref={progressBarRef}
-        className="relative h-2 bg-white/20 rounded-full backdrop-blur-sm cursor-pointer group"
+        className="relative h-1.5 cursor-pointer group overflow-hidden"
         onClick={handleClick}
         onMouseDown={handleMouseDown}
+        style={{
+          borderRadius: '12px',
+        }}
       >
+        {/* 背景条 - 深色半透明 */}
         <div 
-          className="absolute top-0 left-0 h-full rounded-full"
+          className="absolute inset-0 bg-white/25"
+          style={{
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)',
+          }}
+        />
+        
+        {/* 进度条 - 白色 */}
+        <div 
+          className="absolute top-0 left-0 h-full bg-white"
           style={{ 
             width: `${track?.duration_ms ? (currentDisplayPosition / track.duration_ms) * 100 : 0}%`,
-            background: 'linear-gradient(90deg, var(--progress-color-from), var(--progress-color-to))',
+            borderRadius: '12px',
             // 🔥 拖拽时禁用过渡，提高跟手性
-            transition: isDragging ? 'none' : 'all 0.15s ease-out',
-            boxShadow: `
-              0 0 0 1px rgba(255, 255, 255, 0.6),
-              0 0 8px rgba(255, 255, 255, 0.3),
-              0 0 12px var(--progress-glow),
-              0 2px 4px var(--progress-shadow)
-            `
+            transition: isDragging ? 'none' : 'width 0.1s linear',
+            // 微妙的阴影增加层次感
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
           }}
-        >
-          {/* 拖拽手柄 */}
-          <div 
-            className={`absolute right-0 top-1/2 w-[18px] h-[18px] bg-white rounded-full ${isDragging ? 'opacity-100 scale-125' : 'group-hover:opacity-100 group-hover:scale-110'}`}
-            style={{
-              transform: `translateY(-50%) scale(${isDragging ? 1.25 : 0.85})`,
-              opacity: isDragging ? 1 : 0.7,
-              // 🔥 拖拽时禁用过渡，手柄立即跟随
-              transition: isDragging ? 'none' : 'all 0.2s ease-out',
-              border: '2.5px solid var(--progress-color-from)',
-              boxShadow: `
-                0 2px 8px var(--progress-glow),
-                0 0 0 2px rgba(255, 255, 255, 0.3)
-              `
-            }}
-          />
-        </div>
+        />
       </div>
     </div>
   );

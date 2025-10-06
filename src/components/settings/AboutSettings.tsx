@@ -25,16 +25,18 @@ export default function AboutSettings() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h4 className="text-2xl font-bold text-slate-900 dark:text-dark-900">WindChime Player</h4>
-                <div className="px-2.5 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-md text-sm font-medium">v0.4.0.1.0</div>
+                <div className="px-2.5 py-1 bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-md text-sm font-medium">v0.4.1</div>
               </div>
               <p className="text-slate-600 dark:text-dark-700 mb-3 leading-relaxed">
-                一款现代化的音乐播放器，采用 Tauri + React 技术栈构建。
-                注重用户体验和简约美学，提供流畅的音乐播放和管理功能。
+                现代化跨平台音乐播放器，采用 macOS 风格设计，支持本地+WebDAV混合音乐源，提供沉浸式歌词体验。
+                采用混合播放引擎架构，实现零延迟 seek（&lt; 10ms），提供流畅的音乐播放和管理功能。
               </p>
               <div className="flex flex-wrap gap-2">
-                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">音乐播放</div>
+                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">混合播放引擎</div>
+                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">macOS 风格</div>
                 <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">智能搜索</div>
-                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">简约设计</div>
+                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">沉浸式歌词</div>
+                <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">WebDAV</div>
                 <div className="px-2.5 py-1 bg-slate-100 dark:bg-dark-300/50 text-slate-700 dark:text-dark-900 rounded-md text-sm">高性能</div>
               </div>
             </div>
@@ -86,7 +88,7 @@ export default function AboutSettings() {
               <span className="font-medium text-slate-900 dark:text-dark-900">开源许可</span>
             </div>
             <p className="text-slate-700 dark:text-dark-800 text-sm">MIT License</p>
-          </div>1
+          </div>
           
           <div className="bg-blue-50 dark:bg-dark-300/50 rounded-lg p-4 border border-blue-200 dark:border-dark-400">
             <div className="flex items-center gap-3 mb-2">
@@ -95,7 +97,7 @@ export default function AboutSettings() {
               </svg>
               <span className="font-medium text-slate-900 dark:text-dark-900">最后更新</span>
             </div>
-            <p className="text-slate-700 dark:text-dark-800 text-sm">2025年10月4日</p>
+            <p className="text-slate-700 dark:text-dark-800 text-sm">2025年10月8日</p>
           </div>
         </div>
       </SettingSection>
@@ -103,52 +105,86 @@ export default function AboutSettings() {
       {/* 特别感谢 */}
       <SettingSection
         title="特别感谢"
-        description="感谢所有开源项目的贡献"
+        description="感谢所有开源项目和贡献者的支持"
         icon={
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
         }
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-orange-50 dark:bg-dark-300/50 rounded-lg p-4 border border-orange-200 dark:border-dark-400">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white text-sm font-bold">T</span>
-              </div>
-              <span className="font-medium text-slate-900 dark:text-dark-900">Tauri</span>
+        {/* 技术栈 - 词云风格 */}
+        <div className="mb-5">
+          <h5 className="text-sm font-semibold text-slate-900 dark:text-dark-900 mb-4">技术栈</h5>
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-dark-200/50 dark:to-blue-900/10 rounded-xl border border-slate-200 dark:border-dark-400 p-8">
+            <div className="flex flex-wrap items-center justify-center gap-3" style={{ lineHeight: '2' }}>
+              {/* 第一行 */}
+              <span className="text-base font-medium text-blue-600 dark:text-blue-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-5deg)' }}>Vite</span>
+              <span className="text-3xl font-bold text-indigo-700 dark:text-indigo-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(2deg)' }}>React</span>
+              <span className="text-lg font-semibold text-purple-600 dark:text-purple-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-3deg)' }}>Tailwind</span>
+              <span className="text-xl font-semibold text-orange-600 dark:text-orange-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(4deg)' }}>Rodio</span>
+              
+              {/* 第二行 */}
+              <span className="text-2xl font-bold text-rose-600 dark:text-rose-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-2deg)' }}>Rust</span>
+              <span className="text-sm font-medium text-teal-600 dark:text-teal-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(6deg)' }}>Axios</span>
+              <span className="text-3xl font-bold text-cyan-700 dark:text-cyan-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-4deg)' }}>TypeScript</span>
+              <span className="text-xl font-semibold text-amber-600 dark:text-amber-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(3deg)' }}>Symphonia</span>
+              
+              {/* 第三行 */}
+              <span className="text-lg font-medium text-emerald-600 dark:text-emerald-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-6deg)' }}>Tokio</span>
+              <span className="text-3xl font-bold text-blue-700 dark:text-blue-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(1deg)' }}>Tauri</span>
+              <span className="text-base font-medium text-pink-600 dark:text-pink-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-4deg)' }}>JavaScript</span>
+              
+              {/* 第四行 */}
+              <span className="text-xl font-semibold text-sky-600 dark:text-sky-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(5deg)' }}>Rusqlite</span>
+              <span className="text-lg font-medium text-violet-600 dark:text-violet-400 hover:scale-110 transition-transform cursor-default inline-block" style={{ transform: 'rotate(-2deg)' }}>TanStack Query</span>
             </div>
-            <p className="text-slate-700 dark:text-dark-800 text-sm">跨平台应用开发框架</p>
           </div>
-          
-          <div className="bg-blue-50 dark:bg-dark-300/50 rounded-lg p-4 border border-blue-200 dark:border-dark-400">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white text-sm font-bold">R</span>
+        </div>
+
+        {/* API服务提供方 */}
+        <div className="mb-6">
+          <h5 className="text-sm font-semibold text-slate-900 dark:text-dark-900 mb-3">API服务提供方</h5>
+          <div className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-900/20 dark:to-rose-900/20 rounded-lg p-4 border border-pink-200 dark:border-pink-700/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
               </div>
-              <span className="font-medium text-slate-900 dark:text-dark-900">React</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h6 className="font-semibold text-slate-900 dark:text-dark-900">LrcApi</h6>
+                  <a 
+                    href="https://github.com/HisAtri/LrcApi"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    @HisAtri
+                  </a>
+                </div>
+                <p className="text-slate-600 dark:text-dark-700 text-sm">提供公开的歌词和封面API服务，为本项目提供网络歌词和封面获取支持</p>
+              </div>
             </div>
-            <p className="text-slate-700 dark:text-dark-800 text-sm">用户界面构建库</p>
           </div>
-          
-          <div className="bg-indigo-50 dark:bg-dark-300/50 rounded-lg p-4 border border-indigo-200 dark:border-dark-400">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white text-sm font-bold">T</span>
+        </div>
+
+        {/* 社区贡献者 */}
+        <div>
+          <h5 className="text-sm font-semibold text-slate-900 dark:text-dark-900 mb-3">社区贡献者</h5>
+          <div className="bg-gradient-to-br from-slate-50 to-gray-50 dark:from-dark-300 dark:to-dark-200 rounded-lg p-4 border border-slate-200 dark:border-dark-400">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-gray-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <span className="text-white text-sm font-bold">J</span>
               </div>
-              <span className="font-medium text-slate-900 dark:text-dark-900">TypeScript</span>
-            </div>
-            <p className="text-slate-700 dark:text-dark-800 text-sm">类型安全的JavaScript</p>
-          </div>
-          
-          <div className="bg-cyan-50 dark:bg-dark-300/50 rounded-lg p-4 border border-cyan-200 dark:border-dark-400">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white text-sm font-bold">T</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h6 className="font-semibold text-slate-900 dark:text-dark-900">January</h6>
+                  <div className="px-2 py-0.5 bg-slate-100 dark:bg-dark-300 text-slate-700 dark:text-dark-800 rounded text-xs">UI/UX审查专家</div>
+                </div>
+                <p className="text-slate-600 dark:text-dark-700 text-sm">负责前端页面合理性审查和视觉优化建议</p>
               </div>
-              <span className="font-medium text-slate-900 dark:text-dark-900">Tailwind CSS</span>
             </div>
-            <p className="text-slate-700 dark:text-dark-800 text-sm">实用优先的CSS框架</p>
           </div>
         </div>
       </SettingSection>
@@ -157,17 +193,59 @@ export default function AboutSettings() {
       <SettingSection
         title="联系开发者"
         description="反馈和建议"
-        badge={{ text: '敬请期待', variant: 'info' }}
         icon={
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         }
       >
-        <div className="text-center py-6">
-          <p className="text-slate-600 dark:text-dark-700 text-sm">
-            反馈渠道和社区链接将在后续版本中提供
-          </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 邮箱 */}
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h6 className="font-semibold text-slate-900 dark:text-dark-900 mb-2">电子邮箱</h6>
+                <a 
+                  href="mailto:GGBondpy@gmail.com"
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                >
+                  GGBondpy@gmail.com
+                </a>
+                <p className="text-slate-600 dark:text-dark-700 text-xs mt-2">欢迎发送邮件反馈问题或建议</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 酷安 */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h6 className="font-semibold text-slate-900 dark:text-dark-900 mb-2">酷安社区</h6>
+                <a 
+                  href="http://www.coolapk.com/u/18468719"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-green-600 dark:text-green-400 hover:underline inline-flex items-center gap-1"
+                >
+                  访问我的酷安主页
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                <p className="text-slate-600 dark:text-dark-700 text-xs mt-2">在酷安关注最新动态和交流</p>
+              </div>
+            </div>
+          </div>
         </div>
       </SettingSection>
     </div>
