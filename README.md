@@ -17,13 +17,50 @@
 - ⚡ **性能全面优化** - 虚拟滚动、懒加载、智能预加载，丝般顺滑
 - 🎵 **播放器核心修复** - 修复所有已知问题，稳定可靠
 
-## 截图预览
+## 📸 应用截图
 
-### 主界面
-![主界面](920830cfa3481de365a0bf420af684df.png)
-
-### 沉浸式歌词
-![沉浸式歌词](f8103e1ed70f6754d0b16401233eb155.png)
+<table>
+  <tr>
+    <td width="50%">
+      <img src="screenshot-library.png" alt="音乐库" />
+      <p align="center"><b>音乐库</b> - 歌曲列表视图</p>
+    </td>
+    <td width="50%">
+      <img src="screenshot-albums.png" alt="专辑视图" />
+      <p align="center"><b>专辑视图</b> - 网格布局</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="screenshot-artists.png" alt="艺术家" />
+      <p align="center"><b>艺术家</b> - 封面展示</p>
+    </td>
+    <td width="50%">
+      <img src="screenshot-history.png" alt="播放记录" />
+      <p align="center"><b>播放记录</b> - 统计分析</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="screenshot-lyrics-1.png" alt="沉浸式歌词" />
+      <p align="center"><b>沉浸式歌词</b> - 全屏展示</p>
+    </td>
+    <td width="50%">
+      <img src="screenshot-lyrics-2.png" alt="歌词动画" />
+      <p align="center"><b>歌词动画</b> - 大字滚动</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="screenshot-lyrics-3.png" alt="歌词效果" />
+      <p align="center"><b>歌词效果</b> - 渐变背景</p>
+    </td>
+    <td width="50%">
+      <img src="screenshot-lyrics-4.png" alt="播放控制" />
+      <p align="center"><b>播放控制</b> - 简洁操作</p>
+    </td>
+  </tr>
+</table>
 
 ## ✨ 核心特性
 
