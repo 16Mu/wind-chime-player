@@ -338,7 +338,7 @@ export class EnhancedAlbumCoverProvider implements AlbumCoverProvider {
     // 2. 如果本地没有，尝试从网络API获取
     const trackInfo = this.trackCache.get(trackId);
     if (!trackInfo || !trackInfo.artist) {
-      console.log(`⚠️ 曲目 ${trackId} 缺少艺术家信息，跳过网络获取`);
+      console.log(`[AlbumCoverService] Track ${trackId} missing artist info, skipping network fetch`);
       return null;
     }
 
@@ -353,7 +353,7 @@ export class EnhancedAlbumCoverProvider implements AlbumCoverProvider {
       );
 
       if (networkData && networkData.data.length > 0) {
-        console.log(`✅ 网络封面获取成功 (来源: ${networkData.source})`);
+        console.log(`[AlbumCoverService] Network cover fetch successful (source: ${networkData.source})`);
         return {
           data: networkData.data,
           mimeType: networkData.mimeType,

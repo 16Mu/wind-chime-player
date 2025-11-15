@@ -61,8 +61,9 @@ const LyricContent: React.FC<LyricContentProps> = ({ text, animation, containerR
         className={isOverflow ? 'lyric-marquee' : ''}
         data-text={text}
         style={isOverflow ? {
-          animationDuration: `${animationDuration}s`
-        } : undefined}
+          animationDuration: `${animationDuration}s`,
+          whiteSpace: 'pre-line'
+        } : { whiteSpace: 'pre-line' }}
       >
         {text}
       </span>
@@ -112,7 +113,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   const [showLyrics, setShowLyrics] = useState(false);
   const [showLyricsManager, setShowLyricsManager] = useState(false);
   const [currentLyric, setCurrentLyric] = useState<string>('');
-  const [lyrics, setLyrics] = useState<Array<{ time: number; text: string }>>([]);
+  const [lyrics, setLyrics] = useState<Array<{ time: number; text: string; translation?: string }>>([]);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
   const [hasPlayedLyric, setHasPlayedLyric] = useState(false); // 🎵 跟踪是否已经播放过歌词
   
@@ -163,7 +164,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       try {
         unlistenAppReady = await listen('app-ready', () => {
           if (!isActive) return;
-          console.log('✅ PlaylistPlayer：后端就绪');
+          console.log('[PlaylistPlayer] Backend ready');
           setIsAppReady(true);
         });
         
@@ -171,7 +172,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           unlistenAppReady();
         }
       } catch (err) {
-        console.error('[PlaylistPlayer] ❌ 设置后端就绪监听器失败:', err);
+        console.error('[PlaylistPlayer] Failed to set backend ready listener:', err);
       }
     };
 
@@ -198,7 +199,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           
           const newTrack = event.payload;
           if (newTrack && newTrack.id) {
-            console.log('🔄 [PlaylistPlayer] 歌曲切换:', newTrack.title, 'ID:', newTrack.id);
+            console.log('[PlaylistPlayer] Track changed:', newTrack.title, 'ID:', newTrack.id);
             
             // 🎬 检测切歌方向（通过比较track ID）
             const direction = previousTrackIdRef.current !== null && newTrack.id > previousTrackIdRef.current ? 'next' : 'prev';
@@ -216,7 +217,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             // 🎬 确保背面封面已准备好，如果没有则等待加载
             const backCoverUrl = direction === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
             if (!backCoverUrl) {
-              console.warn('⚠️ 背面封面未准备好，立即加载...');
+              console.warn('[PlaylistPlayer] Back cover not ready, loading immediately...');
               // 立即加载缺失的封面
               const coverUrl = await loadCoverUrl(newTrack.id);
               if (coverUrl) {
@@ -248,9 +249,15 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             }, 300);
             
             // 🎬 600ms后清除封面动画并交换封面
-            coverAnimationTimeoutRef.current = setTimeout(() => {
+            coverAnimationTimeoutRef.current = setTimeout(async () => {
               // 🎬 根据方向选择对应的预加载封面
-              const newCoverUrl = direction === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
+              let newCoverUrl = direction === 'next' ? nextAlbumCoverUrl : prevAlbumCoverUrl;
+              
+              // 🔧 如果预加载封面不存在，立即加载当前歌曲的封面
+              if (!newCoverUrl && newTrack.id) {
+                console.warn('[PlaylistPlayer] 预加载封面缺失，立即加载封面:', newTrack.title);
+                newCoverUrl = await loadCoverUrl(newTrack.id);
+              }
               
               if (newCoverUrl) {
                 const oldCover = albumCoverUrl;
@@ -267,7 +274,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 requestAnimationFrame(() => {
                   setCoverFlipAnimation('');
                   // 清理旧封面
-                  if (oldCover) {
+                  if (oldCover && oldCover !== newCoverUrl) {
                     URL.revokeObjectURL(oldCover);
                   }
                   
@@ -280,8 +287,16 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                   }, 100);
                 });
               } else {
+                // 🔧 即使没有封面，也要结束动画状态
                 setCoverFlipAnimation('');
                 setIsAnimatingTrackChange(false);
+                // 尝试加载当前歌曲的封面（非动画模式）
+                if (newTrack.id) {
+                  const coverUrl = await loadCoverUrl(newTrack.id);
+                  if (coverUrl) {
+                    setAlbumCoverUrl(coverUrl);
+                  }
+                }
               }
             }, 600);
             
@@ -296,16 +311,16 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
                 try {
                   const { hybridPlayer } = await import('../services/hybridPlayer');
                   // 🔥 使用 skipRustPlay=true 仅启动后台加载，不重新播放
-                  console.log('🎵 [PlaylistPlayer] 启动后台 Web Audio 加载...');
+                  console.log('[PlaylistPlayer] Starting background Web Audio loading...');
                   await hybridPlayer.play(newTrack, [], true);
                 } catch (error) {
-                  console.error('❌ [PlaylistPlayer] 启动后台加载失败:', error);
+                  console.error('[PlaylistPlayer] Background loading failed:', error);
                   // 🔥 加载失败时重置 lastLoadedTrackId，允许下次重试
                   lastLoadedTrackId = null;
                 }
               }, 100);
             } else {
-              console.log('🔄 [PlaylistPlayer] 跳过重复加载 track', newTrack.id);
+              console.log('[PlaylistPlayer] Skipping duplicate track load', newTrack.id);
             }
           }
         });
@@ -313,10 +328,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
         // 最后检查组件是否还活跃
         if (!isActive && unlistenTrackChanged) {
           unlistenTrackChanged();
-          console.log('[PlaylistPlayer] ⚠️ 组件已卸载，取消刚设置的监听器');
+          console.log('[PlaylistPlayer] Component unmounted, canceling listener');
         }
       } catch (err) {
-        console.error('[PlaylistPlayer] ❌ 设置监听器失败:', err);
+        console.error('[PlaylistPlayer] Failed to set listener:', err);
       }
     };
     
@@ -342,7 +357,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     // 只保留UI专属的错误处理监听
     
     const unlistenPlayerError = listen('player-error', (event: any) => {
-      console.error('🎵 播放器错误:', event.payload);
+      console.error('[PlaylistPlayer] Player error:', event.payload);
       
       // 显示所有播放器错误
       const errorMessage = typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload);
@@ -354,26 +369,26 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
           errorMessage.includes('音频设备') || 
           errorMessage.includes('sink') ||
           errorMessage.includes('播放列表为空')) {
-        console.warn('🎵 检测到音频系统问题:', errorMessage);
+        console.warn('[PlaylistPlayer] Audio system issue detected:', errorMessage);
       }
     });
 
     // 监听歌曲完成事件
     const unlistenTrackCompleted = listen('track-completed', async (event: any) => {
-      console.log('🎵 歌曲播放完成:', event.payload);
+      console.log('[PlaylistPlayer] Track playback complete:', event.payload);
       // 🎵 自动播放下一曲
       try {
         const { hybridPlayer } = await import('../services/hybridPlayer');
         await hybridPlayer.next();
-        console.log('🎵 自动切换到下一曲');
+        console.log('[PlaylistPlayer] Auto-switching to next track');
       } catch (error) {
-        console.error('🎵 自动切换下一曲失败:', error);
+        console.error('[PlaylistPlayer] Auto-switch to next failed:', error);
       }
     });
 
     // 监听播放列表完成事件
     const unlistenPlaylistCompleted = listen('playlist-completed', () => {
-      console.log('🎵 播放列表播放完成');
+      console.log('[PlaylistPlayer] Playlist playback complete');
       toast.info('播放列表已全部播放完毕', 3000);
       // 可以询问是否重新播放
     });
@@ -381,7 +396,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     // 监听音频设备失败事件
     const unlistenAudioDeviceFailed = listen('audio-device-failed', (event: any) => {
       const { error, recoverable } = event.payload || {};
-      console.error('🎵 音频设备失败:', { error, recoverable });
+      console.error('[PlaylistPlayer] Audio device failed:', { error, recoverable });
       
       if (recoverable) {
         toast.warning(`音频设备问题: ${error}。正在尝试恢复...`, 5000);
@@ -395,7 +410,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
     // 监听音频设备就绪事件
     const unlistenAudioDeviceReady = listen('audio-device-ready', () => {
-      console.log('🎵 音频设备已就绪');
+      console.log('[PlaylistPlayer] Audio device ready');
       setAudioDeviceError(null);
       setShowAudioTroubleshooter(false);
       toast.success('音频设备已恢复正常', 2000);
@@ -417,10 +432,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
 
     const initializePlaylist = async () => {
       try {
-        console.log('🎵 初始化播放列表');
+        console.log('[PlaylistPlayer] Initializing playlist');
         await ensurePlaylistLoaded();
       } catch (error) {
-        console.error('🎵 初始化播放列表失败:', error);
+        console.error('[PlaylistPlayer] Playlist initialization failed:', error);
       }
     };
 
@@ -433,20 +448,20 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 确保播放列表已加载
   const ensurePlaylistLoaded = async () => {
     try {
-      console.log('🎵 确保播放列表已加载，当前随机模式:', playerState.shuffle);
+      console.log('[PlaylistPlayer] Ensuring playlist loaded, shuffle mode:', playerState.shuffle);
       await invoke('load_playlist_by_mode', { shuffle: playerState.shuffle });
-      console.log('🎵 播放列表加载完成');
+      console.log('[PlaylistPlayer] Playlist load complete');
       
       // 调试：获取播放列表内容验证
       try {
         const playlist = await invoke('generate_sequential_playlist') as any[];
-        console.log('🎵 当前播放列表验证:', playlist.length, '首歌曲');
-        console.log('🎵 播放列表前3首:', playlist.slice(0, 3).map(t => ({ id: t.id, title: t.title, path: t.path })));
+        console.log('[PlaylistPlayer] Playlist verification:', playlist.length, 'tracks');
+        console.log('[PlaylistPlayer] First 3 tracks:', playlist.slice(0, 3).map(t => ({ id: t.id, title: t.title, path: t.path })));
       } catch (e) {
-        console.warn('🎵 播放列表验证失败:', e);
+        console.warn('[PlaylistPlayer] Playlist verification failed:', e);
       }
     } catch (error) {
-      console.error('🎵 播放列表加载失败:', error);
+      console.error('[PlaylistPlayer] Playlist load failed:', error);
     }
   };
 
@@ -458,11 +473,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       if (playerState.is_playing) {
         // 正在播放 → 暂停
         await hybridPlayer.pause();
-        console.log('⏸️ [PlaylistPlayer] 已暂停');
+        console.log('[PlaylistPlayer] Paused');
       } else if (playerState.current_track) {
-        // 有歌曲但暂停 → 继续播放
         await hybridPlayer.resume();
-        console.log('▶️ [PlaylistPlayer] 已继续播放');
+        console.log('[PlaylistPlayer] Resumed');
       }
     } catch (error) {
       console.error('播放/暂停切换失败:', error);
@@ -473,7 +487,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     try {
       const { hybridPlayer } = await import('../services/hybridPlayer');
       await hybridPlayer.next();
-      console.log('⏭️ 已切换到下一首');
+      console.log('[PlaylistPlayer] Switched to next track');
     } catch (error) {
       console.error('下一首失败:', error);
     }
@@ -483,7 +497,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     try {
       const { hybridPlayer } = await import('../services/hybridPlayer');
       await hybridPlayer.previous();
-      console.log('⏮️ 已切换到上一首');
+      console.log('[PlaylistPlayer] Switched to previous track');
     } catch (error) {
       console.error('上一首失败:', error);
     }
@@ -500,7 +514,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   }, []);
 
   const handleSeek = async (positionMs: number) => {
-    console.log('⚡ [Seek] 跳转到位置:', positionMs, 'ms');
+    console.log('[Seek] Jump to position:', positionMs, 'ms');
     
     // 🔥 立即更新本地位置状态（避免歌词显示错误）
     setRealTimePosition(positionMs);
@@ -509,14 +523,14 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       // 🔥 使用混合播放器（智能选择引擎）
       const { hybridPlayer } = await import('../services/hybridPlayer');
       await hybridPlayer.seek(positionMs);
-      console.log('✅ [Seek] 跳转完成');
+      console.log('[Seek] Jump complete');
     } catch (error) {
-      console.error('🎵 跳转失败:', error);
+      console.error('[Seek] Jump failed:', error);
       
       // 如果是 Rust seek 失败（流式播放不支持），提示用户
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('音频尚未缓存') || errorMessage.includes('seek暂时不可用')) {
-        console.log('💡 [Seek] 提示：Web Audio 引擎正在后台加载，稍后即可支持快速跳转');
+        console.log('[Seek] Tip: Web Audio engine loading in background, fast seeking available soon');
         toast.info('正在加载高速跳转功能，请稍候...', 2000);
       } else {
         toast.error(`跳转失败: ${errorMessage}`, 3000);
@@ -581,7 +595,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     try {
       const { hybridPlayer } = await import('../services/hybridPlayer');
       await hybridPlayer.setVolume(clampedVolume);
-      console.log(`🔊 [音量] 设置为 ${(clampedVolume * 100).toFixed(0)}%`);
+      console.log(`[Volume] Set to ${(clampedVolume * 100).toFixed(0)}%`);
     } catch (error) {
       console.error('设置音量失败:', error);
     }
@@ -701,7 +715,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             URL.revokeObjectURL(nextAlbumCoverUrl);
           }
           setNextAlbumCoverUrl(nextUrl);
-          console.log('✅ 预加载下一首封面:', playlist[nextIndex].title);
+          console.log('[Cover] Preloaded next cover:', playlist[nextIndex].title);
         }
       }
       
@@ -714,7 +728,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
             URL.revokeObjectURL(prevAlbumCoverUrl);
           }
           setPrevAlbumCoverUrl(prevUrl);
-          console.log('✅ 预加载上一首封面:', playlist[prevIndex].title);
+          console.log('[Cover] Preloaded previous cover:', playlist[prevIndex].title);
         }
       }
     } catch (error) {
@@ -767,11 +781,11 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     
     // 🔧 防止重复加载：如果track ID没变，跳过
     if (trackId === lastLoadedTrackIdRef.current) {
-      console.log(`🎵 [歌词调试] 跳过重复加载 trackId=${trackId}`);
+      console.log(`[Lyrics] Skipping duplicate load trackId=${trackId}`);
       return;
     }
     
-    console.log('🎵 [歌词调试] 曲目改变:', {
+    console.log('[Lyrics] Track changed:', {
       oldTrackId: lastLoadedTrackIdRef.current,
       newTrackId: trackId,
       trackTitle: track?.title
@@ -790,7 +804,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     if (trackId) {
       // 🔧 生成新的歌词请求ID
       const lyricsRequestId = ++lyricsRequestIdRef.current;
-      console.log(`🎵 [歌词调试] 开始加载 trackId=${trackId}, requestId=${lyricsRequestId}`);
+      console.log(`[Lyrics] Starting load trackId=${trackId}, requestId=${lyricsRequestId}`);
       
       // 🎬 如果正在进行切歌动画，跳过 loadAlbumCover（使用预加载的封面）
       if (!isAnimatingTrackChange) {
@@ -808,7 +822,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
         preloadNeighborCovers();
       }, 500);
     } else {
-      console.log('🎵 [歌词调试] 无有效 track ID，清空状态');
+      console.log('[Lyrics] No valid track ID, clearing state');
       setIsFavorite(false);
       setLyrics([]);
       setCurrentLyric('');
@@ -830,19 +844,19 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 🎵 获取歌词（方案A：数据库 → 文件系统降级）
   const loadLyrics = async (trackId: number, requestId: number) => {
     try {
-      console.log(`🎵 [LRC#${requestId}] 开始加载歌词，trackId:`, trackId);
+      console.log(`[LRC#${requestId}] Loading lyrics, trackId:`, trackId);
       setIsLoadingLyrics(true);
       
       // 🔧 检查请求是否已过期
       if (requestId !== lyricsRequestIdRef.current) {
-        console.log(`⏭️ [LRC#${requestId}] 歌词请求已过期，跳过`);
+        console.log(`[LRC#${requestId}] Lyrics request expired, skipping`);
         setIsLoadingLyrics(false);
         return;
       }
       
       const track = playerState.current_track || currentTrack;
       if (!track) {
-        console.warn('❌ 没有当前曲目信息');
+        console.warn('[Lyrics] No current track info');
         setLyrics([]);
         setIsLoadingLyrics(false);
         return;
@@ -850,18 +864,40 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       
       // 1️⃣ 查询数据库
       const dbLyrics = await invoke('lyrics_get', { 
-        trackId: trackId 
+        trackId: trackId,
+        track_id: trackId
       }) as { content: string; format: string; source: string } | null;
       
       if (dbLyrics && dbLyrics.content) {
         // 🔧 检测并清理损坏数据
         if (dbLyrics.content.includes('[NaN:')) {
-          console.warn('⚠️ 检测到损坏的数据库歌词，已跳过');
+          console.warn('[Lyrics] Detected corrupted database lyrics, skipped');
           await invoke('lyrics_delete', { trackId: trackId }).catch(() => {});
         } else {
+          try {
+            const parsed = await invoke('lyrics_parse', { 
+              content: dbLyrics.content 
+            }) as { lines: Array<{ timestamp_ms: number; text: string; translation?: string }> };
+
+            if (parsed && parsed.lines && parsed.lines.length > 0) {
+              const normalized = parsed.lines.map(line => ({
+                time: line.timestamp_ms,
+                text: line.text,
+                translation: line.translation,
+              }));
+
+              console.log(`[LRC#${requestId}] Lyrics loaded from database (parsed): ${normalized.length} lines`);
+              setLyrics(normalized);
+              setIsLoadingLyrics(false);
+              return;
+            }
+          } catch (parseError) {
+            console.warn('[Lyrics] Failed to parse database lyrics with backend parser, fallback to simple LRC parser:', parseError);
+          }
+
           const parsedLyrics = parseLrc(dbLyrics.content);
           if (parsedLyrics.length > 0) {
-            console.log(`✅ [LRC#${requestId}] 从数据库加载歌词成功，共 ${parsedLyrics.length} 行`);
+            console.log(`[LRC#${requestId}] Lyrics loaded from database (fallback): ${parsedLyrics.length} lines`);
             setLyrics(parsedLyrics);
             setIsLoadingLyrics(false);
             return;
@@ -870,34 +906,36 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       }
       
       // 2️⃣ 查询文件系统（降级）
-      console.log(`🔍 [LRC#${requestId}] 数据库未找到，尝试文件系统...`);
+      console.log(`[LRC#${requestId}] Not found in database, trying filesystem...`);
       const fileLyrics = await invoke('lyrics_search_comprehensive', { 
-        audioPath: track.path 
+        audioPath: track.path,
+        audio_path: track.path
       }) as any;
       
       if (fileLyrics && fileLyrics.lines && fileLyrics.lines.length > 0) {
-        console.log(`✅ [LRC#${requestId}] 从文件系统加载歌词成功，共 ${fileLyrics.lines.length} 行`);
+        console.log(`[LRC#${requestId}] Lyrics loaded from filesystem: ${fileLyrics.lines.length} lines`);
         
         // 转换为前端格式
         const lyrics = fileLyrics.lines.map((line: any) => ({
           time: line.timestamp_ms,
-          text: line.text
+          text: line.text,
+          translation: line.translation
         }));
         
         setLyrics(lyrics);
         setIsLoadingLyrics(false);
-        console.log(`🔧 [LRC#${requestId}] 已重置加载状态: isLoadingLyrics = false`);
+        console.log(`[LRC#${requestId}] Reset loading state: isLoadingLyrics = false`);
         return;
       }
       
       // 3️⃣ 都没有找到
-      console.log(`❌ [LRC#${requestId}] 未找到歌词`);
+      console.log(`[LRC#${requestId}] Lyrics not found`);
       setLyrics([]);
       setCurrentLyric('');
       setIsLoadingLyrics(false);
       
     } catch (error) {
-      console.error(`❌ [LRC#${requestId}] 加载歌词失败:`, error);
+      console.error(`[LRC#${requestId}] Failed to load lyrics:`, error);
       setLyrics([]);
       setCurrentLyric('');
       setIsLoadingLyrics(false);
@@ -935,8 +973,8 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       return;
     }
 
-    console.log(`🎵 [歌词更新] 启动定时器，共 ${lyrics.length} 行歌词`);
-    console.log(`🎵 [歌词信息] 第一行: ${lyrics[0]?.time}ms "${lyrics[0]?.text}"`);
+    console.log(`[Lyrics] Timer started, ${lyrics.length} lines`);
+    console.log(`[Lyrics] First line: ${lyrics[0]?.time}ms "${lyrics[0]?.text}"`);
     
     // 追踪上一次的歌词索引，避免重复日志
     let lastIndex = -1;
@@ -948,7 +986,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       
       // 🔧 调试：输出当前状态
       if (lastIndex === -1) {
-        console.log(`🎵 [歌词定时器] 当前位置: ${Math.floor(currentPosition/1000)}s`);
+        console.log(`[Lyrics] Current position: ${Math.floor(currentPosition/1000)}s`);
       }
       
       // 找到当前应该显示的歌词
@@ -962,15 +1000,18 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       }
 
       if (currentIndex >= 0 && currentIndex !== lastIndex) {
-        const lyricText = lyrics[currentIndex].text;
+        const line = lyrics[currentIndex];
+        const baseText = line.text;
+        const translationText = line.translation || '';
+        const lyricText = translationText ? `${baseText}\n${translationText}` : baseText;
         setCurrentLyric(lyricText);
         setHasPlayedLyric(true); // 🎵 标记已经播放过歌词
-        console.log(`🎵 [歌词更新] ${Math.floor(currentPosition/1000)}s -> [${currentIndex}/${lyrics.length}] ${lyricText.substring(0, 20)}...`);
+        console.log(`[Lyrics] ${Math.floor(currentPosition/1000)}s -> [${currentIndex}/${lyrics.length}] ${baseText.substring(0, 20)}...`);
         lastIndex = currentIndex;
       } else if (currentIndex < 0) {
         // 🔧 调试：歌词未开始（位置早于第一行歌词）
         if (lastIndex !== -1) {
-          console.log(`🎵 [歌词更新] ${Math.floor(currentPosition/1000)}s -> 等待第一行歌词 (${Math.floor(lyrics[0].time/1000)}s)`);
+          console.log(`[Lyrics] ${Math.floor(currentPosition/1000)}s -> Waiting for first line (${Math.floor(lyrics[0].time/1000)}s)`);
           lastIndex = -1;
         }
         setCurrentLyric('');
@@ -984,7 +1025,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
     const interval = setInterval(updateLyric, 100);
 
     return () => {
-      console.log(`🎵 [歌词更新] 清理定时器`);
+      console.log(`[Lyrics] Timer cleaned up`);
       clearInterval(interval);
     };
   }, [lyrics, getPosition, isDragging, dragPosition]); // 添加必要的依赖项
@@ -1035,10 +1076,10 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
   // 删除复杂的动画逻辑
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('🎵 进度条点击事件触发', e.currentTarget, e.target);
+    console.log('[Progress] Click event triggered', e.currentTarget, e.target);
     
     if (!progressBarRef.current || !displayTrack?.duration_ms) {
-      console.log('🎵 进度条点击失败: 缺少必要条件', {
+      console.log('[Progress] Click failed: Missing required conditions', {
         hasRef: !!progressBarRef.current,
         hasDuration: !!displayTrack?.duration_ms,
         displayTrack: displayTrack
@@ -1063,7 +1104,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       setProgressRipples(prev => prev.filter(r => r.key !== ripple.key));
     }, 600);
     
-    console.log('🎵 进度条点击计算:', {
+    console.log('[Progress] Click calculation:', {
       clickX,
       width: rect.width,
       percentage,
@@ -1111,7 +1152,7 @@ export default function PlaylistPlayer({ currentTrack }: PlaylistPlayerProps) {
       setIsDragging(false);
       // 使用 ref 获取最新的拖拽位置，避免闭包陷阱
       const finalPosition = dragPositionRef.current;
-      console.log('🎵 拖拽结束，执行 seek:', finalPosition);
+      console.log('[Progress] Drag ended, executing seek:', finalPosition);
       handleSeek(finalPosition);
     };
 

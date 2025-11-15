@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
@@ -22,14 +23,40 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.cursor/
 
-# Documentation (local only)
+# Tauri build output
+src-tauri/target/
+src-tauri/WixTools/
+
+# Documentation (local drafts only)
 docs/
 多平台打包配置完成.md
 如何构建macOS和Linux.md
+log.md
+
+# Temporary analysis files
+CODE-ANALYSIS-REPORT.md
+CODE-CLEANUP-SUMMARY.md
+COMMENT-CLEANUP-REPORT.md
+CLEANUP-COMPLETE.md
+ISSUES-SUMMARY.md
+REMAINING-ISSUES-ANALYSIS.md
+TODO-IMPLEMENTATION-COMPLETE.md
+WEBDAV-CRITICAL-ISSUES.md
+WEBDAV-FIX-PROPOSAL.md
+WEBDAV-FIXES-APPLIED.md
+WEBDAV-ISSUES-HANDBOOK.md
+WEBDAV-ISSUES-SUMMARY.md
+WEBDAV-隐藏性能瓶颈分析.md
+性能优化-*.md
+性能瓶颈-*.md
+性能分析报告/
+
+# Temporary screenshots and images (keep only official ones)
+4324445526f129ce390a22cf6c9e6402.png
+920830cfa3481de365a0bf420af684df.png
+f8103e1ed70f6754d0b16401233eb155.png
 
 # Website (exclude from repository)
 website/
-
-# Cursor IDE files
-.cursor/

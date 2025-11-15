@@ -99,7 +99,9 @@ impl PropfindParser {
                     match tag_name.as_str() {
                         "href" | "D:href" => {
                             if let Some(ref mut resp) = current_response {
-                                resp.path = text_buffer.trim().to_string();
+                                // 🔧 修复中文文件名问题：对URL编码的路径进行解码
+                                let href = text_buffer.trim();
+                                resp.path = percent_decode_path(href);
                             }
                         }
                         "getcontentlength" | "D:getcontentlength" |
@@ -225,6 +227,19 @@ fn parse_http_date(date_str: &str) -> Option<i64> {
         .or_else(|_| DateTime::parse_from_rfc3339(date_str))
         .ok()
         .map(|dt| dt.timestamp())
+}
+
+/// URL解码路径（处理中文文件名等非ASCII字符）
+fn percent_decode_path(encoded: &str) -> String {
+    use percent_encoding::percent_decode_str;
+    
+    match percent_decode_str(encoded).decode_utf8() {
+        Ok(decoded) => decoded.to_string(),
+        Err(e) => {
+            log::warn!("URL解码失败: {} - 错误: {}, 使用原始路径", encoded, e);
+            encoded.to_string()
+        }
+    }
 }
 
 #[cfg(test)]

@@ -20,6 +20,7 @@ import {
   ReactNode 
 } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { cacheService, RemoteServerCache } from '../services/cacheService';
 
 // ==================== 类型定义 ====================
 
@@ -113,6 +114,11 @@ interface RemoteSourceContextValue {
     name: string, 
     config: WebDAVConfig
   ) => Promise<string>;
+  updateServer: (
+    serverId: string,
+    name: string, 
+    config: WebDAVConfig
+  ) => Promise<void>;
   deleteServer: (serverId: string) => Promise<void>;
   refreshServers: () => Promise<void>;
   
@@ -183,6 +189,34 @@ export function RemoteSourceProvider({ children }: RemoteSourceProviderProps) {
   }, []);
 
   /**
+   * 更新远程服务器
+   */
+  const updateServer = useCallback(async (
+    serverId: string,
+    name: string,
+    config: WebDAVConfig
+  ): Promise<void> => {
+    if (typeof invoke === 'undefined') {
+      throw new Error('Tauri API不可用');
+    }
+
+    try {
+      const configJson = JSON.stringify(config);
+      await invoke('remote_update_server', {
+        serverId,
+        name,
+        configJson,
+      });
+
+      console.log(`✅ 远程服务器已更新: ${name} (${serverId})`);
+      await refreshServers();
+    } catch (error) {
+      console.error('更新服务器失败:', error);
+      throw error;
+    }
+  }, []);
+
+  /**
    * 删除远程服务器
    */
   const deleteServer = useCallback(async (serverId: string) => {
@@ -214,6 +248,18 @@ export function RemoteSourceProvider({ children }: RemoteSourceProviderProps) {
       const serverList = await invoke<any[]>('remote_get_servers');
       setServers(serverList as RemoteServer[]);
       console.log(`✅ 已加载 ${serverList.length} 个远程服务器`);
+      
+      // 🚀 性能优化：保存服务器配置到缓存
+      const cacheData: RemoteServerCache[] = serverList.map(server => ({
+        id: server.id,
+        name: server.name,
+        server_type: server.server_type,
+        config: server.config,
+        enabled: server.enabled,
+        cachedAt: Date.now(),
+      }));
+      
+      await cacheService.saveRemoteServers(cacheData);
     } catch (error) {
       console.error('刷新服务器列表失败:', error);
     } finally {
@@ -367,10 +413,48 @@ export function RemoteSourceProvider({ children }: RemoteSourceProviderProps) {
   // ========== 初始化 ==========
 
   useEffect(() => {
-    // 初始加载服务器列表和缓存统计
-    refreshServers();
-    refreshCacheStats();
-  }, [refreshServers, refreshCacheStats]);
+    const initializeRemoteSources = async () => {
+      console.log('🌐 初始化远程音乐源...');
+      
+      // 步骤1: 立即从缓存加载服务器配置（秒开）
+      try {
+        const cachedServers = await cacheService.loadRemoteServers();
+        if (cachedServers.length > 0) {
+          // 转换缓存数据为RemoteServer格式
+          const servers: RemoteServer[] = cachedServers.map(cache => ({
+            id: cache.id,
+            name: cache.name,
+            server_type: cache.server_type as RemoteServerType,
+            config: cache.config,
+            enabled: cache.enabled,
+            status: 'unknown' as ConnectionStatus,
+          }));
+          
+          setServers(servers);
+          console.log(`✅ 从缓存加载 ${servers.length} 个远程服务器`);
+        }
+      } catch (error) {
+        console.warn('⚠️ 从缓存加载远程服务器失败:', error);
+      }
+      
+      // 步骤2: 等待Tauri就绪后，后台刷新最新数据
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (typeof invoke !== 'undefined') {
+        // 后台异步刷新（不阻塞UI）
+        setTimeout(async () => {
+          await refreshServers();
+          await refreshCacheStats();
+        }, 500);
+      }
+    };
+    
+    initializeRemoteSources().catch(error => {
+      console.error('❌ 初始化远程音乐源失败:', error);
+    });
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ========== Context值 ==========
 
@@ -379,6 +463,7 @@ export function RemoteSourceProvider({ children }: RemoteSourceProviderProps) {
     isLoading,
     cacheStats,
     addServer,
+    updateServer,
     deleteServer,
     refreshServers,
     testConnection,

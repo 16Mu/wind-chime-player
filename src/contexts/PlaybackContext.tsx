@@ -149,84 +149,68 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
       return;
     }
 
-    console.log('🎵 [PlaybackContext] 初始化混合播放器...');
+    console.log('[PlaybackContext] Initializing hybrid player...');
     
     const initPlayer = async () => {
       try {
-        // 🔥 保存 Web Audio Player 引用（用于获取实时位置）
         webAudioPlayerRef.current = webAudioPlayer;
         
-        // 🔥 第一步：初始化 Web Audio Player
         await webAudioPlayer.initialize({
-          // 歌曲变化回调
           onTrackChanged: (track) => {
-            console.log('🎵 [PlaybackContext] Web Audio 歌曲变化:', track?.title || track?.path);
-            // 🔥 只在 Web Audio 引擎下更新 track
+            console.log('[PlaybackContext] Web Audio track changed:', track?.title || track?.path);
             if (currentEngineRef.current === 'webaudio') {
               setState(prev => ({ ...prev, track }));
               positionRef.current = 0;
             }
           },
           
-          // 播放状态变化回调
           onPlaybackStateChanged: (isPlaying) => {
-            console.log('🎵 [PlaybackContext] Web Audio 播放状态变化:', isPlaying);
-            // 🔥 只在 Web Audio 引擎下更新状态
+            console.log('[PlaybackContext] Web Audio playback state changed:', isPlaying);
             if (currentEngineRef.current === 'webaudio') {
               setState(prev => ({ ...prev, isPlaying }));
             }
           },
           
-          // 播放位置变化回调（100ms 一次）
           onPositionChanged: (position) => {
-            // 🔥 只在 Web Audio 引擎下更新位置
             if (currentEngineRef.current === 'webaudio') {
-              positionRef.current = position * 1000; // 转换为毫秒
+              positionRef.current = position * 1000;
             }
           },
           
-          // 音量变化回调
           onVolumeChanged: (volume) => {
             setState(prev => ({ ...prev, volume }));
           },
           
-          // 歌曲结束回调
           onTrackEnded: () => {
-            console.log('🔚 [PlaybackContext] Web Audio 歌曲播放结束');
-            // Rust 的 track-completed 事件会处理自动播放
+            console.log('[PlaybackContext] Web Audio track ended');
           },
         });
         
-        // 🔥 第二步：初始化混合播放器（添加引擎切换回调）
         const { hybridPlayer } = await import('../services/hybridPlayer');
         await hybridPlayer.initialize({
-          // 引擎切换回调
           onEngineSwitch: (engine) => {
-            console.log(`🔄 [PlaybackContext] 引擎切换: ${engine}`);
+            console.log(`[PlaybackContext] Engine switched: ${engine}`);
             
-            // 🔥 更新当前引擎标志
             currentEngineRef.current = engine;
             
             if (engine === 'webaudio') {
-              console.log('✅ [PlaybackContext] 现在支持 0 延迟 seek！');
-              console.log('🔄 [PlaybackContext] 切换到 Web Audio 位置更新');
-              // 引擎切换后，确保播放状态为 true
+              console.log('[PlaybackContext] Instant seek now available');
+              console.log('[PlaybackContext] Switched to Web Audio position updates');
               setState(prev => ({ ...prev, isPlaying: true }));
             } else {
-              console.log('🔄 [PlaybackContext] 切换到 Rust 位置更新');
+              console.log('[PlaybackContext] Switched to Rust position updates');
             }
           },
           
-          // 加载进度回调
           onLoadingProgress: (progress) => {
-            console.log(`💾 [PlaybackContext] Web Audio 加载进度: ${progress}%`);
+            console.log(`[PlaybackContext] Web Audio loading progress: ${progress}%`);
           },
         });
         
         isPlayerInitialized.current = true;
-        console.log('✅ [PlaybackContext] 混合播放器初始化完成');
+        console.log('[PlaybackContext] Hybrid player initialization complete');
       } catch (error) {
-        console.error('❌ [PlaybackContext] Web Audio Player 初始化失败:', error);
+        console.error('[PlaybackContext] Web Audio Player initialization failed:', error);
       }
     };
     
@@ -261,7 +245,7 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
           if (currentEngineRef.current === 'rust') {
             // 🔥 特殊处理：如果是停止事件且正在播放，可能是引擎切换，忽略
             if (rustState.is_playing === false && state.isPlaying === true) {
-              console.log('⚠️ [PlaybackContext] 检测到 Rust 停止事件，但当前正在播放，可能是引擎切换，忽略此状态更新');
+              console.log('[PlaybackContext] Detected Rust stop event while playing, possible engine switch, ignoring state update');
               // 只更新位置，不更新 isPlaying
               const position = typeof rustState.position_ms === 'number' && !isNaN(rustState.position_ms)
                 ? rustState.position_ms
@@ -297,7 +281,7 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
           if (newTrack && newTrack.id !== lastTrackIdRef.current) {
             currentEngineRef.current = 'rust';
             lastTrackIdRef.current = newTrack.id;
-            console.log(`🔄 [PlaybackContext] 歌曲切换 (ID: ${newTrack.id})，引擎重置为 Rust`);
+            console.log(`[PlaybackContext] Track changed (ID: ${newTrack.id}), engine reset to Rust`);
           }
         });
         
@@ -323,10 +307,10 @@ export function PlaybackProvider({ children }: PlaybackProviderProps) {
           unlistenState();
           unlistenTrack();
           unlistenPosition();
-          console.log('[PlaybackContext] ⚠️ 组件已卸载，取消刚设置的监听器');
+          console.log('[PlaybackContext] Component unmounted, canceling listeners');
         }
       } catch (err) {
-        console.error('[PlaybackContext] ❌ 设置监听器失败:', err);
+        console.error('[PlaybackContext] Failed to set up listeners:', err);
       }
     };
     

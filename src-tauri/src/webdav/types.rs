@@ -73,6 +73,9 @@ pub struct WebDAVConfig {
     pub server_id: String,
     pub name: String,
     pub url: String,
+    /// WebDAV挂载路径（可选，如 /webdav, /dav/ 等）
+    #[serde(default)]
+    pub mount_path: String,
     pub username: String,
     pub password: String,
     pub timeout_seconds: u64,
@@ -90,6 +93,7 @@ impl Default for WebDAVConfig {
             server_id: String::new(),
             name: String::new(),
             url: String::new(),
+            mount_path: String::new(),
             username: String::new(),
             password: String::new(),
             timeout_seconds: 30,
@@ -328,30 +332,62 @@ impl WebDAVConfig {
     }
     
     pub fn build_full_url(&self, path: &str) -> String {
+        use percent_encoding::{utf8_percent_encode, CONTROLS};
+        
         let base = self.get_base_url();
         let clean_path = path.trim_start_matches('/');
         
-        // 🔧 修复路径重复问题：检查基础URL中是否已包含路径的起始部分
-        // 例如：base="https://dav.jianguoyun.com/dav", path="/dav/MUSIC/"
-        // 应该生成："https://dav.jianguoyun.com/dav/MUSIC/" 而不是 "https://dav.jianguoyun.com/dav/dav/MUSIC/"
+        // 🔧 组合 base URL + mount_path + path（支持中文文件名）
+        // 例如：
+        // - base: https://example.com
+        // - mount_path: /webdav
+        // - path: /音乐/歌曲.mp3
+        // - 结果: https://example.com/webdav/%E9%9F%B3%E4%B9%90/%E6%AD%8C%E6%9B%B2.mp3
         
-        // 提取基础URL的路径部分
-        if let Ok(parsed_url) = url::Url::parse(&base) {
-            let base_path = parsed_url.path().trim_end_matches('/');
-            
-            // 如果请求路径以基础路径开头，说明路径已经是完整的
-            if !base_path.is_empty() && clean_path.starts_with(base_path.trim_start_matches('/')) {
-                // 构建完整URL，使用原始的domain + path
-                let domain = format!("{}://{}", parsed_url.scheme(), parsed_url.host_str().unwrap_or(""));
-                return if let Some(port) = parsed_url.port() {
-                    format!("{domain}:{port}/{clean_path}")
-                } else {
-                    format!("{domain}/{clean_path}")
-                };
+        let mut full_url = base;
+        
+        // 添加挂载路径（如果有）
+        if !self.mount_path.is_empty() {
+            let clean_mount_path = self.mount_path.trim_matches('/');
+            if !clean_mount_path.is_empty() {
+                // 对挂载路径的每个部分进行URL编码（保留斜杠分隔符）
+                let encoded_parts: Vec<String> = clean_mount_path
+                    .split('/')
+                    .map(|part| encode_path_segment(part))
+                    .collect();
+                full_url = format!("{}/{}", full_url, encoded_parts.join("/"));
             }
         }
         
-        // 默认行为：简单拼接
-        format!("{}/{}", base, clean_path)
+        // 添加文件路径（对每个路径段进行URL编码，但保留斜杠）
+        if !clean_path.is_empty() {
+            let encoded_parts: Vec<String> = clean_path
+                .split('/')
+                .map(|part| encode_path_segment(part))
+                .collect();
+            full_url = format!("{}/{}", full_url, encoded_parts.join("/"));
+        }
+        
+        full_url
     }
+}
+
+/// URL编码路径段（保留点、下划线、连字符等安全字符，但编码空格和非ASCII字符）
+fn encode_path_segment(segment: &str) -> String {
+    use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+    
+    // 定义需要编码的字符集：控制字符 + 空格 + 一些特殊字符
+    // 但保留: 字母、数字、点(.)、连字符(-)、下划线(_)、波浪号(~)
+    const FRAGMENT: &AsciiSet = &CONTROLS
+        .add(b' ')
+        .add(b'"')
+        .add(b'<')
+        .add(b'>')
+        .add(b'`')
+        .add(b'#')
+        .add(b'?')
+        .add(b'{')
+        .add(b'}');
+    
+    utf8_percent_encode(segment, FRAGMENT).to_string()
 }

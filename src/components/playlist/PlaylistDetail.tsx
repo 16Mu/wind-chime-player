@@ -139,10 +139,19 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
 
   // 处理删除曲目
   const handleRemoveTrack = async (trackId: number) => {
+    // ✅ 修复：先确认，确认后再执行删除操作
+    const track = tracks.find(t => t.id === trackId);
+    const trackName = track ? `"${track.title}"` : '该曲目';
+    
+    if (!window.confirm(`确定要从歌单中移除${trackName}吗？\n\n此操作不会删除音乐文件本身。`)) {
+      return;
+    }
+
     try {
       await removeTrackFromPlaylist(playlist.id, trackId);
     } catch (err) {
       console.error('移除曲目失败:', err);
+      alert('移除曲目失败：' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -244,7 +253,14 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
                 <button
                   onClick={() => {
                     setShowMenu(false);
-                    // TODO: 分享功能
+                    // 分享歌单到系统剪贴板
+                    const shareText = `Wind Chime 歌单分享\n名称: ${playlist.name}\n${playlist.description ? `简介: ${playlist.description}\n` : ''}曲目数: ${tracks.length}`;
+                    navigator.clipboard.writeText(shareText).then(() => {
+                      alert('歌单信息已复制到剪贴板！');
+                    }).catch((err) => {
+                      console.error('复制失败:', err);
+                      alert('复制失败，请重试');
+                    });
                   }}
                   className="w-full px-4 py-2 text-left hover:bg-slate-100 dark:hover:bg-gray-700 flex items-center gap-2 text-slate-900 dark:text-white text-sm"
                 >

@@ -79,8 +79,8 @@ impl Track {
         }
     }
     
-    /// 获取显示名称（标题或文件名）- UI显示用
-    #[allow(dead_code)]
+    /// 获取显示名称（标题或文件名）- UI显示工具方法
+    #[allow(dead_code)]  // 前端UI显示工具，保留
     pub fn display_name(&self) -> String {
         if let Some(title) = &self.title {
             if !title.trim().is_empty() {

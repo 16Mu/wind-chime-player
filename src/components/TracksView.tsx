@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useHoverAnimation } from '../hooks/useHoverAnimation';
 import { useAlbumCovers } from '../hooks/useAlbumCovers';
 
@@ -47,39 +47,41 @@ export default function TracksView({
 
   // 自定义Hooks
   const { hoverIndicator: _hoverIndicator, indicatorRef: _indicatorRef, updateIndicator, hideIndicator } = useHoverAnimation(true);
+  
+  // 🚀 性能优化：延迟加载封面，先渲染列表
   const { albumCoverUrls } = useAlbumCovers(tracks);
 
-  // 事件处理
-  const handleRowMouseEnter = (index: number) => {
+  // 🚀 性能优化：使用useCallback缓存事件处理函数
+  const handleRowMouseEnter = useCallback((index: number) => {
     setHoveredRowIndex(index);
     updateIndicator(rowRefs.current[index]);
-  };
+  }, [updateIndicator]);
 
-  const handleContainerMouseLeave = () => {
+  const handleContainerMouseLeave = useCallback(() => {
     setHoveredRowIndex(-1);
     hideIndicator();
-  };
+  }, [hideIndicator]);
 
 
-  // 拖拽事件处理
-  const handleDragStart = (index: number) => {
+  // 🚀 性能优化：缓存拖拽事件处理函数
+  const handleDragStart = useCallback((index: number) => {
     if (!enableDragSort) return;
     setDraggedIndex(index);
-  };
+  }, [enableDragSort]);
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     if (!enableDragSort) return;
     e.preventDefault();
     if (draggedIndex !== null && draggedIndex !== index) {
       setDropTargetIndex(index);
     }
-  };
+  }, [enableDragSort, draggedIndex]);
 
-  const handleDragLeave = () => {
+  const handleDragLeave = useCallback(() => {
     setDropTargetIndex(null);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent, index: number) => {
+  const handleDrop = useCallback((e: React.DragEvent, index: number) => {
     if (!enableDragSort) return;
     e.preventDefault();
     
@@ -89,12 +91,12 @@ export default function TracksView({
     
     setDraggedIndex(null);
     setDropTargetIndex(null);
-  };
+  }, [enableDragSort, draggedIndex, onDragEnd]);
 
-  const handleDragEndEvent = () => {
+  const handleDragEndEvent = useCallback(() => {
     setDraggedIndex(null);
     setDropTargetIndex(null);
-  };
+  }, []);
 
   // 加载状态
   if (isLoading) {

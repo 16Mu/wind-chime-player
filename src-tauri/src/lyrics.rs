@@ -19,7 +19,7 @@ impl LyricsParser {
         Self
     }
 
-    /// 解析LRC格式歌词文件
+    /// 解析LRC格式歌词文件（支持双语歌词）
     pub fn parse_lrc(&self, content: &str) -> Result<ParsedLyrics> {
         let mut lines = Vec::new();
         let mut metadata = HashMap::new();
@@ -61,6 +61,7 @@ impl LyricsParser {
                 lines.push(LyricLine {
                     timestamp_ms,
                     text,
+                    translation: None, // 稍后会处理翻译
                 });
             }
             // 尝试解析元数据
@@ -73,8 +74,27 @@ impl LyricsParser {
 
         // 按时间戳排序
         lines.sort_by_key(|line| line.timestamp_ms);
+        
+        // 🌐 处理双语歌词（网易云/QQ音乐格式）
+        // 如果两行有相同的时间戳，第二行作为翻译
+        let mut merged_lines = Vec::new();
+        let mut i = 0;
+        while i < lines.len() {
+            let mut current = lines[i].clone();
+            
+            // 检查下一行是否有相同时间戳
+            if i + 1 < lines.len() && lines[i + 1].timestamp_ms == current.timestamp_ms {
+                // 下一行作为翻译
+                current.translation = Some(lines[i + 1].text.clone());
+                i += 2; // 跳过下一行
+            } else {
+                i += 1;
+            }
+            
+            merged_lines.push(current);
+        }
 
-        Ok(ParsedLyrics { lines, metadata })
+        Ok(ParsedLyrics { lines: merged_lines, metadata })
     }
 
     /// 从音频文件同目录查找歌词文件
@@ -242,6 +262,7 @@ impl LyricsParser {
                 lines.push(LyricLine {
                     timestamp_ms: (index as u64) * 3000, // 假设每行3秒
                     text: line.to_string(),
+                    translation: None,
                 });
             }
         }
@@ -278,6 +299,7 @@ impl LyricsParser {
                         lines.push(LyricLine {
                             timestamp_ms,
                             text,
+                            translation: None,
                         });
                     }
                 }
@@ -331,6 +353,7 @@ impl LyricsParser {
                             lines.push(LyricLine {
                                 timestamp_ms,
                                 text: clean_text,
+                                translation: None,
                             });
                         }
                     }
@@ -386,6 +409,7 @@ impl LyricsParser {
                         lines.push(LyricLine {
                             timestamp_ms,
                             text,
+                            translation: None,
                         });
                     }
                 }
@@ -683,9 +707,9 @@ mod tests {
     fn test_get_current_line() {
         let parser = LyricsParser::new();
         let lines = vec![
-            LyricLine { timestamp_ms: 1000, text: "Line 1".to_string() },
-            LyricLine { timestamp_ms: 3000, text: "Line 2".to_string() },
-            LyricLine { timestamp_ms: 5000, text: "Line 3".to_string() },
+            LyricLine { timestamp_ms: 1000, text: "Line 1".to_string(), translation: None },
+            LyricLine { timestamp_ms: 3000, text: "Line 2".to_string(), translation: None },
+            LyricLine { timestamp_ms: 5000, text: "Line 3".to_string(), translation: None },
         ];
 
         assert_eq!(parser.get_current_line(&lines, 500), None);

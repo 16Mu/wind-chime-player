@@ -393,6 +393,14 @@ impl PreloadActor {
 
     /// 处理预加载单个曲目
     async fn handle_preload_track(&mut self, track: Track, priority: PreloadPriority) {
+        // 🔧 跳过远程文件（WebDAV等流式源不需要预加载）
+        if track.path.starts_with("webdav://") || 
+           track.path.starts_with("http://") || 
+           track.path.starts_with("https://") {
+            log::debug!("曲目 {} 是远程文件，跳过预加载: {}", track.id, track.path);
+            return;
+        }
+        
         // 如果已在缓存中，跳过
         if self.cache.contains(track.id) {
             log::debug!("曲目 {} 已在缓存中，跳过预加载", track.id);

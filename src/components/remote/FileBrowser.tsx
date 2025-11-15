@@ -183,6 +183,15 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
 
   const pathParts = currentPath.split('/').filter(Boolean);
 
+  // 解码 URL 编码的路径用于显示
+  const decodePathForDisplay = (path: string) => {
+    try {
+      return decodeURIComponent(path);
+    } catch (e) {
+      return path; // 如果解码失败，返回原始路径
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-8 pb-32 overflow-y-auto">
       <div className="bg-white dark:bg-dark-200 rounded-2xl w-full max-w-6xl max-h-[calc(100vh-180px)] mx-4 flex flex-col my-auto">
@@ -193,7 +202,7 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
               浏览文件 - {serverName}
             </h3>
             <p className="text-sm text-slate-600 dark:text-dark-700 mt-0.5">
-              当前路径：{currentPath}
+              当前路径：{decodePathForDisplay(currentPath)}
             </p>
           </div>
           <button
@@ -224,7 +233,7 @@ export function FileBrowser({ serverId, serverName, onClose }: FileBrowserProps)
                 onClick={() => setCurrentPath('/' + pathParts.slice(0, index + 1).join('/'))}
                 className="px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors whitespace-nowrap"
               >
-                {part}
+                {decodePathForDisplay(part)}
               </button>
             </div>
           ))}

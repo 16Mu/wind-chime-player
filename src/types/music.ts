@@ -20,6 +20,12 @@ export interface Track {
   artist?: string;
   album?: string;
   duration_ms?: number;
+  // 封面和歌词数据（二进制数据）
+  album_cover_data?: Uint8Array;
+  album_cover_mime?: string;
+  artist_photo_data?: Uint8Array;
+  artist_photo_mime?: string;
+  embedded_lyrics?: string;
 }
 
 /**
@@ -75,6 +81,7 @@ export interface Artist {
 export interface LyricLine {
   time: number;
   text: string;
+  translation?: string;
 }
 
 /**

@@ -5,7 +5,7 @@
 // - 边读边解码
 // - 真正的流式播放
 
-use symphonia::core::formats::{FormatReader, Packet};
+use symphonia::core::formats::FormatReader;
 use symphonia::core::codecs::Decoder;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::errors::Error as SymphoniaError;

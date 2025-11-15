@@ -223,16 +223,12 @@ const LibraryPage = memo(function LibraryPage({
   }, [viewMode]); // 依赖viewMode，切换视图时重新绑定
 
   // ========== 播放全部 ==========
-  const handlePlayAll = async () => {
-    if (tracks.length > 0) {
-      try {
-        // 🔥 使用混合播放器
-        const { hybridPlayer } = await import('../services/hybridPlayer');
-        await hybridPlayer.play(tracks[0], tracks);
-        console.log('✅ 播放全部歌曲');
-      } catch (error) {
-        console.error('播放失败:', error);
-      }
+  // 性能优化：复用上层的 onTrackSelect，只选择当前排序后的第一首歌
+  // 不再在前端传递整库 tracks 给 HybridPlayer，避免大库下 UI 卡顿
+  const handlePlayAll = () => {
+    const firstTrack = sortedTracks[0];
+    if (firstTrack) {
+      onTrackSelect(firstTrack);
     }
   };
 

@@ -267,8 +267,8 @@ impl PlayerCore {
         })
     }
     
-    /// 创建默认配置的PlayerCore
-    #[allow(dead_code)]
+    /// 创建默认配置的PlayerCore - 便捷构造方法
+    #[allow(dead_code)]  // 公共API便捷方法，保留
     pub async fn with_default_config() -> Result<Self> {
         Self::new(PlayerCoreConfig::default()).await
     }
@@ -527,8 +527,8 @@ impl PlayerCore {
         self.state_handle.get_state()
     }
     
-    /// 订阅状态变化
-    #[allow(dead_code)]
+    /// 订阅状态变化 - 状态监听API
+    #[allow(dead_code)]  // 公共API，状态订阅功能，保留
     pub fn subscribe_state(&self) -> watch::Receiver<PlayerState> {
         self.state_watch.clone()
     }
@@ -538,8 +538,8 @@ impl PlayerCore {
         Arc::clone(&self.event_rx)
     }
     
-    /// 接收下一个事件（非阻塞）
-    #[allow(dead_code)]
+    /// 接收下一个事件（非阻塞）- 事件监听API
+    #[allow(dead_code)]  // 公共API，事件接收功能，保留
     pub async fn recv_event(&self) -> Option<PlayerEvent> {
         let mut rx = self.event_rx.lock().await;
         rx.recv().await

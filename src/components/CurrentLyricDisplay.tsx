@@ -13,6 +13,7 @@ interface Track {
 interface LyricLine {
   time: number;
   text: string;
+  translation?: string;
 }
 
 interface CurrentLyricDisplayProps {
@@ -120,11 +121,15 @@ export default function CurrentLyricDisplay({ track, className = '', lyricsData 
           }
         }
 
-        const text = index >= 0 ? lines[index].text : '';
-        if (text !== currentText) {
+        const currentLine = index >= 0 ? lines[index] : null;
+        const text = currentLine?.text || '';
+        const translation = currentLine?.translation || '';
+        const displayText = translation ? `${text}\n${translation}` : text;
+        
+        if (displayText !== currentText) {
           setIsFadingOut(true);
           setTimeout(() => {
-            setCurrentText(text);
+            setCurrentText(displayText);
             setIsFadingOut(false);
           }, 160);
         }

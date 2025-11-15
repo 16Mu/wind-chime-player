@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { Track } from '../types/music';
 import { useCoverCache } from '../contexts/CoverCacheContext';
 
@@ -15,7 +15,8 @@ interface ArtistsViewProps {
   isLoading: boolean;
 }
 
-export default function ArtistsView({ tracks, onTrackSelect, isLoading }: ArtistsViewProps) {
+// 🚀 性能优化：使用React.memo避免不必要的重渲染
+export default React.memo(function ArtistsView({ tracks, onTrackSelect, isLoading }: ArtistsViewProps) {
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [displayArtist, setDisplayArtist] = useState<string | null>(null);
@@ -363,4 +364,4 @@ export default function ArtistsView({ tracks, onTrackSelect, isLoading }: Artist
       )}
     </div>
   );
-}
+});

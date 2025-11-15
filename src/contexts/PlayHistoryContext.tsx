@@ -163,7 +163,7 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (lastRecorded && 
         lastRecorded.trackId === current.trackId && 
         now - lastRecorded.timestamp < 3000) {
-      console.log(`[PlayHistoryContext] ⏭️ 跳过重复记录: track_id=${current.trackId} (距上次记录 ${now - lastRecorded.timestamp}ms)`);
+      console.log(`[PlayHistoryContext] Skipping duplicate record: track_id=${current.trackId} (${now - lastRecorded.timestamp}ms since last)`);
       return;
     }
     
@@ -178,7 +178,7 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const isHalfPlayed = trackDurationMs ? (durationMs >= trackDurationMs * MIN_PERCENTAGE) : false;
     
     if (!isLongEnough && !isHalfPlayed) {
-      console.log(`[PlayHistoryContext] ⏭️ 播放时长不足，不计入记录: track_id=${current.trackId}, 播放=${playedSeconds.toFixed(1)}秒 (需要≥30秒或≥50%)`);
+      console.log(`[PlayHistoryContext] Insufficient play duration: track_id=${current.trackId}, played=${playedSeconds.toFixed(1)}s (requires ≥30s or ≥50%)`);
       return;
     }
     
@@ -195,9 +195,9 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
         timestamp: now
       };
       
-      console.log('[PlayHistoryContext] ✅ 播放历史已记录');
+      console.log('[PlayHistoryContext] Play history recorded');
     } catch (err) {
-      console.warn('[PlayHistoryContext] ⚠️ 记录播放历史失败:', err);
+      console.warn('[PlayHistoryContext] Failed to record play history:', err);
     }
   }, []);
 
@@ -222,7 +222,7 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
           if (!isActive) return;
           
           const trackData = event.payload;
-          console.log('[PlayHistoryContext] 🎵 检测到曲目切换:', trackData);
+          console.log('[PlayHistoryContext] Track change detected:', trackData);
           
           // 如果有上一首歌，先记录它的播放时长
           if (currentPlayingRef.current) {
@@ -253,7 +253,7 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
             // 🔒 再次检查组件是否仍然挂载
             if (!isActive) return;
             
-            console.log('[PlayHistoryContext] 🔄 刷新播放历史和统计数据');
+            console.log('[PlayHistoryContext] Refreshing play history and statistics');
             try {
               // 使用 ref 获取最新的 sortBy 值
               const historyData = await invoke<PlayHistoryEntry[]>('get_play_history', {
@@ -272,9 +272,9 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
               
               setStatistics(stats);
               
-              console.log('[PlayHistoryContext] ✅ 数据刷新完成');
+              console.log('[PlayHistoryContext] Data refresh complete');
             } catch (err) {
-              console.error('[PlayHistoryContext] ❌ 刷新数据失败:', err);
+              console.error('[PlayHistoryContext] Data refresh failed:', err);
             }
           }, 1500);
         });
@@ -296,15 +296,15 @@ export const PlayHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
         
         // 最后检查组件是否还活跃
         if (isActive) {
-          console.log('[PlayHistoryContext] ✅ 已设置播放历史监听器');
+          console.log('[PlayHistoryContext] Play history listener set');
         } else {
           // 如果在设置期间组件已卸载，立即清理
           unlistenTrack();
           unlistenPos();
-          console.log('[PlayHistoryContext] ⚠️ 组件已卸载，取消刚设置的监听器');
+          console.log('[PlayHistoryContext] Component unmounted, canceling listener');
         }
       } catch (err) {
-        console.error('[PlayHistoryContext] ❌ 设置监听器失败:', err);
+        console.error('[PlayHistoryContext] Failed to set listener:', err);
       }
     };
     

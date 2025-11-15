@@ -13,9 +13,11 @@ export default function WebDAVSettings() {
     checkAllConnections,
     deleteServer,
     addServer,
+    updateServer,
   } = useRemoteSource();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingServer, setEditingServer] = useState<RemoteServer | null>(null);
   const [browsingServerId, setBrowsingServerId] = useState<string | null>(null);
   const [browsingServerName, setBrowsingServerName] = useState<string>('');
   const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -56,6 +58,26 @@ export default function WebDAVSettings() {
       console.error('添加服务器失败:', error);
       const errorMsg = typeof error === 'string' ? error : String(error);
       alert(`❌ 添加失败\n\n${errorMsg}\n\n请检查：\n• URL 格式是否正确\n• 用户名和密码是否正确\n• 服务器是否可访问`);
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleUpdateServer = async (serverId: string, config: any) => {
+    try {
+      setIsTestingConnection(true);
+      await updateServer(serverId, config.name, config);
+      setEditingServer(null);
+      // 刷新列表和统计
+      await Promise.all([
+        refreshServers(),
+        refreshCacheStats()
+      ]);
+      alert('✅ 服务器更新成功！');
+    } catch (error) {
+      console.error('更新服务器失败:', error);
+      const errorMsg = typeof error === 'string' ? error : String(error);
+      alert(`❌ 更新失败\n\n${errorMsg}\n\n请检查：\n• URL 格式是否正确\n• 用户名和密码是否正确\n• 服务器是否可访问`);
     } finally {
       setIsTestingConnection(false);
     }
@@ -104,6 +126,7 @@ export default function WebDAVSettings() {
           <ServerList 
             servers={webdavServers}
             onBrowse={handleBrowse}
+            onEdit={(server) => setEditingServer(server)}
             onDelete={handleDelete}
             onAddClick={() => setShowAddDialog(true)}
           />
@@ -253,6 +276,16 @@ export default function WebDAVSettings() {
         />
       )}
 
+      {/* 编辑对话框 */}
+      {editingServer && (
+        <EditServerDialog
+          server={editingServer}
+          onUpdate={handleUpdateServer}
+          onClose={() => setEditingServer(null)}
+          isLoading={isTestingConnection}
+        />
+      )}
+
       {/* 文件浏览器 */}
       {browsingServerId && (
         <FileBrowser
@@ -266,9 +299,10 @@ export default function WebDAVSettings() {
 }
 
 // 服务器列表组件
-function ServerList({ servers, onBrowse, onDelete, onAddClick }: {
+function ServerList({ servers, onBrowse, onEdit, onDelete, onAddClick }: {
   servers: RemoteServer[];
   onBrowse: (server: RemoteServer) => void;
+  onEdit: (server: RemoteServer) => void;
   onDelete: (serverId: string, serverName: string) => void;
   onAddClick: () => void;
 }) {
@@ -343,6 +377,15 @@ function ServerList({ servers, onBrowse, onDelete, onAddClick }: {
                     }}
                   />
                   <button
+                    onClick={() => onEdit(server)}
+                    className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    title="编辑"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
                     onClick={() => onDelete(server.id, server.name)}
                     className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                     title="删除"
@@ -371,6 +414,208 @@ function ServerList({ servers, onBrowse, onDelete, onAddClick }: {
   );
 }
 
+// 编辑服务器对话框组件
+function EditServerDialog({ server, onUpdate, onClose, isLoading }: any) {
+  const [config, setConfig] = useState(() => ({
+    name: server.name,
+    url: server.config.url || 'https://',
+    mount_path: server.config.mount_path || '',
+    username: server.config.username || '',
+    password: server.config.password || '',
+    timeout_seconds: server.config.timeout_seconds || 30,
+    verify_ssl: server.config.verify_ssl !== undefined ? server.config.verify_ssl : true,
+    max_redirects: server.config.max_redirects || 5,
+    user_agent: server.config.user_agent || 'WindChimePlayer/1.0',
+    server_id: server.config.server_id || server.id,
+  }));
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    
+    try {
+      const configJson = JSON.stringify(config);
+      const result = await invoke<string>('remote_test_connection', {
+        serverType: 'webdav',
+        configJson,
+      });
+      setTestResult({ success: true, message: result });
+    } catch (error) {
+      setTestResult({ 
+        success: false, 
+        message: `连接失败: ${error}` 
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdate(server.id, config);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-16 pb-32 overflow-y-auto" onClick={e => e.target === e.currentTarget && !isLoading && onClose()}>
+      <div className="bg-white dark:bg-dark-200 rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[calc(100vh-180px)] overflow-y-auto my-auto">
+        <h3 className="text-xl font-bold text-slate-900 dark:text-dark-900 mb-4">
+          编辑 WebDAV 服务器
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              服务器名称 *
+            </label>
+            <input
+              type="text"
+              value={config.name}
+              onChange={e => setConfig({ ...config, name: e.target.value })}
+              placeholder="我的音乐服务器"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              required
+              disabled={isLoading}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              WebDAV 服务器地址 *
+            </label>
+            <input
+              type="url"
+              value={config.url}
+              onChange={e => setConfig({ ...config, url: e.target.value })}
+              placeholder="https://example.com"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              required
+              disabled={isLoading}
+            />
+            <p className="text-xs text-slate-500 dark:text-dark-700 mt-1">
+              服务器的基础地址（不包含挂载路径）
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              挂载路径
+            </label>
+            <input
+              type="text"
+              value={config.mount_path}
+              onChange={e => setConfig({ ...config, mount_path: e.target.value })}
+              placeholder="/webdav"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              disabled={isLoading}
+            />
+            <p className="text-xs text-slate-500 dark:text-dark-700 mt-1">
+              常见挂载路径：
+              <br />• 123云盘: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/webdav</code>
+              <br />• Nextcloud: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/remote.php/dav/files/username/</code>
+              <br />• ownCloud: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/remote.php/webdav/</code>
+              <br />• 坚果云: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/dav/</code>
+              <br />• 其他服务: 留空或填写 <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/</code>
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              用户名 *
+            </label>
+            <input
+              type="text"
+              value={config.username}
+              onChange={e => setConfig({ ...config, username: e.target.value })}
+              placeholder="用户名"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              密码 *
+            </label>
+            <input
+              type="password"
+              value={config.password}
+              onChange={e => setConfig({ ...config, password: e.target.value })}
+              placeholder="密码"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* 测试结果显示 */}
+          {testResult && (
+            <div className={`px-4 py-3 rounded-lg ${
+              testResult.success 
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            }`}>
+              <p className={`text-sm ${
+                testResult.success 
+                  ? 'text-green-700 dark:text-green-400' 
+                  : 'text-red-700 dark:text-red-400'
+              }`}>
+                {testResult.message}
+              </p>
+            </div>
+          )}
+
+          <div className="flex space-x-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading || isTesting}
+              className="px-4 py-2 border border-slate-300 dark:border-dark-400 text-slate-700 dark:text-dark-800 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-dark-300 transition-colors disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={isLoading || isTesting}
+              className="px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 font-medium rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isTesting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                  <span>测试中...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>测试连接</span>
+                </>
+              )}
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading || isTesting || !testResult?.success}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>更新中...</span>
+                </>
+              ) : (
+                <span>保存更改</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // 添加服务器对话框组件
 function AddServerDialog({ onAdd, onClose, isLoading }: any) {
   // 生成唯一的 server_id
@@ -381,6 +626,7 @@ function AddServerDialog({ onAdd, onClose, isLoading }: any) {
   const [config, setConfig] = useState({
     name: '',
     url: 'https://',
+    mount_path: '',
     username: '',
     password: '',
     timeout_seconds: 30,
@@ -442,21 +688,41 @@ function AddServerDialog({ onAdd, onClose, isLoading }: any) {
           
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
-              WebDAV URL *
+              WebDAV 服务器地址 *
             </label>
             <input
               type="url"
               value={config.url}
               onChange={e => setConfig({ ...config, url: e.target.value })}
-              placeholder="https://example.com/webdav"
+              placeholder="https://example.com"
               className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
               required
               disabled={isLoading}
             />
             <p className="text-xs text-slate-500 dark:text-dark-700 mt-1">
-              例如：
-              <br />• Nextcloud: https://cloud.example.com/remote.php/dav/files/username/
-              <br />• ownCloud: https://cloud.example.com/remote.php/webdav/
+              服务器的基础地址（不包含挂载路径）
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-dark-800 mb-1">
+              挂载路径
+            </label>
+            <input
+              type="text"
+              value={config.mount_path}
+              onChange={e => setConfig({ ...config, mount_path: e.target.value })}
+              placeholder="/webdav"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-dark-400 bg-white dark:bg-dark-300 text-slate-900 dark:text-dark-900 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent outline-none transition"
+              disabled={isLoading}
+            />
+            <p className="text-xs text-slate-500 dark:text-dark-700 mt-1">
+              常见挂载路径：
+              <br />• 123云盘: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/webdav</code>
+              <br />• Nextcloud: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/remote.php/dav/files/username/</code>
+              <br />• ownCloud: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/remote.php/webdav/</code>
+              <br />• 坚果云: <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/dav/</code>
+              <br />• 其他服务: 留空或填写 <code className="bg-slate-100 dark:bg-dark-400 px-1.5 py-0.5 rounded">/</code>
             </p>
           </div>
 

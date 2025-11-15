@@ -16,6 +16,7 @@ mod metadata_extractor; // 新增：通用元数据提取器
 mod play_history; // 新增：播放历史管理
 mod streaming; // 新增：流式播放服务（高内聚低耦合设计）
 mod network_api; // 新增：网络API服务（LrcApi集成）
+mod cache; // 新增：智能音频缓存系统
 
 // 使用新的PlayerCore（通过适配器）
 use player::{PlayerCommand, PlayerEvent, Track, RepeatMode};
@@ -1452,6 +1453,50 @@ async fn webdav_file_exists(
     }
 }
 
+/// 下载完整的 WebDAV 文件到内存（用于 Web Audio API）
+#[tauri::command]
+async fn webdav_download_file(
+    url: String,
+    username: String,
+    password: String,
+    file_path: String,
+) -> Result<Vec<u8>, String> {
+    log::info!("下载 WebDAV 文件到内存: {}", file_path);
+    
+    let config = WebDAVConfig {
+        server_id: "download".to_string(),
+        name: "文件下载".to_string(),
+        url,
+        username,
+        password,
+        timeout_seconds: 120, // 增加超时时间用于大文件
+        max_redirects: 5,
+        verify_ssl: true,
+        user_agent: "WindChimePlayer/1.0".to_string(),
+        ..Default::default()
+    };
+    
+    let client = WebDAVClient::new(config)
+        .map_err(|e| format!("创建 WebDAV 客户端失败: {}", e))?;
+    
+    // 下载文件流
+    let stream = client.download_stream(&file_path).await
+        .map_err(|e| format!("下载文件失败: {}", e))?;
+    
+    // 收集所有字节到内存
+    use futures::StreamExt;
+    let mut bytes = Vec::new();
+    let mut stream = Box::pin(stream);
+    
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("读取数据块失败: {}", e))?;
+        bytes.extend_from_slice(&chunk);
+    }
+    
+    log::info!("WebDAV 文件下载完成: {} bytes", bytes.len());
+    Ok(bytes)
+}
+
 /// 创建 WebDAV 目录
 #[tauri::command]
 async fn webdav_create_directory(
@@ -1579,6 +1624,21 @@ async fn remote_delete_server(
 }
 
 #[tauri::command]
+async fn remote_update_server(
+    state: State<'_, AppState>,
+    server_id: String,
+    name: String,
+    config_json: String,
+) -> Result<(), String> {
+    let db = state.inner().db.lock().map_err(|e| e.to_string())?;
+    db.update_remote_server(&server_id, &name, &config_json)
+        .map_err(|e| e.to_string())?;
+    
+    log::info!("更新远程服务器: {} ({})", name, server_id);
+    Ok(())
+}
+
+#[tauri::command]
 async fn remote_get_cache_stats(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
@@ -1590,6 +1650,60 @@ async fn remote_get_cache_stats(
         "file_count": count,
         "total_size_mb": total_size / (1024 * 1024),
     }))
+}
+
+// ==================== 音频缓存命令 ====================
+
+#[tauri::command]
+async fn cache_get_config() -> Result<String, String> {
+    // TODO: 从数据库加载配置
+    let config = cache::CacheConfig::default();
+    config.to_json().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn cache_update_config(config_json: String) -> Result<(), String> {
+    let config = cache::CacheConfig::from_json(&config_json)
+        .map_err(|e| format!("解析配置失败: {}", e))?;
+    
+    config.validate()?;
+    
+    // TODO: 保存到数据库
+    log::info!("缓存配置已更新: max_size={} MB, path={:?}", 
+        config.max_size_mb, config.cache_path);
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn cache_get_stats() -> Result<serde_json::Value, String> {
+    // TODO: 从CacheManager获取统计
+    let stats = cache::CacheStats::default();
+    
+    Ok(serde_json::json!({
+        "file_count": stats.file_count,
+        "total_size_mb": stats.total_size_mb,
+        "usage_percent": stats.usage_percent,
+        "hit_rate": stats.hit_rate,
+        "saved_bandwidth_mb": stats.saved_bandwidth_mb,
+        "high_priority_count": stats.high_priority_count,
+        "medium_priority_count": stats.medium_priority_count,
+        "low_priority_count": stats.low_priority_count,
+    }))
+}
+
+#[tauri::command]
+async fn cache_clear_all() -> Result<(), String> {
+    // TODO: 调用CacheManager清空缓存
+    log::info!("清空所有缓存");
+    Ok(())
+}
+
+#[tauri::command]
+async fn cache_auto_cleanup() -> Result<u32, String> {
+    // TODO: 调用CacheManager自动清理
+    log::info!("执行自动清理");
+    Ok(0)
 }
 
 #[tauri::command]
@@ -1726,6 +1840,16 @@ async fn remote_scan_library(
     // 执行扫描
     let result = scanner.scan(&root_path).await
         .map_err(|e| e.to_string())?;
+    
+    // 🔧 扫描完成后，自动刷新音乐库数据
+    log::info!("✅ 扫描完成，触发音乐库刷新...");
+    if let Some(tx) = LIBRARY_TX.get() {
+        let _ = tx.send(LibraryCommand::GetTracks);
+        let _ = tx.send(LibraryCommand::GetStats);
+        log::info!("✅ 已发送刷新命令到Library");
+    } else {
+        log::warn!("⚠️ Library未初始化，无法自动刷新");
+    }
     
     Ok(serde_json::json!({
         "total_files": result.total_files,
@@ -2193,17 +2317,25 @@ pub fn run() {
             webdav_list_directory,
             webdav_get_file_info,
             webdav_file_exists,
+            webdav_download_file,
             webdav_create_directory,
             webdav_delete_file,
             // 远程音乐源命令 (仅支持WebDAV)
             remote_add_server,
             remote_get_servers,
             remote_delete_server,
+            remote_update_server,
             remote_get_cache_stats,
             remote_test_connection,
             remote_check_all_connections,
             remote_browse_directory,
             remote_scan_library,
+            // 音频缓存命令
+            cache_get_config,
+            cache_update_config,
+            cache_get_stats,
+            cache_clear_all,
+            cache_auto_cleanup,
             // Streaming commands已移除（新架构中后端内部处理）
             // Test commands
             test_library_stats,

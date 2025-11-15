@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Track } from '../types/music';
 import { useCoverCache } from '../contexts/CoverCacheContext';
@@ -18,7 +18,8 @@ interface AlbumsViewProps {
   isLoading: boolean;
 }
 
-export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsViewProps) {
+// 🚀 性能优化：使用React.memo避免不必要的重渲染
+export default React.memo(function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsViewProps) {
   // 使用全局封面缓存
   const { albumCovers, loadAlbumCover, getAlbumCover } = useCoverCache();
   
@@ -572,4 +573,4 @@ export default function AlbumsView({ tracks, onTrackSelect, isLoading }: AlbumsV
       )}
     </div>
   );
-}
+});

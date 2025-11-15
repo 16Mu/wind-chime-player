@@ -39,6 +39,9 @@ import { CoverCacheProvider } from './contexts/CoverCacheContext';
 // Types
 import type { Track } from './types/music';
 
+// Services - 🔧 静态导入，避免点击时动态加载导致卡顿
+import { hybridPlayer } from './services/hybridPlayer';
+
 // Hooks
 import { useTauriEvent } from './hooks/useEventManager';
 
@@ -205,6 +208,7 @@ function AppContent() {
   }, [tracks]);
   
   // 🎯 终极方案：强制串行化，同时只有一个播放请求
+  // ⚙️ 性能优化：普通点击播放仅发送 trackId，不再每次传递整库 tracks 给后端
   const handleTrackSelect = useCallback(async (track: Track) => {
     const timestamp = Date.now();
     console.log(`🎯 [${timestamp}] 点击播放:`, track.id, track.title);
@@ -245,27 +249,46 @@ function AppContent() {
         const execTimestamp = Date.now();
         console.log(`▶️ [${execTimestamp}] 执行播放（使用混合播放器）:`, targetTrack.id, targetTrack.title);
         
-        // 🔥 使用混合播放器（Rust 流式 + Web Audio 后台加载）
-        const { hybridPlayer } = await import('./services/hybridPlayer');
-        
-        // 播放歌曲（立即使用 Rust 流式播放，后台加载 Web Audio）
-        const playSuccess = await hybridPlayer.play(targetTrack, tracks);
-        
-        if (!playSuccess) {
-          throw new Error('播放失败');
-        }
-        
-        // 🔥 立即更新 PlaybackContext 状态（不等待 Rust 事件）
+        // 🔥 立即更新UI状态，不等待播放实际开始（避免卡顿）
         updatePlaybackState({
           track: targetTrack,
           isPlaying: true,
         });
-        
-        // 🔥 更新当前播放的歌曲 ID
         currentPlayingTrackIdRef.current = targetTrack.id;
-        
         playlistLoadedRef.current = true;
-        console.log(`✅ [${execTimestamp}] 播放命令完成（Rust 已启动，Web Audio 后台加载中...）`);
+        
+        console.log(`✅ [${execTimestamp}] UI已更新，开始播放...`);
+        
+        // 🚀 异步播放，不阻塞UI（使用Promise.then而不是await）
+        // 普通点击播放：只传递当前曲目，让后端按既有播放列表/模式处理
+        hybridPlayer.play(targetTrack)
+          .then(playSuccess => {
+            if (playSuccess) {
+              console.log(`✅ [${execTimestamp}] 播放命令完成（Rust 已启动，Web Audio 后台加载中...）`);
+            } else {
+              console.error(`❌ [${execTimestamp}] 播放失败`);
+              // 播放失败时恢复UI状态
+              if (currentPlayingTrackIdRef.current === targetTrack.id) {
+                updatePlaybackState({
+                  track: null,
+                  isPlaying: false,
+                });
+                currentPlayingTrackIdRef.current = null;
+              }
+            }
+          })
+          .catch(error => {
+            console.error(`❌ [${execTimestamp}] 播放异常:`, error);
+            // 播放失败时恢复UI状态
+            if (currentPlayingTrackIdRef.current === targetTrack.id) {
+              updatePlaybackState({
+                track: null,
+                isPlaying: false,
+              });
+              currentPlayingTrackIdRef.current = null;
+            }
+          });
+        
       } catch (error) {
         console.error(`❌ 播放失败:`, error);
       } finally {
@@ -296,7 +319,7 @@ function AppContent() {
     
     // 立即执行
     executePlay();
-  }, [tracks]);
+  }, [updatePlaybackState]);
 
   // ========== 窗口控制 ==========
 

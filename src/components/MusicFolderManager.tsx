@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useToast } from '../contexts/ToastContext';
+import { useLibrary } from '../contexts/LibraryContext';
 
 interface MusicFolderManagerProps {
   className?: string;
@@ -9,6 +10,7 @@ interface MusicFolderManagerProps {
 
 export default function MusicFolderManager({ className = '' }: MusicFolderManagerProps) {
   const toast = useToast();
+  const { refresh: refreshLibrary } = useLibrary();
   
   const [musicFolders, setMusicFolders] = useState<string[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -191,6 +193,11 @@ export default function MusicFolderManager({ className = '' }: MusicFolderManage
       
       // 立即刷新文件夹列表
       await loadMusicFolders();
+      
+      // 🔥 自动刷新音乐库数据 - 确保所有页面的歌曲列表立即更新
+      console.log('🔄 刷新音乐库数据...');
+      await refreshLibrary();
+      console.log('✅ 音乐库数据已刷新');
       
       // 显示成功消息
       toast.success(`成功删除了 ${deletedCount} 首曲目`);

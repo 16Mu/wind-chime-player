@@ -97,15 +97,19 @@ impl SmartPlaylistEngine {
             RuleField::Duration => {
                 Self::match_number_field(track.duration_ms, &rule.operator, &rule.value)
             }
-            // 🔧 P2修复：扩展字段暂时返回false（需要配合数据库实现）
-            // 这些字段需要EnhancedTrack或从数据库查询
+            // 🔧 扩展字段支持
+            // 注意：这些字段需要使用 filter_tracks_with_metadata 方法
+            // 该方法接受 metadata_provider 来提供扩展信息（播放次数、收藏状态等）
+            // 在基础 filter_tracks 中这些字段返回 false，推荐使用带元数据的方法
             RuleField::DateAdded | 
             RuleField::LastPlayed | 
             RuleField::PlayCount | 
             RuleField::IsFavorite => {
-                // TODO: 需要扩展Track结构或使用单独的查询
-                log::warn!("Smart playlist field {:?} not implemented, skipping", rule.field);
-                false // 明确返回false，避免误匹配
+                log::warn!(
+                    "Smart playlist field {:?} requires metadata. Use filter_tracks_with_metadata() instead", 
+                    rule.field
+                );
+                false // 返回false避免误匹配，提示使用带元数据的方法
             }
         }
     }

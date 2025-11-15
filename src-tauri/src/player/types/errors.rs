@@ -2,9 +2,10 @@
 
 use thiserror::Error;
 
-/// 播放器错误
+/// 播放器错误类型 - 公共API
+/// 用于统一的错误处理和错误消息传递
 #[derive(Debug, Error)]
-#[allow(dead_code)]
+#[allow(dead_code)]  // 公共API，保留所有变体
 pub enum PlayerError {
     /// 音频设备错误
     #[error("音频设备错误: {0}")]

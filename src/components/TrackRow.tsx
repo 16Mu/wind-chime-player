@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Track } from '../types/music';
 
 interface TrackRowProps {
@@ -21,7 +22,8 @@ interface TrackRowProps {
   rowRef: (el: HTMLTableRowElement | null) => void;
 }
 
-export default function TrackRow({
+// 🚀 性能优化：使用React.memo避免不必要的重渲染
+const TrackRow = memo(function TrackRow({
   track,
   isSelected,
   albumCoverUrl,
@@ -154,4 +156,15 @@ export default function TrackRow({
       </td>
     </tr>
   );
-}
+}, (prevProps, nextProps) => {
+  // 🚀 自定义比较函数，只在必要时重渲染
+  return (
+    prevProps.track.id === nextProps.track.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.albumCoverUrl === nextProps.albumCoverUrl &&
+    prevProps.isFavorite === nextProps.isFavorite &&
+    prevProps.showFavoriteButtons === nextProps.showFavoriteButtons
+  );
+});
+
+export default TrackRow;

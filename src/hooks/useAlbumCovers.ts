@@ -43,6 +43,16 @@ export function useAlbumCovers(tracks: Track[]) {
       const trackIds = tracks.map(t => t.id);
 
       try {
+        // 🚀 性能优化：延迟加载封面，避免阻塞UI
+        // 先显示UI，500ms后再加载封面
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        console.log(`🎨 开始加载 ${trackIds.length} 个封面...`);
+
         // 并发加载所有封面（服务内部处理并发控制、缓存、去重）
         const results = await serviceRef.current.loadCovers(
           trackIds,
@@ -61,6 +71,7 @@ export function useAlbumCovers(tracks: Track[]) {
         });
 
         setAlbumCoverUrls(urlsObject);
+        console.log(`✅ 已加载 ${results.size}/${trackIds.length} 个封面`);
 
         // 清理不再需要的封面
         serviceRef.current.cleanupCovers(trackIds);
@@ -77,6 +88,7 @@ export function useAlbumCovers(tracks: Track[]) {
       }
     };
 
+    // 🚀 异步加载，不阻塞主线程
     loadCovers();
 
     // 清理函数：中止未完成的加载

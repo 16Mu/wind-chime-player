@@ -96,20 +96,20 @@ impl AudioDecoder {
         Ok(decoder)
     }
     
-    /// 获取文件路径（用于调试和日志）
-    #[allow(dead_code)]
+    /// 获取文件路径 - 调试和日志使用
+    #[allow(dead_code)]  // 调试工具方法，保留
     pub fn path(&self) -> &Path {
         &self.path
     }
     
-    /// 获取音频格式（用于调试和日志）
-    #[allow(dead_code)]
+    /// 获取音频格式 - 调试和日志使用
+    #[allow(dead_code)]  // 调试工具方法，保留
     pub fn format(&self) -> AudioFormat {
         self.format
     }
     
-    /// 验证文件是否存在且可读（用于预检查）
-    #[allow(dead_code)]
+    /// 验证文件是否存在且可读 - 预检查使用
+    #[allow(dead_code)]  // 预检查工具方法，保留
     pub fn validate(&self) -> Result<()> {
         if !self.path.exists() {
             return Err(PlayerError::decode_error(

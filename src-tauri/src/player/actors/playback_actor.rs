@@ -1,10 +1,5 @@
 // 播放控制Actor
-//
-// 职责：
-// - 播放、暂停、停止控制
-// - 精确跳转
-// - 音量控制
-// - 位置追踪
+// 负责播放、暂停、停止控制、精确跳转、音量控制和位置追踪
 
 use tokio::sync::{mpsc, oneshot, watch};
 use std::time::{Duration, Instant};
@@ -29,19 +24,19 @@ pub enum PlaybackMsg {
     /// 停止播放
     Stop,
     
-    /// 跳转到指定位置（毫秒）
+    /// 跳转到指定位置(ms)
     Seek {
         position_ms: u64,
         reply: oneshot::Sender<Result<()>>,
     },
     
-    /// 设置音量（0.0 - 1.0）
+    /// 设置音量(0.0-1.0)
     SetVolume(f32),
     
-    /// 获取当前位置（毫秒）
+    /// 获取当前播放位置(ms)
     GetPosition(oneshot::Sender<Option<u64>>),
     
-    /// 缓存样本完成（后台任务通知）
+    /// 后台缓存完成通知
     CacheSamples {
         track_path: String,
         samples: std::sync::Arc<[i16]>,
@@ -49,7 +44,7 @@ pub enum PlaybackMsg {
         sample_rate: u32,
     },
     
-    /// 关闭Actor
+    /// 关闭
     Shutdown,
 }
 
@@ -62,9 +57,7 @@ enum PlaybackState {
     Stopped,
 }
 
-/// 缓存的音频样本数据
-/// 
-/// 优化：使用Arc共享samples，避免每次播放时clone大量数据
+/// 缓存的音频样本数据，使用Arc避免重复拷贝
 struct CachedAudioSamples {
     samples: std::sync::Arc<[i16]>,
     channels: u16,
@@ -73,43 +66,18 @@ struct CachedAudioSamples {
 
 /// 播放控制Actor
 pub struct PlaybackActor {
-    /// 消息接收器
     inbox: mpsc::Receiver<PlaybackMsg>,
-    
-    /// 消息发送器（用于后台任务回传）
     inbox_tx: mpsc::Sender<PlaybackMsg>,
-    
-    /// 音频设备（必须保持存活以输出声音）
     audio_device: Option<LazyAudioDevice>,
-    
-    /// Sink资源池（已包含设备句柄）
     sink_pool: Option<SinkPool>,
-    
-    /// 当前Sink
     current_sink: Option<PooledSink>,
-    
-    /// 播放开始时间（内部状态，用于位置计算）
     play_start_time: Option<Instant>,
-    
-    /// 播放开始时的位置（内部状态，用于位置计算）
     play_start_position_ms: u64,
-    
-    /// 状态订阅（从StateActor获取状态）
     state_rx: watch::Receiver<PlayerState>,
-    
-    /// 事件发送器
     event_tx: mpsc::Sender<PlayerEvent>,
-    
-    /// 当前曲目的缓存样本（用于快速Seek）
     cached_samples: Option<CachedAudioSamples>,
-    
-    /// 当前曲目路径（用于判断是否需要重新缓存）
     current_track_path: Option<String>,
-    
-    /// WebDAV完整缓存（用于支持seek）
     webdav_full_cache: Option<Vec<u8>>,
-    
-    /// 当前播放的Track信息（用于Range跳转）
     current_track: Option<Track>,
 }
 
@@ -140,7 +108,7 @@ impl PlaybackActor {
         (actor, tx)
     }
     
-    /// 使用外部创建的接收器创建PlaybackActor（用于线程内部创建）
+    /// 使用外部接收器创建PlaybackActor
     pub fn new_with_receiver(
         inbox: mpsc::Receiver<PlaybackMsg>,
         inbox_tx: mpsc::Sender<PlaybackMsg>,
@@ -166,10 +134,9 @@ impl PlaybackActor {
     
     /// 运行Actor事件循环
     pub async fn run(mut self) {
-        log::info!("▶️ PlaybackActor 启动（懒加载模式，无阻塞）");
+        log::info!("PlaybackActor started");
         
-        // 不在启动时初始化Sink池，延迟到第一次播放时
-        // 这样可以避免阻塞应用启动
+        // Sink池延迟初始化，避免阻塞启动
         
         let mut position_update_timer = tokio::time::interval(Duration::from_millis(100));
         position_update_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -207,7 +174,7 @@ impl PlaybackActor {
                             self.handle_cache_samples(track_path, samples, channels, sample_rate);
                         }
                         PlaybackMsg::Shutdown => {
-                            log::info!("▶️ PlaybackActor 收到关闭信号");
+                            log::info!("PlaybackActor shutdown requested");
                             break;
                         }
                     }
@@ -220,208 +187,190 @@ impl PlaybackActor {
                 
                 // 收件箱关闭
                 else => {
-                    log::warn!("▶️ PlaybackActor 收件箱关闭");
+                    log::warn!("PlaybackActor inbox closed");
                     break;
                 }
             }
         }
         
-        log::info!("▶️ PlaybackActor 已停止");
+        log::info!("PlaybackActor stopped");
     }
     
     /// 初始化Sink池
     async fn initialize_sink_pool(&mut self) -> Result<()> {
-        log::info!("📦 初始化Sink资源池");
+        log::info!("Initializing sink pool");
         
-        // 创建音频设备（必须保存以保持OutputStream存活）
         let device = LazyAudioDevice::default();
         let dev = device.get_or_init().await?;
         let pool = SinkPool::with_default_capacity(dev.handle().clone());
         
-        // 预热池（创建2个Sink）
         pool.warm_up(2)?;
         
-        // 🔥 保存音频设备，确保OutputStream在整个生命周期内存活
         self.audio_device = Some(device);
         self.sink_pool = Some(pool);
-        log::info!("✅ Sink资源池初始化完成");
+        log::info!("Sink pool initialized");
         
         Ok(())
     }
     
-    /// 清理缓存（切歌时调用）
+    /// 清理缓存
     fn clear_cache(&mut self) {
         if self.cached_samples.is_some() || self.webdav_full_cache.is_some() {
-            log::info!("🧹 清理旧曲目缓存");
+            log::info!("Clearing track cache");
             self.cached_samples = None;
             self.webdav_full_cache = None;
         }
     }
     
-    /// 处理播放请求（优化版：立即播放 + 异步缓存）
+    /// 处理播放请求
     async fn handle_play(&mut self, track: Track) -> Result<()> {
         use std::time::Instant;
         let start = Instant::now();
-        log::info!("▶️ 播放: {:?}", track.title);
-        println!("🎵 [PlaybackActor] 开始播放: {:?}", track.title);
+        log::info!("Playing: {:?}", track.title);
+        println!("[PlaybackActor] Starting playback: {:?}", track.title);
         
-        // 切歌时清理旧缓存
         if self.current_track_path.as_ref() != Some(&track.path) {
             self.clear_cache();
         }
         
-        // 更新当前曲目
         self.current_track = Some(track.clone());
         self.current_track_path = Some(track.path.clone());
         
-        // 懒加载：第一次播放时才初始化Sink池
         if self.sink_pool.is_none() {
             let init_start = Instant::now();
-            log::info!("🎯 首次播放，初始化Sink资源池...");
-            println!("🎯 [PlaybackActor] 首次播放，初始化Sink资源池...");
+            log::info!("First playback, initializing sink pool");
+            println!("[PlaybackActor] Initializing sink pool");
             if let Err(e) = self.initialize_sink_pool().await {
-                log::error!("❌ 初始化Sink池失败: {}", e);
+                log::error!("Failed to initialize sink pool: {}", e);
                 return Err(e);
             }
-            println!("✅ [PlaybackActor] Sink池初始化完成 (耗时: {}ms)", init_start.elapsed().as_millis());
+            println!("[PlaybackActor] Sink pool ready ({}ms)", init_start.elapsed().as_millis());
         }
         
-        // 停止当前播放
         let stop_start = Instant::now();
-        println!("⏸️ [PlaybackActor] 停止当前播放...");
+        println!("[PlaybackActor] Stopping current playback");
         self.handle_stop();
-        println!("✅ [PlaybackActor] 停止完成 (耗时: {}ms)", stop_start.elapsed().as_millis());
+        println!("[PlaybackActor] Stopped ({}ms)", stop_start.elapsed().as_millis());
         
         // 确保Sink池已初始化
         if self.sink_pool.is_none() {
             self.initialize_sink_pool().await?;
         }
         
-        // 检查是否已有缓存
         let has_cache = self.current_track_path.as_ref() == Some(&track.path) 
                         && self.cached_samples.is_some();
         
-        // 创建音频源（统一类型使用 Box<dyn Source>）
         use rodio::Source;
         let decode_start = Instant::now();
         let source: Box<dyn Source<Item = i16> + Send> = if has_cache {
-            // 从缓存创建音频源（即时，Arc共享，无需完整clone）
-            println!("⚡ [PlaybackActor] 使用缓存样本（Arc共享，零拷贝）");
+            println!("[PlaybackActor] Using cached samples");
             let cached = self.cached_samples.as_ref().unwrap();
             use rodio::buffer::SamplesBuffer;
-            // Arc<[i16]>转换为Vec - rodio需要拥有数据
-            // 但这是最后一次不可避免的拷贝，之前的缓存复用都是零成本的
             Box::new(SamplesBuffer::new(
                 cached.channels,
                 cached.sample_rate,
                 cached.samples.to_vec(),
             ))
         } else {
-            // 首次播放：解码音频文件
-            println!("🎵 [PlaybackActor] 准备音频文件...");
+            println!("[PlaybackActor] Preparing audio");
             
-            // 🔥 优化：WebDAV 使用流式播放，本地文件完整解码到内存
             let source_result: Result<Box<dyn rodio::Source<Item = i16> + Send>> = if track.path.starts_with("webdav://") {
-                println!("🌊 [PlaybackActor] 检测到WebDAV远程文件，使用流式播放（边下边播）...");
+                println!("[PlaybackActor] WebDAV streaming playback");
                 self.decode_streaming(&track.path).await
             } else {
-                // 🎯 本地文件：流式解码（立即播放，混合播放器会在后台加载 Web Audio）
-                println!("🎵 [PlaybackActor] 解码本地音频文件（流式播放，立即开始）: {}...", track.path);
-                let decoder = AudioDecoder::new(&track.path);
-                match decoder.decode() {
-                    Ok(s) => {
-                        println!("✅ [PlaybackActor] 本地文件流式解码器已创建（立即播放）");
-                        Ok(Box::new(s) as Box<dyn rodio::Source<Item = i16> + Send>)
+                println!("[PlaybackActor] Decoding local file: {}", track.path);
+                // 🚀 性能优化：使用spawn_blocking异步解码本地文件，避免阻塞
+                let path = track.path.clone();
+                tokio::task::spawn_blocking(move || {
+                    let decoder = AudioDecoder::new(&path);
+                    match decoder.decode() {
+                        Ok(s) => {
+                            println!("[PlaybackActor] Local decoder created");
+                            Ok(Box::new(s) as Box<dyn rodio::Source<Item = i16> + Send>)
+                        }
+                        Err(e) => {
+                            println!("[PlaybackActor] Decode failed: {}", e);
+                            Err(e)
+                        }
                     }
-                    Err(e) => {
-                        println!("❌ [PlaybackActor] 音频解码失败: {}", e);
-                        Err(e)
-                    }
-                }
+                })
+                .await
+                .map_err(|e| PlayerError::decode_error(format!("异步解码任务失败: {}", e)))?
             };
             
             match source_result {
                 Ok(s) => {
-                    println!("✅ [PlaybackActor] 音频源已准备 (耗时: {}ms)", decode_start.elapsed().as_millis());
+                    println!("[PlaybackActor] Audio source ready ({}ms)", decode_start.elapsed().as_millis());
                     s
                 }
                 Err(e) => {
-                    println!("❌ [PlaybackActor] 音频源准备失败: {}", e);
+                    println!("[PlaybackActor] Source preparation failed: {}", e);
                     return Err(e);
                 }
             }
         };
-        println!("✅ [PlaybackActor] 音频源准备完成 (耗时: {}ms)", decode_start.elapsed().as_millis());
+        println!("[PlaybackActor] Audio prepared ({}ms)", decode_start.elapsed().as_millis());
         
-        // 从池中获取Sink
         let sink_start = Instant::now();
-        println!("🎵 [PlaybackActor] 从池中获取Sink...");
+        println!("[PlaybackActor] Acquiring sink");
         let pool = self.sink_pool.as_ref().unwrap();
         let sink = match pool.acquire() {
             Ok(s) => {
-                println!("✅ [PlaybackActor] Sink获取成功 (耗时: {}ms)", sink_start.elapsed().as_millis());
+                println!("[PlaybackActor] Sink acquired ({}ms)", sink_start.elapsed().as_millis());
                 s
             }
             Err(e) => {
-                println!("❌ [PlaybackActor] Sink获取失败: {}", e);
+                println!("[PlaybackActor] Sink acquisition failed: {}", e);
                 return Err(e);
             }
         };
         
-        // 从状态读取音量并播放
         let play_start = Instant::now();
         let volume = self.state_rx.borrow().volume;
         sink.set_volume(volume);
         
-        println!("▶️ [PlaybackActor] 添加音频源并开始播放...");
+        println!("[PlaybackActor] Starting playback");
         sink.append(source);
         sink.play();
-        println!("✅ [PlaybackActor] 播放启动完成 (耗时: {}ms)", play_start.elapsed().as_millis());
+        println!("[PlaybackActor] Playback started ({}ms)", play_start.elapsed().as_millis());
         
-        // 更新本地播放控制状态
         self.current_sink = Some(sink);
         self.play_start_time = Some(Instant::now());
         self.play_start_position_ms = 0;
         
-        println!("✅ [PlaybackActor] handle_play完成 (总耗时: {}ms)", start.elapsed().as_millis());
+        println!("[PlaybackActor] Play complete ({}ms)", start.elapsed().as_millis());
         
-        // 🔥 后台缓存策略：
-        // - 本地文件：不需要后台缓存（混合播放器会使用 Web Audio）
-        // - WebDAV 文件：后台完整下载（支持 seek）
         if !has_cache && track.path.starts_with("webdav://") {
-            println!("💾 [PlaybackActor] WebDAV 文件启动后台完整下载任务（支持 seek）");
+            println!("[PlaybackActor] Starting background download for seek support");
             let track_path = track.path.clone();
             let inbox_tx = self.inbox_tx.clone();
             
             tokio::task::spawn(async move {
-                println!("🔧 [后台下载] 开始下载 WebDAV 完整文件...");
+                println!("[Background] Downloading WebDAV file");
                 
-                // TODO: 实现 WebDAV 完整下载和缓存
-                println!("⚠️ [后台下载] WebDAV 完整下载功能待实现");
+                // TODO: Implement WebDAV full download
+                println!("[Background] WebDAV full download not yet implemented");
                 
                 let _ = inbox_tx;
                 let _ = track_path;
             });
         } else if !has_cache {
-            // 本地文件：不启动后台缓存（混合播放器会处理）
-            println!("ℹ️ [PlaybackActor] 本地文件使用混合播放器策略，Rust 仅提供流式播放");
+            println!("[PlaybackActor] Local file uses hybrid player");
         }
         
-        // 发送事件
-        log::info!("📤 [PlaybackActor] 发送TrackChanged事件");
+        log::info!("Sending TrackChanged event");
         let _ = self.event_tx.send(PlayerEvent::TrackChanged(Some(track))).await;
         
-        log::info!("✅ [PlaybackActor] 播放开始成功");
+        log::info!("Playback started successfully");
         Ok(())
     }
     
-    /// 处理暂停请求
+    /// 处理暂停
     fn handle_pause(&mut self) {
         if let Some(sink) = &self.current_sink {
-            log::info!("⏸️ 暂停播放");
+            log::info!("Pausing playback");
             sink.pause();
             
-            // 保存当前位置
             if let Some(position) = self.get_current_position() {
                 self.play_start_position_ms = position;
             }
@@ -429,36 +378,31 @@ impl PlaybackActor {
         }
     }
     
-    /// 处理恢复请求
+    /// 处理恢复
     fn handle_resume(&mut self) {
         if let Some(sink) = &self.current_sink {
-            log::info!("▶️ 恢复播放");
+            log::info!("Resuming playback");
             sink.play();
             
-            // 重置播放开始时间
             self.play_start_time = Some(Instant::now());
         }
     }
     
-    /// 处理停止请求
+    /// 处理停止
     fn handle_stop(&mut self) {
         if let Some(sink) = self.current_sink.take() {
-            log::info!("⏹️ 停止播放");
-            // 🔧 优化：使用clear()而非stop()，立即清空缓冲区，避免5秒延迟
+            log::info!("Stopping playback");
             sink.clear();
-            // sink在drop时会自动归还到池中
         }
         
         self.play_start_time = None;
         self.play_start_position_ms = 0;
     }
     
-    /// 处理跳转请求（方案5：智能缓存seek）
-    /// 本地文件：等待后台缓存完成后支持0延迟seek
-    /// WebDAV文件：流式播放过程中边播边缓存，支持已缓存部分的seek
+    /// 处理跳转，需要缓存支持
     async fn handle_seek(&mut self, position_ms: u64) -> Result<()> {
         let seek_start = Instant::now();
-        log::info!("⚡ Seek到: {}ms", position_ms);
+        log::info!("Seeking to: {}ms", position_ms);
         
         // 提取缓存数据（Arc共享，避免大量clone）
         let (samples, channels, sample_rate) = match &self.cached_samples {
@@ -624,11 +568,13 @@ impl PlaybackActor {
     /// WEBDAV流式播放（真正的即点即播）
     async fn decode_streaming(&self, track_path: &str) -> Result<Box<dyn rodio::Source<Item = i16> + Send>> {
         use crate::streaming::SimpleHttpReader;
-        use std::io::BufReader;
         use tokio::time::{timeout, Duration};
+        use symphonia::core::io::MediaSourceStream;
+        use symphonia::core::probe::Hint;
+        use crate::player::audio::SymphoniaDecoder;
         
         log::info!("🌊 WEBDAV流式播放: {}", track_path);
-        println!("🌊 [PlaybackActor] WEBDAV流式播放: {}", track_path);
+        println!("🌊 [PlaybackActor] WEBDAV流式播放（真正的流式解码）: {}", track_path);
         
         // 只支持WEBDAV
         if !track_path.starts_with("webdav://") {
@@ -642,7 +588,7 @@ impl PlaybackActor {
         println!("📡 [PlaybackActor] 创建HTTP流式Reader（即点即播模式）...");
         
         // 🚀 创建SimpleHttpReader（零等待，立即返回）
-        let create_future = SimpleHttpReader::new(http_url, username, password);
+        let create_future = SimpleHttpReader::new(http_url.clone(), username, password);
         
         let reader = match timeout(Duration::from_secs(5), create_future).await {
             Ok(Ok(r)) => {
@@ -663,22 +609,96 @@ impl PlaybackActor {
             }
         };
         
-        log::info!("✅ HTTP Reader已创建，立即开始解码");
-        println!("🎵 [PlaybackActor] 立即开始解码...");
+        log::info!("✅ HTTP Reader已创建，等待初始缓冲...");
+        println!("🎵 [PlaybackActor] 等待初始缓冲（提升播放流畅度）...");
         
-        // 🚀 使用 rodio::Decoder（边接收边解码）
-        let buf_reader = BufReader::with_capacity(128 * 1024, reader);
-        let decoder = rodio::Decoder::new(buf_reader)
+        // 🔧 等待初始缓冲（256KB），确保格式探测不会因网络延迟而卡顿
+        const INITIAL_BUFFER_SIZE: usize = 256 * 1024; // 256KB
+        let buffer_timeout = Duration::from_secs(3);
+        let buffer_start = std::time::Instant::now();
+        
+        loop {
+            let available = reader.get_buffered_size();
+            
+            if available >= INITIAL_BUFFER_SIZE {
+                log::info!("✅ 初始缓冲完成: {}KB", available / 1024);
+                println!("✅ [PlaybackActor] 初始缓冲完成: {}KB", available / 1024);
+                break;
+            }
+            
+            if buffer_start.elapsed() > buffer_timeout {
+                log::warn!("⚠️ 初始缓冲超时（仅缓冲了{}KB），继续播放", available / 1024);
+                println!("⚠️ [PlaybackActor] 初始缓冲超时（仅缓冲了{}KB），继续播放", available / 1024);
+                break;
+            }
+            
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        
+        log::info!("🎵 使用SymphoniaDecoder进行真正的流式解码");
+        println!("🎵 [PlaybackActor] 使用SymphoniaDecoder（真正的流式，不等待metadata）...");
+        
+        // 🔥 P0-4修复: 使用SymphoniaDecoder替代rodio::Decoder
+        // Symphonia支持真正的流式播放，不需要预先读取完整metadata
+        
+        // 1. 包装为MediaSourceStream
+        let mss = MediaSourceStream::new(Box::new(reader), Default::default());
+        
+        // 2. 探测格式（提供扩展名提示加速探测）
+        let mut hint = Hint::new();
+        // 从URL提取文件扩展名
+        if let Some(ext) = http_url.split('.').last() {
+            let ext_lower = ext.split('?').next().unwrap_or(ext).to_lowercase();
+            hint.with_extension(&ext_lower);
+            log::info!("🔍 文件扩展名提示: {}", ext_lower);
+        }
+        
+        let probe_result = symphonia::default::get_probe()
+            .format(&hint, mss, &Default::default(), &Default::default())
             .map_err(|e| {
-                let err_msg = format!("解码失败: {}", e);
+                let err_msg = format!("格式探测失败: {}", e);
                 log::error!("❌ {}", err_msg);
                 println!("❌ [PlaybackActor] {}", err_msg);
                 PlayerError::decode_error(err_msg)
             })?;
         
-        log::info!("✅ 解码器已创建，开始播放");
-        println!("✅ [PlaybackActor] 解码器已创建，开始播放！");
-        Ok(Box::new(decoder))
+        let format = probe_result.format;
+        
+        // 3. 选择音轨
+        let track = format.tracks()
+            .iter()
+            .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+            .ok_or_else(|| {
+                let err_msg = "没有找到有效音轨";
+                log::error!("❌ {}", err_msg);
+                println!("❌ [PlaybackActor] {}", err_msg);
+                PlayerError::decode_error(err_msg.to_string())
+            })?;
+        
+        let track_id = track.id;
+        
+        log::info!("✅ 找到音轨: ID={}, 编解码器={:?}", track_id, track.codec_params.codec);
+        
+        // 4. 创建解码器
+        let decoder = symphonia::default::get_codecs()
+            .make(&track.codec_params, &Default::default())
+            .map_err(|e| {
+                let err_msg = format!("创建解码器失败: {}", e);
+                log::error!("❌ {}", err_msg);
+                println!("❌ [PlaybackActor] {}", err_msg);
+                PlayerError::decode_error(err_msg)
+            })?;
+        
+        // 5. 使用 SymphoniaDecoder（真正的流式）
+        let symphonia_decoder = SymphoniaDecoder::new(
+            format,
+            decoder,
+            track_id
+        );
+        
+        log::info!("✅ SymphoniaDecoder创建成功，真正的流式播放已启动");
+        println!("✅ [PlaybackActor] SymphoniaDecoder创建成功（真正的流式播放）！");
+        Ok(Box::new(symphonia_decoder))
     }
     
     /// 解析WEBDAV路径为HTTP URL（包含完整配置）

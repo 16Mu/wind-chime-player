@@ -23,9 +23,10 @@ import AppearanceSettings from './settings/AppearanceSettings';
 import AnimationSettings from './settings/AnimationSettings';
 import PlaybackSettings from './settings/PlaybackSettings';
 import WebDAVSettings from './settings/WebDAVSettings';
+import AudioCacheSettings from './settings/AudioCacheSettings';
 import AboutSettings from './settings/AboutSettings';
 
-type SettingsTab = 'library' | 'appearance' | 'animation' | 'playback' | 'webdav' | 'about';
+type SettingsTab = 'library' | 'appearance' | 'animation' | 'playback' | 'cache' | 'webdav' | 'about';
 
 interface TabConfig {
   id: SettingsTab;
@@ -60,10 +61,16 @@ const TABS: TabConfig[] = [
     icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z' 
   },
   { 
+    id: 'cache', 
+    label: '智能缓存', 
+    emoji: '💾',
+    icon: 'M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2' 
+  },
+  { 
     id: 'webdav', 
     label: '远程音乐源', 
     emoji: '☁️',
-    icon: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z' 
+    icon: 'M3 15a4 4 0 004 4h9a5 5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z' 
   },
   { 
     id: 'about', 
@@ -236,6 +243,9 @@ export default function SettingsPageNew() {
       
       case 'playback':
         return <PlaybackSettings highlightedSettingId={highlightedSettingId} />;
+      
+      case 'cache':
+        return <AudioCacheSettings />;
       
       case 'webdav':
         return <WebDAVSettings />;

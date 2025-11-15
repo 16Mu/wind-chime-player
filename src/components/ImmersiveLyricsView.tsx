@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { usePlaybackPosition } from '../contexts/PlaybackContext';
 import LyricsScrollContainer from './lyrics/LyricsScrollContainer';
 import GradualBlurMask from './lyrics/GradualBlurMask';
+import { ImmersiveLyricsPanel, CurvedLyricsPanel, FBMWaveBackground } from './immersive';
 
 // 歌词滚动配置参数（严格按照手册第9章推荐）
 // 🎨 动画效果预设方案
@@ -674,6 +675,7 @@ const getResponsiveFontSizes = () => {
 export interface LyricLine {
   timestamp_ms: number;
   text: string;
+  translation?: string;
 }
 
 export interface ParsedLyrics {
@@ -776,7 +778,7 @@ function ImmersiveLyricsView({
   
   // 皮肤切换相关状态
   const [showSkinPanel, setShowSkinPanel] = useState(false);
-  const [currentSkin, setCurrentSkin] = useState<'split' | 'fullscreen' | 'card' | 'minimal' | 'cinematic'>('split');
+  const [currentSkin, setCurrentSkin] = useState<'split' | 'fullscreen' | 'card' | 'minimal' | 'cinematic' | 'orbital' | 'vinyl' | 'curved'>('split');
   
   // 🎨 动画效果设置状态（从localStorage读取）
   const [selectedAnimation, setSelectedAnimation] = useState<keyof typeof ANIMATION_PRESETS>(() => {
@@ -973,6 +975,15 @@ function ImmersiveLyricsView({
     e.stopPropagation();
     setCurrentSkin(layoutKey as any);
     setShowSkinPanel(false);
+    
+    // 切换布局后重新显示控件，并启动3秒隐藏定时器
+    setShowControls(true);
+    if (mouseTimerRef.current) {
+      clearTimeout(mouseTimerRef.current);
+    }
+    mouseTimerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
   }, []);
 
   // 🔧 性能优化：歌词行点击处理函数（适配新组件接口）
@@ -2138,6 +2149,7 @@ function ImmersiveLyricsView({
       </div>
     </LayoutTransition>
   );
+
                      
                      return (
                        <div
@@ -2149,38 +2161,9 @@ function ImmersiveLyricsView({
       `}
       style={getTransitionStyles() as React.CSSProperties}
     >
-      {/* 专辑封面模糊背景层 */}
-      {albumCoverUrl && (
-        <div 
-          className="absolute -inset-8 -z-10"
-          style={{
-            backgroundImage: `url(${albumCoverUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            filter: 'blur(80px) brightness(0.6) saturate(1.2)',
-            transition: 'all 0.6s ease-out'
-          }}
-        />
-      )}
-      
-      {/* ✅ 平滑渐变遮罩层，消除色彩断层 */}
-      {albumCoverUrl && (
-        <>
-          {/* 额外的暗化遮罩层 */}
-          <div 
-            className="absolute inset-0 -z-5 bg-black/40"
-            style={{ transition: 'opacity 0.6s ease-out' }}
-          />
-          {/* 从上到下的平滑渐变，消除断层 */}
-          <div 
-            className="absolute inset-0 -z-4"
-            style={{
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.15) 100%)',
-              transition: 'opacity 0.6s ease-out'
-            }}
-          />
-        </>
+      {/* Apple Music 风格动态流动背景 - 应用于所有布局模式 */}
+      {currentSkin !== 'vinyl' && currentSkin !== 'curved' && (
+        <FBMWaveBackground albumCoverUrl={albumCoverUrl} playing={isPlaying} />
       )}
       
       {/* 根据布局样式渲染不同的内容区域 - 使用单一容器避免组件卸载 */}
@@ -2196,94 +2179,156 @@ function ImmersiveLyricsView({
             return renderMinimalLayout();
           case 'cinematic':
             return renderCinematicLayout();
+          case 'vinyl':
+            return (
+              <div className="absolute inset-0">
+                <ImmersiveLyricsPanel
+                  track={track || null}
+                  isPlaying={isPlaying}
+                  onClose={onClose}
+                  onError={(error) => console.error('歌词加载错误:', error)}
+                />
+              </div>
+            );
+          case 'curved':
+            return (
+              <div className="absolute inset-0">
+                <CurvedLyricsPanel
+                  track={track || null}
+                  isPlaying={isPlaying}
+                  onClose={onClose}
+                  onError={(error) => console.error('歌词加载错误:', error)}
+                />
+              </div>
+            );
           default:
             return renderSplitLayout();
         }
       })()}
         
-        {/* 关闭按钮 - 鼠标移动时显示 */}
-        <button
-          onClick={onClose}
-          className={`absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group z-50 ${
-            showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-          }`}
-          style={{ transitionTimingFunction: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
-        >
-          <svg className="w-6 h-6 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        {/* 布局样式切换控件 - 圆形入口扩展为大面板 */}
-        <div 
-          className={`absolute top-6 transition-all duration-500 z-50 ${
-            showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-          } ${
-            showSkinPanel ? 'right-6' : 'right-20'
-          }`}
-          style={{ transitionTimingFunction: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
-        >
-          <div
-            className={`relative transition-all duration-500 ease-out cursor-pointer ${
-              showSkinPanel 
-                ? 'w-[min(480px,calc(100vw-3rem))] h-[min(288px,calc(100vh-6rem))]' 
-                : 'w-12 h-12 hover:scale-110'
+        {/* 关闭按钮 - 鼠标移动时显示（vinyl和curved模式有自己的关闭按钮，不显示） */}
+        {currentSkin !== 'vinyl' && currentSkin !== 'curved' && (
+          <button
+            onClick={onClose}
+            className={`absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group z-50 ${
+              showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
             }`}
-            onClick={handleSkinPanelToggle}
-                         style={{
-              borderRadius: showSkinPanel ? '24px' : '50%',
-              background: showSkinPanel
-                ? 'linear-gradient(135deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.65) 100%)'
-                : 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.08) 100%)',
-              backdropFilter: showSkinPanel ? 'blur(25px) saturate(200%)' : 'blur(20px) saturate(180%)',
-              border: showSkinPanel ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(255, 255, 255, 0.2)',
-              boxShadow: showSkinPanel
-                ? '0 12px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
-                : '0 4px 16px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-              transitionProperty: 'all, border-radius',
-              transitionTimingFunction: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-            }}
+            style={{ transitionTimingFunction: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
           >
-            {!showSkinPanel ? (
-              // 圆形状态：布局切换图标
-              <div className="w-full h-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+            <svg className="w-6 h-6 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+
+        {/* 布局样式切换控件 - 侧边半圆按钮（vinyl和curved模式下也显示） */}
+        {true && (
+          <>
+            {/* 侧边半圆触发按钮 - 缩小尺寸 */}
+            <button
+              onClick={handleSkinPanelToggle}
+              className={`fixed top-1/2 -translate-y-1/2 z-50 group transition-all duration-300 ${
+                showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+              style={{
+                right: showSkinPanel ? 'min(500px, 45vw)' : '0',
+                width: '32px',
+                height: '64px',
+                background: 'linear-gradient(to right, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08))',
+                backdropFilter: 'blur(20px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+                borderRadius: '32px 0 0 32px',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                borderRight: 'none',
+                boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.2), inset 1px 0 0 rgba(255, 255, 255, 0.2)',
+                transition: 'right 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+              }}
+            >
+              <div className="w-full h-full flex items-center justify-center pl-1">
+                <svg 
+                  className="w-4 h-4 text-white/90 transition-transform duration-300" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  style={{
+                    transform: showSkinPanel ? 'translateX(0)' : 'translateX(-1px)'
+                  }}
+                >
+                  {showSkinPanel ? (
+                    // 展开状态：> 箭头
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  ) : (
+                    // 收起状态：< 箭头
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                  )}
                 </svg>
               </div>
-            ) : (
-              // 展开状态：布局样式选择面板
-              <div className="w-full h-full p-3 sm:p-4 flex flex-col">
+            </button>
+
+            {/* 遮罩层 - 只覆盖侧边栏区域 */}
+            {showSkinPanel && (
+              <div 
+                className="fixed top-0 bottom-0 z-[60] transition-opacity duration-300"
+                style={{ 
+                  right: 0,
+                  left: 0,
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  animation: 'fadeIn 0.3s ease-out'
+                }}
+                onClick={handleSkinPanelClose}
+              />
+            )}
+
+            {/* 侧边抽屉面板 */}
+            <div
+              className="fixed top-0 right-0 h-full w-[min(500px,45vw)] max-w-full z-[70] overflow-hidden"
+              style={{
+                background: 'rgba(0, 0, 0, 0.4)',
+                backdropFilter: 'blur(80px) saturate(180%) brightness(0.85)',
+                WebkitBackdropFilter: 'blur(80px) saturate(180%) brightness(0.85)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.05)',
+                transform: showSkinPanel ? 'scaleX(1)' : 'scaleX(0)',
+                transformOrigin: '100% 50%',
+                transition: 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                pointerEvents: showSkinPanel ? 'auto' : 'none',
+              }}
+            >
+              <div className="h-full flex flex-col">
                 {/* 顶部标题栏 */}
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <h3 className="text-white/90 text-sm sm:text-base font-semibold">选择布局样式</h3>
-                  <button
-                    onClick={handleSkinPanelClose}
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                  >
-                    <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                <div className="p-6 border-b border-white/10">
+                  <h3 className="text-white text-xl font-bold tracking-wide">布局样式</h3>
+                  <p className="text-white/50 text-sm mt-1">选择你喜欢的歌词展示方式</p>
                 </div>
 
-                {/* 布局样式网格 - 响应式列数 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 flex-1 overflow-y-auto">
+                {/* 布局样式网格 */}
+                <div className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar">
+                  <div className="grid grid-cols-2 gap-3">
                   {[
                     {
                       key: 'split',
                       name: '左右分屏',
-                      description: '大封面左侧显示，歌词在右侧平铺展示',
+                      description: '封面与歌词并排',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <rect x="3" y="3" width="7" height="18" rx="1" strokeWidth="2" />
+                          <line x1="14" y1="6" x2="21" y2="6" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="14" y1="10" x2="21" y2="10" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="14" y1="14" x2="21" y2="14" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="14" y1="18" x2="19" y2="18" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      ),
                       preview: (
-                        <div className="w-full h-12 sm:h-14 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-lg flex overflow-hidden">
-                          <div className="w-2/5 bg-white/15 flex flex-col items-center justify-center space-y-1 p-2">
-                            <div className="w-8 h-8 bg-white/35 rounded-lg"></div>
-                            <div className="w-6 h-0.5 bg-white/50 rounded"></div>
+                        <div className="w-full h-24 bg-gradient-to-br from-emerald-500/25 via-teal-500/20 to-cyan-500/25 rounded-xl flex overflow-hidden relative group-hover:from-emerald-500/30 group-hover:via-teal-500/25 group-hover:to-cyan-500/30 transition-all duration-500">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
+                          <div className="w-2/5 bg-white/12 backdrop-blur-sm flex flex-col items-center justify-center space-y-2 p-3 relative border-r border-white/10">
+                            <div className="w-12 h-12 bg-gradient-to-br from-white/40 to-white/20 rounded-xl shadow-lg"></div>
+                            <div className="w-8 h-1 bg-white/60 rounded-full"></div>
                           </div>
-                          <div className="flex-1 flex flex-col justify-center px-3 space-y-1">
-                            <div className="w-full h-1.5 bg-white/70 rounded"></div>
-                            <div className="w-4/5 h-1 bg-white/50 rounded"></div>
-                            <div className="w-3/4 h-1 bg-white/30 rounded"></div>
+                          <div className="flex-1 flex flex-col justify-center px-4 space-y-2">
+                            <div className="w-full h-2 bg-white/80 rounded-full shadow-sm"></div>
+                            <div className="w-5/6 h-1.5 bg-white/60 rounded-full"></div>
+                            <div className="w-4/6 h-1.5 bg-white/40 rounded-full"></div>
                           </div>
                         </div>
                       )
@@ -2291,17 +2336,26 @@ function ImmersiveLyricsView({
                     {
                       key: 'fullscreen',
                       name: '全屏沉浸',
-                      description: '歌词全屏显示，底部浮动信息条',
+                      description: '歌词全屏居中',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" />
+                          <line x1="8" y1="11" x2="16" y2="11" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="10" y1="15" x2="14" y2="15" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      ),
                       preview: (
-                        <div className="w-full h-12 sm:h-14 bg-gradient-to-br from-pink-500/20 to-rose-500/20 rounded-lg flex items-center justify-center relative overflow-hidden">
+                        <div className="w-full h-24 bg-gradient-to-br from-rose-500/25 via-pink-500/20 to-fuchsia-500/25 rounded-xl flex items-center justify-center relative overflow-hidden group-hover:from-rose-500/30 group-hover:via-pink-500/25 group-hover:to-fuchsia-500/30 transition-all duration-500">
                           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/8 to-transparent"></div>
-                          <div className="text-center z-10 space-y-1">
-                            <div className="w-24 h-2 bg-white/80 mx-auto rounded"></div>
-                            <div className="w-20 h-1.5 bg-white/60 mx-auto rounded"></div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
+                          <div className="text-center z-10 space-y-2">
+                            <div className="w-32 h-2.5 bg-white/90 mx-auto rounded-full shadow-lg"></div>
+                            <div className="w-24 h-2 bg-white/70 mx-auto rounded-full shadow-md"></div>
+                            <div className="w-28 h-1.5 bg-white/50 mx-auto rounded-full"></div>
                           </div>
-                          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex items-center space-x-1 bg-black/30 rounded-full px-2 py-0.5">
-                            <div className="w-2 h-2 bg-white/50 rounded-full"></div>
-                            <div className="w-8 h-0.5 bg-white/40 rounded"></div>
+                          <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 bg-black/40 backdrop-blur-md rounded-full px-3 py-1 border border-white/10">
+                            <div className="w-3 h-3 bg-white/70 rounded-full shadow-sm"></div>
+                            <div className="w-16 h-1 bg-white/50 rounded-full"></div>
                           </div>
                         </div>
                       )
@@ -2309,25 +2363,40 @@ function ImmersiveLyricsView({
                     {
                       key: 'card',
                       name: '卡片模式',
-                      description: '每行歌词以卡片形式展示，提升可读性',
+                      description: '歌词卡片呈现',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <rect x="5" y="4" width="14" height="4" rx="1" strokeWidth="2" />
+                          <rect x="5" y="10" width="14" height="4" rx="1" strokeWidth="2" />
+                          <rect x="5" y="16" width="10" height="4" rx="1" strokeWidth="2" />
+                        </svg>
+                      ),
                       preview: (
-                        <div className="w-full h-12 sm:h-14 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-lg p-2 space-y-1">
-                          <div className="w-full h-3 bg-white/20 rounded border border-white/10"></div>
-                          <div className="w-full h-3 bg-white/30 rounded border border-white/15"></div>
-                          <div className="w-3/4 h-3 bg-white/20 rounded border border-white/10"></div>
+                        <div className="w-full h-24 bg-gradient-to-br from-amber-500/25 via-orange-500/20 to-yellow-500/25 rounded-xl p-3 space-y-2 relative group-hover:from-amber-500/30 group-hover:via-orange-500/25 group-hover:to-yellow-500/30 transition-all duration-500">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent rounded-xl"></div>
+                          <div className="relative w-full h-5 bg-white/25 backdrop-blur-sm rounded-lg border border-white/20 shadow-md"></div>
+                          <div className="relative w-full h-5 bg-white/35 backdrop-blur-sm rounded-lg border border-white/25 shadow-lg"></div>
+                          <div className="relative w-4/5 h-5 bg-white/25 backdrop-blur-sm rounded-lg border border-white/20 shadow-md"></div>
                         </div>
                       )
                     },
                     {
                       key: 'minimal',
                       name: '极简模式',
-                      description: '纯文字居中，去除所有装饰元素',
+                      description: '纯文字居中',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <line x1="8" y1="10" x2="16" y2="10" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="10" y1="14" x2="14" y2="14" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      ),
                       preview: (
-                        <div className="w-full h-12 sm:h-14 bg-gradient-to-br from-slate-500/15 to-gray-500/15 rounded-lg flex items-center justify-center">
-                          <div className="text-center space-y-2">
-                            <div className="w-18 h-0.5 bg-white/90 mx-auto rounded"></div>
-                            <div className="w-14 h-0.5 bg-white/60 mx-auto rounded"></div>
-                            <div className="w-16 h-0.5 bg-white/40 mx-auto rounded"></div>
+                        <div className="w-full h-24 bg-gradient-to-br from-slate-500/20 via-gray-500/15 to-zinc-500/20 rounded-xl flex items-center justify-center relative group-hover:from-slate-500/25 group-hover:via-gray-500/20 group-hover:to-zinc-500/25 transition-all duration-500">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent rounded-xl"></div>
+                          <div className="text-center space-y-3 relative">
+                            <div className="w-24 h-1 bg-white/90 mx-auto rounded-full shadow-sm"></div>
+                            <div className="w-20 h-0.5 bg-white/70 mx-auto rounded-full"></div>
+                            <div className="w-22 h-0.5 bg-white/50 mx-auto rounded-full"></div>
                           </div>
                         </div>
                       )
@@ -2335,15 +2404,94 @@ function ImmersiveLyricsView({
                     {
                       key: 'cinematic',
                       name: '电影模式',
-                      description: '宽屏比例显示，营造观影氛围',
+                      description: '宽屏影院效果',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth="2" />
+                          <line x1="9" y1="11" x2="15" y2="11" strokeWidth="2" strokeLinecap="round" />
+                          <line x1="11" y1="14" x2="13" y2="14" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                      ),
                       preview: (
-                        <div className="w-full h-12 sm:h-14 bg-gradient-to-br from-indigo-600/20 to-purple-700/20 rounded-lg relative overflow-hidden">
-                          <div className="absolute top-0 left-0 right-0 h-2 bg-black/40"></div>
-                          <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/40"></div>
+                        <div className="w-full h-24 bg-gradient-to-br from-indigo-500/25 via-purple-500/20 to-violet-500/25 rounded-xl relative overflow-hidden group-hover:from-indigo-500/30 group-hover:via-purple-500/25 group-hover:to-violet-500/30 transition-all duration-500">
+                          <div className="absolute top-0 left-0 right-0 h-3 bg-black/50"></div>
+                          <div className="absolute bottom-0 left-0 right-0 h-3 bg-black/50"></div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
                           <div className="h-full flex items-center justify-center">
-                            <div className="text-center space-y-1">
-                              <div className="w-20 h-1.5 bg-white/80 mx-auto rounded"></div>
-                              <div className="w-16 h-1 bg-white/60 mx-auto rounded"></div>
+                            <div className="text-center space-y-2 relative">
+                              <div className="w-28 h-2 bg-white/90 mx-auto rounded-full shadow-lg"></div>
+                              <div className="w-20 h-1.5 bg-white/70 mx-auto rounded-full shadow-md"></div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      key: 'vinyl',
+                      name: '黑胶模式',
+                      description: '旋转唱片效果',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                          <circle cx="12" cy="12" r="3" strokeWidth="2" fill="currentColor" fillOpacity="0.2" />
+                          <line x1="17" y1="12" x2="21" y2="12" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      ),
+                      preview: (
+                        <div className="w-full h-24 bg-gradient-to-br from-purple-500/25 via-pink-500/20 to-rose-500/25 rounded-xl flex overflow-hidden relative group-hover:from-purple-500/30 group-hover:via-pink-500/25 group-hover:to-rose-500/30 transition-all duration-500">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
+                          <div className="w-2/5 flex items-center justify-center relative">
+                            <div className="w-14 h-14 bg-gradient-to-br from-white/35 to-white/20 rounded-full border-2 border-white/50 relative shadow-xl">
+                              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white/70 rounded-full shadow-inner"></div>
+                              <div className="absolute inset-2 rounded-full border border-white/30"></div>
+                            </div>
+                          </div>
+                          <div className="flex-1 flex flex-col justify-center px-3 space-y-2 relative">
+                            <div className="w-full h-2.5 bg-white/90 rounded-full shadow-lg"></div>
+                            <div className="w-5/6 h-1.5 bg-white/70 rounded-full shadow-md"></div>
+                            <div className="w-4/6 h-1.5 bg-white/50 rounded-full"></div>
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      key: 'curved',
+                      name: '曲线歌词',
+                      description: '动态曲线排列',
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M3 12 Q 12 6, 21 12" strokeWidth="2" strokeLinecap="round" />
+                          <circle cx="9" cy="9" r="1.5" fill="currentColor" />
+                          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                          <circle cx="15" cy="9" r="1.5" fill="currentColor" />
+                        </svg>
+                      ),
+                      preview: (
+                        <div className="w-full h-24 bg-gradient-to-br from-cyan-500/25 via-blue-500/20 to-indigo-500/25 rounded-xl flex overflow-hidden relative group-hover:from-cyan-500/30 group-hover:via-blue-500/25 group-hover:to-indigo-500/30 transition-all duration-500">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
+                          <div className="w-1/4 flex items-center justify-center">
+                            <div className="w-12 h-12 bg-gradient-to-br from-white/35 to-white/20 rounded-full border-2 border-white/50 shadow-lg"></div>
+                          </div>
+                          <div className="flex-1 flex items-center justify-center relative">
+                            {/* 曲线示意 */}
+                            <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
+                              <path 
+                                d="M 25 15 Q 65 50 25 85" 
+                                stroke="rgba(255,255,255,0.5)" 
+                                strokeWidth="2.5" 
+                                fill="none"
+                                strokeDasharray="5,5"
+                              />
+                            </svg>
+                            {/* 歌词线条 */}
+                            <div className="absolute" style={{ top: '15%', left: '35%', transform: 'rotate(20deg)' }}>
+                              <div className="w-14 h-1.5 bg-white/85 rounded-full shadow-md"></div>
+                            </div>
+                            <div className="absolute" style={{ top: '50%', left: '55%', transform: 'rotate(0deg)' }}>
+                              <div className="w-18 h-2 bg-white/95 rounded-full shadow-lg"></div>
+                            </div>
+                            <div className="absolute" style={{ top: '80%', left: '35%', transform: 'rotate(-20deg)' }}>
+                              <div className="w-12 h-1.5 bg-white/75 rounded-full shadow-sm"></div>
                             </div>
                           </div>
                         </div>
@@ -2353,37 +2501,59 @@ function ImmersiveLyricsView({
                     <button
                       key={layout.key}
                       onClick={handleSkinSelect(layout.key)}
-                      className={`group relative p-2 sm:p-3 rounded-lg transition-all duration-300 hover:scale-[1.02] ${
+                      className={`group relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
                         currentSkin === layout.key 
-                          ? 'bg-white/15 ring-2 ring-white/30 shadow-lg' 
-                          : 'bg-white/8 hover:bg-white/12'
+                          ? 'bg-white/12 border-white/40 shadow-xl scale-[1.01]' 
+                          : 'bg-white/6 border-white/15 hover:bg-white/10 hover:border-white/25'
                       }`}
-                      style={{ transitionTimingFunction: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
+                      style={{ 
+                        transitionTimingFunction: 'cubic-bezier(0.25, 0.8, 0.25, 1)',
+                      }}
                     >
-                      {/* 预览区域 */}
-                      <div className="mb-1 sm:mb-2">
-                        {layout.preview}
-                      </div>
-                      
-                      {/* 标题和描述 */}
-                      <div className="text-left">
-                        <h4 className="text-white/95 text-xs sm:text-sm font-semibold mb-0.5 sm:mb-1">{layout.name}</h4>
-                        <p className="text-white/70 text-xs leading-relaxed hidden sm:block">{layout.description}</p>
+                      {/* 预览图容器 */}
+                      <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-black/30 to-black/50">
+                        <div className="absolute inset-0">
+                          {layout.preview}
+                        </div>
+                        
+                        {/* 选中对勾标记 - 半透明白色，更融合 */}
+                        {currentSkin === layout.key && (
+                          <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-2xl animate-in zoom-in duration-200">
+                            <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
                       </div>
 
-                      {/* 选中指示器 */}
-                      {currentSkin === layout.key && (
-                        <div className="absolute top-2 right-2 w-3 h-3 bg-white/90 rounded-full flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 bg-black rounded-full"></div>
+                      {/* 标题区域 */}
+                      <div className="px-2.5 py-2 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`flex-shrink-0 w-4 h-4 rounded flex items-center justify-center ${
+                            currentSkin === layout.key
+                              ? 'bg-white/25 text-white'
+                              : 'bg-white/15 text-white/80'
+                          }`}>
+                            <div className="scale-[0.65]">{layout.icon}</div>
+                          </div>
+                          <span className={`text-xs font-semibold ${
+                            currentSkin === layout.key ? 'text-white' : 'text-white/90'
+                          }`}>
+                            {layout.name}
+                          </span>
                         </div>
-                      )}
+                        <p className="text-[10px] text-white/55 mt-1 leading-snug">
+                          {layout.description}
+                        </p>
+                      </div>
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
     </div>
   );
 }

@@ -1,8 +1,6 @@
 /**
- * 播放控制 API
- * 
- * 提供统一的播放控制接口，内部使用 Web Audio Player
- * 替代原来的 Rust 后端调用
+ * Playback control API
+ * Unified playback interface using Web Audio Player
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -18,168 +16,165 @@ export interface Track {
 }
 
 /**
- * 播放指定歌曲（替代 player_play）
+ * Play track
  */
 export async function playerPlay(trackId: number): Promise<void> {
   try {
-    console.log(`🎵 [PlaybackControl] 播放歌曲: track_id=${trackId}`);
+    console.log(`[PlaybackControl] Play track: track_id=${trackId}`);
     
-    // 1. 从数据库获取歌曲信息
     const track = await invoke<Track>('get_track', { trackId });
     
-    console.log(`✅ [PlaybackControl] 获取歌曲信息: ${track.title || track.path}`);
+    console.log(`[PlaybackControl] Track info retrieved: ${track.title || track.path}`);
     
-    // 2. 使用 Web Audio Player 加载并播放
     const loadSuccess = await webAudioPlayer.loadTrack(track);
     if (!loadSuccess) {
-      throw new Error('加载歌曲失败');
+      throw new Error('Failed to load track');
     }
     
     const playSuccess = await webAudioPlayer.play();
     if (!playSuccess) {
-      throw new Error('播放失败');
+      throw new Error('Failed to play');
     }
     
-    console.log(`✅ [PlaybackControl] 播放成功`);
+    console.log(`[PlaybackControl] Play successful`);
   } catch (error) {
-    console.error('❌ [PlaybackControl] 播放失败:', error);
+    console.error('[PlaybackControl] Play failed:', error);
     throw error;
   }
 }
 
 /**
- * 暂停播放（替代 player_pause）
+ * Pause playback
  */
 export async function playerPause(): Promise<void> {
   try {
     webAudioPlayer.pause();
-    console.log('⏸️ [PlaybackControl] 已暂停');
+    console.log('[PlaybackControl] Paused');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 暂停失败:', error);
+    console.error('[PlaybackControl] Pause failed:', error);
     throw error;
   }
 }
 
 /**
- * 继续播放（替代 player_resume）
+ * Resume playback
  */
 export async function playerResume(): Promise<void> {
   try {
     await webAudioPlayer.play();
-    console.log('▶️ [PlaybackControl] 已继续播放');
+    console.log('[PlaybackControl] Resumed');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 继续播放失败:', error);
+    console.error('[PlaybackControl] Resume failed:', error);
     throw error;
   }
 }
 
 /**
- * 停止播放（替代 player_stop）
+ * Stop playback
  */
 export async function playerStop(): Promise<void> {
   try {
     webAudioPlayer.stop();
-    console.log('⏹️ [PlaybackControl] 已停止');
+    console.log('[PlaybackControl] Stopped');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 停止失败:', error);
+    console.error('[PlaybackControl] Stop failed:', error);
     throw error;
   }
 }
 
 /**
- * 跳转到指定位置（替代 player_seek）
- * @param positionMs 位置（毫秒）
+ * Seek to position
+ * @param positionMs Position in milliseconds
  */
 export async function playerSeek(positionMs: number): Promise<void> {
   try {
     const positionSec = positionMs / 1000;
     await webAudioPlayer.seek(positionSec);
-    console.log(`⚡ [PlaybackControl] Seek 到 ${positionSec.toFixed(2)}s (0 延迟!)`);
+    console.log(`[PlaybackControl] Seek to ${positionSec.toFixed(2)}s (instant!)`);
   } catch (error) {
-    console.error('❌ [PlaybackControl] Seek 失败:', error);
+    console.error('[PlaybackControl] Seek failed:', error);
     throw error;
   }
 }
 
 /**
- * 设置音量（替代 player_set_volume）
- * @param volume 音量 (0.0 - 1.0)
+ * Set volume
+ * @param volume Volume level (0.0 - 1.0)
  */
 export async function playerSetVolume(volume: number): Promise<void> {
   try {
     webAudioPlayer.setVolume(volume);
-    console.log(`🔊 [PlaybackControl] 音量设置为 ${(volume * 100).toFixed(0)}%`);
+    console.log(`[PlaybackControl] Volume set to ${(volume * 100).toFixed(0)}%`);
   } catch (error) {
-    console.error('❌ [PlaybackControl] 设置音量失败:', error);
+    console.error('[PlaybackControl] Set volume failed:', error);
     throw error;
   }
 }
 
 /**
- * 播放下一首（替代 player_next）
+ * Play next track
  */
 export async function playerNext(): Promise<void> {
   try {
     await webAudioPlayer.nextTrack();
-    console.log('⏭️ [PlaybackControl] 已切换到下一首');
+    console.log('[PlaybackControl] Next track');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 下一首失败:', error);
+    console.error('[PlaybackControl] Next failed:', error);
     throw error;
   }
 }
 
 /**
- * 播放上一首（替代 player_previous）
+ * Play previous track
  */
 export async function playerPrevious(): Promise<void> {
   try {
     await webAudioPlayer.previousTrack();
-    console.log('⏮️ [PlaybackControl] 已切换到上一首');
+    console.log('[PlaybackControl] Previous track');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 上一首失败:', error);
+    console.error('[PlaybackControl] Previous failed:', error);
     throw error;
   }
 }
 
 /**
- * 加载播放列表（替代 player_load_playlist）
+ * Load playlist
  */
 export async function playerLoadPlaylist(tracks: Track[], startIndex: number = 0): Promise<void> {
   try {
-    console.log(`📋 [PlaybackControl] 加载播放列表: ${tracks.length}首歌曲`);
+    console.log(`[PlaybackControl] Load playlist: ${tracks.length} tracks`);
     
     webAudioPlayer.setPlaylist(tracks, startIndex);
     
-    // 如果指定了起始歌曲，加载并播放
     if (startIndex >= 0 && startIndex < tracks.length) {
       const track = tracks[startIndex];
       await webAudioPlayer.loadTrack(track);
       await webAudioPlayer.play();
     }
     
-    console.log('✅ [PlaybackControl] 播放列表加载完成');
+    console.log('[PlaybackControl] Playlist loaded');
   } catch (error) {
-    console.error('❌ [PlaybackControl] 加载播放列表失败:', error);
+    console.error('[PlaybackControl] Load playlist failed:', error);
     throw error;
   }
 }
 
 /**
- * 获取当前播放位置（毫秒）
+ * Get current position in milliseconds
  */
 export function getPosition(): number {
   return webAudioPlayer.getPosition() * 1000;
 }
 
 /**
- * 获取歌曲总时长（毫秒）
+ * Get duration in milliseconds
  */
 export function getDuration(): number {
   return webAudioPlayer.getDuration() * 1000;
 }
 
 /**
- * 获取当前歌曲
+ * Get current track
  */
 export function getCurrentTrack(): Track | null {
   return webAudioPlayer.getCurrentTrack();

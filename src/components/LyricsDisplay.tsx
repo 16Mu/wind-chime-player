@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import ImmersiveLyricsView from './ImmersiveLyricsView';
+import { ImmersiveLyricsPanel } from './immersive';
 import type { Track } from '../types/music';
 
 export interface LyricLine {
   timestamp_ms: number;
   text: string;
+  translation?: string;
 }
 
 export interface ParsedLyrics {
@@ -372,14 +373,16 @@ function LyricsDisplay({
         }}
       >
         {/* 沉浸式模式切换按钮 */}
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          {/* 新版沉浸式歌词按钮 */}
           <button
             onClick={() => setShowImmersiveMode(true)}
-            className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-500/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group immersive-button-hover"
-            title="沉浸式歌词模式"
+            className="w-10 h-10 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-500/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 group"
+            title="沉浸式歌词模式（新版）"
           >
-            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400 group-hover:text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
         </div>
@@ -455,9 +458,14 @@ function LyricsDisplay({
               <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-blue-400/10 to-transparent animate-pulse"></div>
             )}
             
-            <span className="relative z-10">
-              {line.text || '♪'}
-            </span>
+            <div className="relative z-10 flex flex-col items-center gap-1">
+              <span>{line.text || '♪'}</span>
+              {line.translation && (
+                <span className="text-sm opacity-80">
+                  {line.translation}
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -468,8 +476,9 @@ function LyricsDisplay({
 
       {/* 沉浸式歌词模式 */}
       {showImmersiveMode && (
-        <ImmersiveLyricsView
-          track={stableTrack}
+        <ImmersiveLyricsPanel
+          track={stableTrack || null}
+          currentPositionMs={currentPositionMs}
           isPlaying={isPlaying}
           onClose={() => setShowImmersiveMode(false)}
           onError={onError}

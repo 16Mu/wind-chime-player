@@ -144,6 +144,8 @@ pub struct Lyrics {
 pub struct LyricLine {
     pub timestamp_ms: u64,
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translation: Option<String>,
 }
 
 // 注意：Favorite 结构体已移除，改用 favorites 表的直接操作
@@ -1565,6 +1567,16 @@ impl Database {
     pub fn delete_remote_server(&self, id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM remote_servers WHERE id = ?1", params![id])?;
         log::info!("删除远程服务器: {}", id);
+        Ok(())
+    }
+
+    pub fn update_remote_server(&self, id: &str, name: &str, config_json: &str) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        self.conn.execute(
+            "UPDATE remote_servers SET name = ?1, config_json = ?2, updated_at = ?3 WHERE id = ?4",
+            params![name, config_json, now, id],
+        )?;
+        log::info!("更新远程服务器: {} ({})", name, id);
         Ok(())
     }
 

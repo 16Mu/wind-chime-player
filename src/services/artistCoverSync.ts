@@ -64,9 +64,8 @@ export async function syncArtistCovers(
   onProgress?: (progress: SyncProgress) => void,
   maxConcurrent: number = 3
 ): Promise<void> {
-  // 防止重复同步
   if (isSyncing) {
-    console.log('⏸️ 艺术家封面同步已在进行中，跳过');
+    console.log('[ArtistCoverSync] Sync already in progress, skipping');
     return;
   }
 
@@ -74,50 +73,42 @@ export async function syncArtistCovers(
   syncAbortController = new AbortController();
 
   try {
-    console.log('🎨 开始艺术家封面自动同步...');
+    console.log('[ArtistCoverSync] Starting artist cover sync...');
     
-    // 1. 提取所有艺术家
     const allArtists = extractUniqueArtists(tracks);
-    console.log(`📊 发现 ${allArtists.length} 个唯一艺术家`);
+    console.log(`[ArtistCoverSync] Found ${allArtists.length} unique artists`);
     
     if (allArtists.length === 0) {
-      console.log('✅ 没有艺术家需要同步');
+      console.log('[ArtistCoverSync] No artists to sync');
       return;
     }
     
-    // 2. 获取数据库中已有的封面
     const existingCovers = await getAllArtistCovers();
-    console.log(`💾 数据库中已有 ${existingCovers.size} 个艺术家封面`);
+    console.log(`[ArtistCoverSync] ${existingCovers.size} artist covers in database`);
     
-    // 3. 找出缺失封面的艺术家
     const missingArtists = allArtists.filter(artist => !existingCovers.has(artist));
-    console.log(`🔍 发现 ${missingArtists.length} 个艺术家缺少封面`);
+    console.log(`[ArtistCoverSync] ${missingArtists.length} artists missing covers`);
     
     if (missingArtists.length === 0) {
-      console.log('✅ 所有艺术家封面已缓存，无需同步');
+      console.log('[ArtistCoverSync] All artist covers cached');
       return;
     }
     
-    // 4. 批量下载封面（控制并发数）
-    console.log(`🌐 开始下载 ${missingArtists.length} 个艺术家封面（最大并发：${maxConcurrent}）...`);
+    console.log(`[ArtistCoverSync] Downloading ${missingArtists.length} artist covers (max concurrent: ${maxConcurrent})...`);
     
     let completed = 0;
     let successCount = 0;
     
-    // 分批处理
     for (let i = 0; i < missingArtists.length; i += maxConcurrent) {
-      // 检查是否被中止
       if (syncAbortController.signal.aborted) {
-        console.log('⛔ 艺术家封面同步已中止');
+        console.log('[ArtistCoverSync] Sync aborted');
         break;
       }
       
       const batch = missingArtists.slice(i, i + maxConcurrent);
       
-      // 并发处理当前批次
       const promises = batch.map(async (artistName) => {
         try {
-          // 更新进度
           if (onProgress) {
             onProgress({
               total: missingArtists.length,
@@ -126,35 +117,32 @@ export async function syncArtistCovers(
             });
           }
           
-          // 获取封面（自动保存到数据库）
           const result = await getOrFetchArtistCover(artistName);
           
           if (result) {
             successCount++;
-            console.log(`✅ [${completed + 1}/${missingArtists.length}] ${artistName} 封面已缓存`);
+            console.log(`[ArtistCoverSync] [${completed + 1}/${missingArtists.length}] ${artistName} cover cached`);
           } else {
-            console.log(`⚠️ [${completed + 1}/${missingArtists.length}] ${artistName} 封面获取失败`);
+            console.log(`[ArtistCoverSync] [${completed + 1}/${missingArtists.length}] ${artistName} cover fetch failed`);
           }
         } catch (error) {
-          console.warn(`❌ ${artistName} 封面同步失败:`, error);
+          console.warn(`[ArtistCoverSync] ${artistName} sync failed:`, error);
         } finally {
           completed++;
         }
       });
       
-      // 等待当前批次完成
       await Promise.all(promises);
       
-      // 小延迟，避免API请求过于频繁
       if (i + maxConcurrent < missingArtists.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
     
-    console.log(`🎉 艺术家封面同步完成！成功: ${successCount}/${missingArtists.length}`);
+    console.log(`[ArtistCoverSync] Sync complete! Success: ${successCount}/${missingArtists.length}`);
     
   } catch (error) {
-    console.error('❌ 艺术家封面同步失败:', error);
+    console.error('[ArtistCoverSync] Sync failed:', error);
   } finally {
     isSyncing = false;
     syncAbortController = null;
@@ -162,33 +150,29 @@ export async function syncArtistCovers(
 }
 
 /**
- * 停止当前的同步任务
+ * Stop current sync task
  */
 export function stopSync(): void {
   if (syncAbortController) {
     syncAbortController.abort();
-    console.log('⏹️ 艺术家封面同步已停止');
+    console.log('[ArtistCoverSync] Sync stopped');
   }
 }
 
 /**
- * 检查是否正在同步
+ * Check if sync is in progress
  */
 export function isSyncInProgress(): boolean {
   return isSyncing;
 }
 
 /**
- * 静默同步（适合应用启动时使用）
- * - 在后台运行，不阻塞UI
- * - 不显示进度
- * - 使用较低的并发数
+ * Silent sync for background use
  */
 export async function silentSyncArtistCovers(tracks: Track[]): Promise<void> {
-  // 延迟1秒启动，更快开始同步
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  console.log('🔇 启动静默艺术家封面同步...');
+  console.log('[ArtistCoverSync] Starting silent artist cover sync...');
   
   await syncArtistCovers(tracks, undefined, 3); // 并发数设为3，更快同步
 }

@@ -52,7 +52,7 @@ export async function saveArtistCover(
       coverData,
       coverMime,
     });
-    console.log(`✅ 艺术家封面已保存: ${artistName}`);
+    console.log(`[NetworkApiService] Artist cover saved: ${artistName}`);
     return true;
   } catch (error) {
     console.error(`Failed to save artist cover for ${artistName}:`, error);
@@ -112,12 +112,12 @@ export async function getOrFetchArtistCover(
   // 1. 先从数据库获取
   const dbCover = await getArtistCover(artistName);
   if (dbCover) {
-    console.log(`✅ 从数据库加载艺术家封面: ${artistName}`);
+    console.log(`[NetworkApiService] Artist cover loaded from database: ${artistName}`);
     return dbCover;
   }
   
-  // 2. 数据库没有，尝试从网络获取
-  console.log(`🌐 从网络获取艺术家封面: ${artistName}`);
+  // Fetch from network if not in database
+  console.log(`[NetworkApiService] Fetching artist cover from network: ${artistName}`);
   const networkCover = await fetchCoverFromNetwork(artistName);
   
   if (networkCover && networkCover.data.length > 0) {

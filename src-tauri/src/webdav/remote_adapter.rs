@@ -8,11 +8,14 @@ use tokio::io::AsyncRead;
 /// WebDAV远程源适配器
 pub struct WebDAVRemoteAdapter {
     client: WebDAVClient,
+    config: WebDAVConfig,
 }
 
 impl WebDAVRemoteAdapter {
     pub fn new(client: WebDAVClient) -> Self {
-        Self { client }
+        // 获取配置的克隆
+        let config = client.get_config().clone();
+        Self { client, config }
     }
 }
 
@@ -26,22 +29,50 @@ impl RemoteSourceClient for WebDAVRemoteAdapter {
     }
 
     async fn list_directory(&self, path: &str) -> Result<Vec<RemoteFileInfo>> {
+        use percent_encoding::percent_decode_str;
+        
         let listing = self.client.list_directory(path).await?;
         
         let original_count = listing.files.len();
         log::info!("🔍 WebDAV 返回 {} 个原始项目用于路径: '{}'", original_count, path);
         
-        // 规范化路径用于比较（去除末尾斜杠）
-        let normalized_request_path = path.trim_end_matches('/');
-        log::info!("🔍 规范化的请求路径: '{}'", normalized_request_path);
+        // 🔧 修复中文路径：对请求路径进行 URL 解码和规范化
+        let decoded_path = percent_decode_str(path)
+            .decode_utf8()
+            .unwrap_or_else(|_| std::borrow::Cow::Borrowed(path));
+        
+        // 🔧 构建完整的服务器路径用于比较（添加 mount_path）
+        // 前端现在只发送相对路径（如 "/音乐测试"），我们需要加上 mount_path 来匹配服务器返回的路径
+        let full_request_path = if !self.config.mount_path.is_empty() {
+            let mount = self.config.mount_path.trim_matches('/');
+            let clean_path = decoded_path.trim_start_matches('/');
+            if clean_path.is_empty() {
+                // 根目录
+                format!("/{}", mount)
+            } else {
+                // 子目录
+                format!("/{}/{}", mount, clean_path)
+            }
+        } else {
+            decoded_path.to_string()
+        };
+        
+        let normalized_request_path = full_request_path.trim_end_matches('/');
+        log::info!("🔍 规范化的请求路径: '{}' (原始: '{}', mount_path: '{}')", 
+            normalized_request_path, path, self.config.mount_path);
         
         // 过滤掉父目录本身（WebDAV PROPFIND 通常会返回当前目录）
         let files: Vec<RemoteFileInfo> = listing.files.into_iter()
             .filter_map(|f| {
-                let file_path_normalized = f.path.trim_end_matches('/');
+                // 🔧 对文件路径也进行 URL 解码和规范化
+                let decoded_file_path = percent_decode_str(&f.path)
+                    .decode_utf8()
+                    .unwrap_or_else(|_| std::borrow::Cow::Borrowed(&f.path));
+                let file_path_normalized = decoded_file_path.trim_end_matches('/');
                 
                 log::info!("  📄 检查项目: name='{}', path='{}', is_dir={}, size={:?}", 
                     f.name, f.path, f.is_directory, f.size);
+                log::info!("     解码后的路径: '{}'", decoded_file_path);
                 log::info!("     规范化后的路径: '{}'", file_path_normalized);
                 log::info!("     比较: '{}' == '{}' ? {}", file_path_normalized, normalized_request_path, 
                     file_path_normalized == normalized_request_path);
@@ -54,8 +85,24 @@ impl RemoteSourceClient for WebDAVRemoteAdapter {
                 
                 log::info!("    ✅ 保留此项目");
                 
+                // 🔧 去除路径中的 mount_path 前缀，返回相对路径给前端
+                // 这样前端在进入子目录时，不会导致路径重复
+                let relative_path = if !self.config.mount_path.is_empty() {
+                    let mount = format!("/{}", self.config.mount_path.trim_matches('/'));
+                    if f.path.starts_with(&mount) {
+                        // 去除 mount_path 前缀
+                        f.path.strip_prefix(&mount).unwrap_or(&f.path).to_string()
+                    } else {
+                        f.path.clone()
+                    }
+                } else {
+                    f.path.clone()
+                };
+                
+                log::info!("    📤 返回相对路径: '{}' (原始: '{}')", relative_path, f.path);
+                
                 Some(RemoteFileInfo {
-                    path: f.path,
+                    path: relative_path,
                     name: f.name,
                     is_directory: f.is_directory,
                     size: f.size,

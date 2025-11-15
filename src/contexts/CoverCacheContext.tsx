@@ -37,7 +37,7 @@ export function CoverCacheProvider({ children }: { children: React.ReactNode }) 
   const loadArtistCovers = useCallback(async () => {
     // 如果已经加载过或正在加载，直接返回
     if (artistCoversLoaded.current || isLoadingArtistCovers.current) {
-      console.log('⚡ 艺术家封面已缓存，跳过加载');
+      console.log('[CoverCache] Artist covers cached, skipping load');
       return;
     }
 
@@ -51,7 +51,7 @@ export function CoverCacheProvider({ children }: { children: React.ReactNode }) 
       const allCachedCovers = await getAllArtistCovers();
       
       if (allCachedCovers.size === 0) {
-        console.log('⚠️ 数据库中没有缓存的封面');
+        console.log('[CoverCache] No cached covers in database');
         artistCoversLoaded.current = true;
         return;
       }
@@ -67,10 +67,10 @@ export function CoverCacheProvider({ children }: { children: React.ReactNode }) 
       artistCoversLoaded.current = true;
       
       const totalTime = (performance.now() - startTime).toFixed(2);
-      console.log(`✅ [CoverCache] 艺术家封面加载完成！${newCovers.size} 个封面，耗时 ${totalTime}ms`);
+      console.log(`[CoverCache] Artist covers loaded: ${newCovers.size} covers, ${totalTime}ms`);
       
     } catch (error) {
-      console.error('❌ [CoverCache] 批量加载封面失败:', error);
+      console.error('[CoverCache] Batch cover load failed:', error);
     } finally {
       isLoadingArtistCovers.current = false;
     }
@@ -96,7 +96,7 @@ export function CoverCacheProvider({ children }: { children: React.ReactNode }) 
     // 创建新的加载 Promise
     const loadPromise = (async () => {
       try {
-        console.log(`🔍 [CoverCache] 开始加载专辑封面: ${albumKey}, track_id: ${trackId}`);
+        console.log(`[CoverCache] Loading album cover: ${albumKey}, track_id: ${trackId}`);
         const result = await invoke('get_album_cover', { 
           track_id: trackId, 
           trackId: trackId 
@@ -104,21 +104,21 @@ export function CoverCacheProvider({ children }: { children: React.ReactNode }) 
         
         if (result) {
           const [imageData, mimeType] = result;
-          console.log(`✅ [CoverCache] 收到封面数据: ${albumKey}, 大小: ${imageData.length} 字节, MIME: ${mimeType}`);
+          console.log(`[CoverCache] Received cover data: ${albumKey}, size: ${imageData.length} bytes, MIME: ${mimeType}`);
           const blob = new Blob([new Uint8Array(imageData)], { type: mimeType });
           const url = URL.createObjectURL(blob);
-          console.log(`✅ [CoverCache] 创建 Blob URL: ${url}`);
+          console.log(`[CoverCache] Created Blob URL: ${url}`);
           
           // 更新缓存
           setAlbumCovers(prev => new Map(prev).set(albumKey, url));
           
           return url;
         } else {
-          console.warn(`⚠️ [CoverCache] 未找到封面数据: ${albumKey}, track_id: ${trackId}`);
+          console.warn(`[CoverCache] Cover data not found: ${albumKey}, track_id: ${trackId}`);
         }
         return null;
       } catch (error) {
-        console.error(`❌ 加载专辑封面失败 (${albumKey}):`, error);
+        console.error(`[CoverCache] Failed to load album cover (${albumKey}):`, error);
         return null;
       } finally {
         // 清理 Promise 缓存

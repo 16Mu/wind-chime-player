@@ -12,6 +12,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Track, LibraryStats, ScanProgress } from '../types/music';
 import { useTauriEvent } from '../hooks/useEventManager';
 import { silentSyncArtistCovers } from '../services/artistCoverSync';
+import { cacheService, TrackMetadata } from '../services/cacheService';
+import { perfDiag } from '../utils/performanceDiagnostics';
 
 // ==================== Context类型定义 ====================
 
@@ -58,77 +60,150 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isCached, setIsCached] = useState(false);
+  // 新增：标识是否正在从缓存加载和后台同步
+  const [, setIsLoadingFromCache] = useState(true);
+  const [, setIsSyncing] = useState(false);
 
   // ========== 核心操作方法 ==========
 
   /**
-   * 加载所有曲目
+   * 从缓存快速加载（启动优化 - 秒开策略）
    */
-  const loadTracks = useCallback(async () => {
-    if (typeof invoke === 'undefined') {
-      console.warn('Tauri API不可用，跳过加载曲目');
-      return;
-    }
-
+  const loadFromCache = useCallback(async () => {
     try {
-      console.log('📨 LibraryContext: 发送加载曲目请求...');
-      setIsLoading(true);
-      await invoke('library_get_tracks');
-      console.log('✅ LibraryContext: 加载请求已发送');
+      console.log('⚡ [性能优化] 从IndexedDB缓存加载数据...');
+      setIsLoadingFromCache(true);
+
+      // 1. 加载轻量级元数据（几乎无延迟）
+      const cachedMetadata = await cacheService.loadTracksMetadata();
+      
+      if (cachedMetadata.length > 0) {
+        // 转换为Track格式（暂时不包含封面数据）
+        const tracksFromCache: Track[] = cachedMetadata.map((meta: TrackMetadata) => ({
+          ...meta,
+          album_cover_data: undefined,
+          album_cover_mime: undefined,
+          artist_photo_data: undefined,
+          artist_photo_mime: undefined,
+          embedded_lyrics: undefined,
+        }));
+
+        setTracks(tracksFromCache);
+        setHasInitialized(true);
+        setIsCached(true);
+        console.log(`✅ 从缓存加载了 ${cachedMetadata.length} 首曲目（轻量级模式）`);
+      }
+
+      // 2. 加载统计信息
+      const cachedStats = await cacheService.loadStats();
+      if (cachedStats) {
+        setStats(cachedStats);
+        console.log('✅ 从缓存加载了统计信息');
+      }
+
+      // 3. 检查缓存是否过期
+      const isExpired = await cacheService.isCacheExpired();
+      if (isExpired) {
+        console.log('⚠️ 缓存已过期（超过24小时），将在后台刷新');
+      }
+
+      return {
+        hasCache: cachedMetadata.length > 0,
+        isExpired,
+      };
     } catch (error) {
-      console.error('LibraryContext: 加载曲目失败', error);
-      setIsLoading(false);
+      console.error('❌ 从缓存加载失败:', error);
+      return {
+        hasCache: false,
+        isExpired: true,
+      };
+    } finally {
+      setIsLoadingFromCache(false);
     }
   }, []);
 
   /**
-   * 加载统计数据
+   * 后台同步最新数据
+   */
+  const syncFromBackend = useCallback(async (silent: boolean = true) => {
+    if (typeof invoke === 'undefined') {
+      console.warn('Tauri API不可用，跳过同步');
+      return;
+    }
+
+    try {
+      if (silent) {
+        console.log('🔄 [后台同步] 静默刷新最新数据...');
+        setIsSyncing(true);
+      } else {
+        console.log('[LibraryContext] 显式加载数据...');
+        setIsLoading(true);
+      }
+
+      await invoke('library_get_tracks');
+      console.log('[LibraryContext] 同步请求已发送');
+    } catch (error) {
+      console.error('[LibraryContext] 同步失败', error);
+      if (!silent) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  /**
+   * 加载所有曲目（兼容旧接口）
+   */
+  const loadTracks = useCallback(async () => {
+    await syncFromBackend(false);
+  }, [syncFromBackend]);
+
+  /**
+   * Load statistics
    */
   const loadStats = useCallback(async () => {
     if (typeof invoke === 'undefined') {
-      console.warn('Tauri API不可用，跳过加载统计');
+      console.warn('Tauri API not available, skipping stats load');
       return;
     }
 
     try {
-      console.log('📊 LibraryContext: 加载统计数据...');
+      console.log('[LibraryContext] Loading statistics...');
       await invoke('library_get_stats');
     } catch (error) {
-      console.error('LibraryContext: 加载统计失败', error);
+      console.error('[LibraryContext] Failed to load stats', error);
     }
   }, []);
 
   /**
-   * 搜索曲目
+   * Search tracks
    */
   const searchTracks = useCallback(async (query: string) => {
     if (typeof invoke === 'undefined') return;
 
     if (query && query.trim()) {
-      console.log('🔍 LibraryContext: 搜索', query);
+      console.log('[LibraryContext] Searching', query);
       try {
         if (!isCached) {
           setIsLoading(true);
         }
         await invoke('library_search', { query: query.trim() });
       } catch (error) {
-        console.error('LibraryContext: 搜索失败', error);
+        console.error('[LibraryContext] Search failed', error);
         setIsLoading(false);
       }
     } else {
-      // 恢复完整列表
       if (hasInitialized) {
-        console.log('LibraryContext: 恢复完整列表');
+        console.log('[LibraryContext] Restoring full list');
         await loadTracks();
       }
     }
   }, [hasInitialized, isCached, loadTracks]);
 
   /**
-   * 刷新音乐库数据
+   * Refresh library data
    */
   const refresh = useCallback(async () => {
-    console.log('🔄 LibraryContext: 刷新音乐库');
+    console.log('[LibraryContext] Refreshing library');
     setIsCached(false);
     setIsLoading(true);
     await loadTracks();
@@ -161,102 +236,152 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
   // ========== 事件监听 ==========
 
   /**
-   * 监听曲目加载完成
+   * Listen for tracks loaded
    */
   useTauriEvent('library-tracks-loaded', (payload) => {
-    console.log(`📥 LibraryContext: 收到曲目数据，共${payload.length}首`);
+    console.log(`[LibraryContext] Received track data, ${payload.length} tracks`);
     setTracks(payload);
     setIsLoading(false);
+    setIsSyncing(false);
     setHasInitialized(true);
     setIsCached(true);
     
-    // 🎨 自动同步艺术家封面（后台静默执行）
+    // 🚀 性能优化：保存到IndexedDB缓存
     if (payload.length > 0) {
+      cacheService.saveTracks(payload).catch(error => {
+        console.warn('⚠️ 保存曲目到缓存失败:', error);
+      });
+      
       silentSyncArtistCovers(payload).catch(error => {
-        console.warn('艺术家封面自动同步失败:', error);
+        console.warn('Artist cover auto-sync failed:', error);
       });
     }
   });
 
   /**
-   * 监听搜索结果
+   * Listen for search results
    */
   useTauriEvent('library-search-results', (payload) => {
-    console.log(`🔍 LibraryContext: 搜索结果，共${payload.length}首`);
+    console.log(`[LibraryContext] Search results, ${payload.length} tracks`);
     setTracks(payload);
     setIsLoading(false);
   });
 
   /**
-   * 监听统计数据
+   * Listen for statistics
    */
   useTauriEvent('library-stats', (payload) => {
-    console.log('📊 LibraryContext: 收到统计数据', payload);
+    console.log('[LibraryContext] Received statistics', payload);
     setStats(payload);
+    
+    // 🚀 性能优化：保存统计信息到缓存
+    cacheService.saveStats(payload).catch(error => {
+      console.warn('⚠️ 保存统计信息到缓存失败:', error);
+    });
   });
 
   /**
-   * 监听扫描开始
+   * Listen for scan started
    */
   useTauriEvent('library-scan-started', () => {
-    console.log('🎬 LibraryContext: 扫描开始');
+    console.log('[LibraryContext] Scan started');
     setIsScanning(true);
     setScanProgress(null);
   });
 
   /**
-   * 监听扫描进度
+   * Listen for scan progress
    */
   useTauriEvent('library-scan-progress', (payload) => {
     setScanProgress(payload);
   });
 
   /**
-   * 监听扫描完成
+   * Listen for scan complete
    */
   useTauriEvent('library-scan-complete', async (payload) => {
-    console.log('🎉 LibraryContext: 扫描完成', payload);
+    console.log('[LibraryContext] Scan complete', payload);
     setIsScanning(false);
     setScanProgress(null);
     
-    // 自动刷新数据
     await loadTracks();
     await loadStats();
     
-    // 🎨 扫描完成后也触发艺术家封面同步（可能有新艺术家）
     if (tracks.length > 0) {
       silentSyncArtistCovers(tracks).catch(error => {
-        console.warn('艺术家封面自动同步失败:', error);
+        console.warn('Artist cover auto-sync failed:', error);
       });
     }
   });
 
-  // ========== 初始化 ==========
+  // ========== Initialization ==========
 
   /**
-   * 监听应用就绪事件，自动加载数据
-   */
-  useTauriEvent('app-ready', async () => {
-    console.log('✅ LibraryContext: 应用就绪，加载音乐库数据');
-    await loadTracks();
-    await loadStats();
-  });
-
-  /**
-   * 组件挂载时尝试立即加载（如果后端已就绪）
+   * 🚀 性能优化：组件挂载时的初始化流程
+   * 策略：缓存优先 + 后台同步（参考QQ音乐、网易云音乐）
    */
   useEffect(() => {
-    // 延迟100ms确保后端完全就绪
-    const timer = setTimeout(async () => {
-      if (!hasInitialized && typeof invoke !== 'undefined') {
-        console.log('⏰ LibraryContext: 尝试立即加载数据');
-        await loadTracks();
-        await loadStats();
-      }
-    }, 100);
+    const initializeLibrary = async () => {
+      perfDiag.start();
+      console.log('🎵 初始化音乐库...');
 
-    return () => clearTimeout(timer);
+      perfDiag.checkpoint('开始加载缓存');
+      // 步骤1: 立即从缓存加载（几乎无延迟，实现秒开）
+      const cacheResult = await loadFromCache();
+      perfDiag.checkpoint('缓存加载完成');
+
+      // 步骤2: 等待Tauri后端就绪
+      await new Promise(resolve => setTimeout(resolve, 100));
+      perfDiag.checkpoint('等待Tauri就绪');
+
+      if (typeof invoke === 'undefined') {
+        console.warn('⚠️ Tauri API不可用，仅使用缓存数据');
+        perfDiag.report();
+        return;
+      }
+
+      // 步骤3: 后台异步同步最新数据
+      if (cacheResult.hasCache) {
+        // 有缓存：后台静默刷新（不阻塞UI）
+        console.log('🔄 缓存已加载，后台静默同步最新数据...');
+        perfDiag.checkpoint('UI可用（有缓存）');
+        perfDiag.report();
+        
+        setTimeout(async () => {
+          await syncFromBackend(true); // 静默模式
+          await loadStats();
+          console.log('✅ 后台同步完成');
+        }, 500); // 延迟500ms，让UI先渲染
+      } else {
+        // 无缓存：显式加载（显示加载状态）
+        console.log('📥 首次启动，从后端加载数据...');
+        perfDiag.checkpoint('开始从后端加载');
+        await syncFromBackend(false); // 非静默模式
+        await loadStats();
+        perfDiag.checkpoint('后端加载完成');
+        perfDiag.report();
+      }
+    };
+
+    initializeLibrary().catch(error => {
+      console.error('❌ 初始化音乐库失败:', error);
+      perfDiag.report();
+    });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Listen for app ready event（兼容旧的事件触发方式）
+   */
+  useTauriEvent('app-ready', async () => {
+    console.log('[LibraryContext] App ready event received');
+    // 如果还未初始化，则触发加载
+    if (!hasInitialized) {
+      await syncFromBackend(false);
+      await loadStats();
+    }
+  });
 
   // ========== Context Value ==========
 

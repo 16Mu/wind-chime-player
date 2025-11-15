@@ -77,7 +77,7 @@ const PlaylistCardMini: React.FC<PlaylistCardMiniProps> = ({ playlist, onClick }
 
 export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: SidebarProps) {
   // 从 PlaylistContext 获取歌单数据 - 高内聚低耦合
-  const { getSidebarPlaylists } = usePlaylist();
+  const { getSidebarPlaylists, createPlaylist, loadPlaylists } = usePlaylist();
   const sidebarPlaylists = getSidebarPlaylists() || []; // 防御性编程，确保总是返回数组
   
   // 主题管理
@@ -418,9 +418,20 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                              hover:border-purple-400 dark:hover:border-purple-500
                              transition-all duration-200
                              flex items-center justify-center group"
-                    onClick={() => {
-                      // TODO: 打开创建歌单对话框
-                      console.log('创建新歌单');
+                    onClick={async () => {
+                      const name = prompt('请输入歌单名称：');
+                      if (name?.trim()) {
+                        try {
+                          await createPlaylist({ 
+                            name: name.trim(), 
+                            is_smart: false 
+                          });
+                          loadPlaylists();
+                        } catch (error) {
+                          console.error('创建歌单失败:', error);
+                          alert('创建歌单失败，请重试');
+                        }
+                      }
                     }}
                   >
                     <svg className="w-8 h-8 text-slate-400 dark:text-gray-500 
@@ -442,8 +453,7 @@ export default function Sidebar({ currentPage, onNavigate, onCollapseChange }: S
                            hover:bg-slate-100 dark:hover:bg-gray-700/50
                            transition-all duration-200"
                   onClick={() => {
-                    // TODO: 跳转到歌单页面
-                    console.log('查看全部歌单');
+                    onNavigate('playlists');
                   }}
                 >
                   查看全部 {sidebarPlaylists.length} 个歌单 →

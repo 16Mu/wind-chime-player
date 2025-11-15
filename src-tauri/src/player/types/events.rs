@@ -4,9 +4,11 @@ use serde::Serialize;
 use super::{track::Track, state::PlayerState};
 
 /// 播放器事件
+/// 播放器事件 - 公共API
+/// 用于前端监听播放器状态变化和事件通知
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "data")]
-#[allow(dead_code)]
+#[allow(dead_code)]  // 公共API，保留所有变体
 pub enum PlayerEvent {
     /// 状态变化
     StateChanged(PlayerState),

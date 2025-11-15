@@ -1,5 +1,5 @@
-// WebDAV客户端核心实现 - 高内聚：专注于WebDAV协议操作
-// 低耦合：通过接口与其他模块通信
+// WebDAV client core implementation
+// Focused on WebDAV protocol operations
 
 use super::{auth::AuthManager, types::*};
 // 已删除：旧版 provider trait，现在使用 remote_adapter
@@ -9,43 +9,49 @@ use std::{sync::Arc, time::Instant};
 use tokio::io::AsyncRead;
 use tokio_util::io::ReaderStream;
 
-/// WebDAV客户端 - 单一职责：WebDAV协议实现
+/// WebDAV client for protocol operations
 pub struct WebDAVClient {
-    /// HTTP客户端 - 依赖注入
     http_client: HttpClient,
-    
-    /// 配置信息
     config: WebDAVConfig,
-    
-    /// 认证管理器
     auth_manager: AuthManager,
-    
-    /// 操作统计
     stats: Arc<tokio::sync::RwLock<WebDAVStats>>,
 }
 
 impl WebDAVClient {
-    /// 创建新的WebDAV客户端
+    /// Create new WebDAV client
     pub fn new(config: WebDAVConfig) -> WebDAVResult<Self> {
-        // 验证配置
         config.validate()?;
         
-        // 创建HTTP客户端
         let mut builder = HttpClient::builder()
+            .pool_max_idle_per_host(5)
+            .pool_idle_timeout(Some(std::time::Duration::from_secs(90)))
             .timeout(std::time::Duration::from_secs(config.timeout_seconds))
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects as usize))
             .user_agent(&config.user_agent);
         
-        // SSL验证设置
+        builder = match config.http_protocol {
+            super::types::HttpProtocolPreference::Http1Only => {
+                log::info!("Using HTTP/1.1");
+                builder.http1_only()
+            },
+            super::types::HttpProtocolPreference::Http2Preferred => {
+                log::info!("Preferring HTTP/2");
+                builder.http2_prior_knowledge()
+            },
+            super::types::HttpProtocolPreference::Auto => {
+                log::info!("Auto HTTP version negotiation");
+                builder
+            },
+        };
+        
         if !config.verify_ssl {
             builder = builder.danger_accept_invalid_certs(true);
-            log::warn!("SSL证书验证已禁用");
+            log::warn!("SSL certificate verification disabled");
         }
         
         let http_client = builder.build()
-            .map_err(|e| WebDAVError::ConfigError(format!("HTTP客户端创建失败: {}", e)))?;
+            .map_err(|e| WebDAVError::ConfigError(format!("HTTP client creation failed: {}", e)))?;
         
-        // 创建认证管理器
         let auth_manager = AuthManager::from_config(&config);
         auth_manager.validate()?;
         
@@ -56,49 +62,45 @@ impl WebDAVClient {
             stats: Arc::new(tokio::sync::RwLock::new(WebDAVStats::default())),
         };
         
-        log::info!("WebDAV客户端已创建: {}", client.config.name);
+        log::info!("WebDAV client created: {}", client.config.name);
         Ok(client)
     }
     
-    /// 测试连接
+    /// Test connection
     pub async fn test_connection(&self) -> WebDAVResult<bool> {
-        log::info!("测试WebDAV连接: {}", self.config.url);
+        log::info!("Testing WebDAV connection: {}", self.config.url);
         
         let start_time = Instant::now();
         
-        // 发送OPTIONS请求
         let result = self.send_request(WebDAVMethod::Options, "/", None, None).await;
         
-        // 更新统计信息
         self.update_stats(start_time, result.is_ok()).await;
         
         match result {
             Ok(response) => {
-                log::info!("WebDAV连接测试成功: {}", response.status());
+                log::info!("WebDAV connection test successful: {}", response.status());
                 
-                // 检查WebDAV支持的方法
                 if let Some(allow_header) = response.headers().get("allow") {
                     if let Ok(methods) = allow_header.to_str() {
-                        log::debug!("服务器支持的方法: {}", methods);
+                        log::debug!("Server supported methods: {}", methods);
                     }
                 }
                 
                 Ok(true)
             }
             Err(e) => {
-                log::error!("WebDAV连接测试失败: {}", e);
+                log::error!("WebDAV connection test failed: {}", e);
                 Err(e)
             }
         }
     }
     
-    /// 列出目录内容
+    /// List directory contents
     pub async fn list_directory(&self, path: &str) -> WebDAVResult<WebDAVDirectoryListing> {
-        log::debug!("列出目录: {}", path);
+        log::debug!("Listing directory: {}", path);
         
         let start_time = Instant::now();
         
-        // 构建PROPFIND请求
         let propfind_body = self.build_propfind_request(&[
             DavProperty::DisplayName,
             DavProperty::ResourceType,
@@ -119,41 +121,38 @@ impl WebDAVClient {
             Some(propfind_body.into_bytes()),
         ).await?;
         
-        // 更新统计信息
         self.update_stats(start_time, true).await;
         
-        // 解析响应
         let response_text = response.text().await?;
         
-        // 🔍 调试：输出原始 XML 响应的前 2000 字符
         if response_text.len() <= 2000 {
-            log::info!("📄 WebDAV 原始 XML 响应:\n{}", response_text);
+            log::info!("WebDAV XML response:\n{}", response_text);
         } else {
-            log::info!("📄 WebDAV 原始 XML 响应 (前 2000 字符):\n{}", &response_text[..2000]);
+            log::info!("WebDAV XML response (first 2000 chars):\n{}", &response_text[..2000]);
         }
         
         let files = self.parse_propfind_response(&response_text)?;
         
-        log::info!("🔍 解析结果：共 {} 个项目", files.len());
+        log::info!("Parse result: {} items", files.len());
         for (idx, file) in files.iter().enumerate() {
-            log::info!("  [{}] {} (目录: {}, 大小: {:?})", 
+            log::info!("  [{}] {} (dir: {}, size: {:?})", 
                 idx, file.name, file.is_directory, file.size);
         }
         
         let listing = WebDAVDirectoryListing {
             path: path.to_string(),
             total_count: files.len(),
-            has_more: false, // 简化实现，不支持分页
+            has_more: false,
             files,
         };
         
-        log::info!("✅ 目录列表获取成功，共 {} 个项目", listing.total_count);
+        log::info!("Directory listing success: {} items", listing.total_count);
         Ok(listing)
     }
     
-    /// 获取文件信息
+    /// Get file info
     pub async fn get_file_info(&self, path: &str) -> WebDAVResult<WebDAVFileInfo> {
-        log::debug!("获取文件信息: {}", path);
+        log::debug!("Getting file info: {}", path);
         
         let start_time = Instant::now();
         
@@ -192,9 +191,9 @@ impl WebDAVClient {
         Ok(files.remove(0))
     }
     
-    /// 下载文件流
+    /// Download file stream
     pub async fn download_stream(&self, path: &str) -> WebDAVResult<impl Stream<Item = WebDAVResult<bytes::Bytes>>> {
-        log::debug!("下载文件流: {}", path);
+        log::debug!("Downloading file stream: {}", path);
         
         let start_time = Instant::now();
         
@@ -206,9 +205,9 @@ impl WebDAVClient {
         Ok(response.bytes_stream().map_err(WebDAVError::from))
     }
     
-    /// 下载文件范围（支持断点续传）
+    /// Download file range (resumable)
     pub async fn download_range(&self, path: &str, range: RangeRequest) -> WebDAVResult<impl Stream<Item = WebDAVResult<bytes::Bytes>>> {
-        log::debug!("下载文件范围: {} ({})", path, range);
+        log::debug!("Downloading file range: {} ({})", path, range);
         
         let start_time = Instant::now();
         
@@ -222,37 +221,34 @@ impl WebDAVClient {
         let response = self.send_request(WebDAVMethod::Get, path, Some(headers), None).await?;
         self.update_stats(start_time, true).await;
         
-        // 检查是否支持范围请求
         if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-            log::warn!("服务器不支持范围请求，返回完整文件");
+            log::warn!("Server doesn't support range requests, returning full file");
         }
         
         use futures::stream::TryStreamExt;
         Ok(response.bytes_stream().map_err(WebDAVError::from))
     }
     
-    /// 上传文件
+    /// Upload file
     #[allow(dead_code)]
     pub async fn upload_file<R>(&self, path: &str, reader: R, options: UploadOptions) -> WebDAVResult<()>
     where
         R: AsyncRead + Send + Sync + 'static,
     {
-        log::debug!("上传文件: {}", path);
+        log::debug!("Uploading file: {}", path);
         
         let start_time = Instant::now();
         
-        // 如果需要，创建父目录
         if options.create_directories {
             self.ensure_parent_directories(path).await?;
         }
         
-        // 构建请求头
         let mut headers = HeaderMap::new();
         if let Some(content_type) = &options.content_type {
             headers.insert(
                 CONTENT_TYPE,
                 HeaderValue::from_str(content_type)
-                    .map_err(|e| WebDAVError::ConfigError(format!("无效的Content-Type: {}", e)))?
+                    .map_err(|e| WebDAVError::ConfigError(format!("Invalid Content-Type: {}", e)))?
             );
         }
         
@@ -260,7 +256,6 @@ impl WebDAVClient {
             headers.insert("If-None-Match", HeaderValue::from_static("*"));
         }
         
-        // 转换AsyncRead为Stream
         let stream = ReaderStream::new(reader);
         let body = reqwest::Body::wrap_stream(stream);
         
@@ -268,19 +263,19 @@ impl WebDAVClient {
         self.update_stats(start_time, true).await;
         
         if response.status().is_success() {
-            log::info!("文件上传成功: {}", path);
+            log::info!("File upload successful: {}", path);
             Ok(())
         } else {
             Err(WebDAVError::HttpStatusError {
                 status: response.status().as_u16(),
-                message: format!("上传失败: {}", response.status()),
+                message: format!("Upload failed: {}", response.status()),
             })
         }
     }
     
-    /// 删除文件
+    /// Delete file
     pub async fn delete_file(&self, path: &str) -> WebDAVResult<()> {
-        log::debug!("删除文件: {}", path);
+        log::debug!("Deleting file: {}", path);
         
         let start_time = Instant::now();
         
@@ -288,21 +283,21 @@ impl WebDAVClient {
         self.update_stats(start_time, true).await;
         
         if response.status().is_success() {
-            log::info!("文件删除成功: {}", path);
+            log::info!("File deleted successfully: {}", path);
             Ok(())
         } else if response.status() == reqwest::StatusCode::NOT_FOUND {
             Err(WebDAVError::FileNotFound { path: path.to_string() })
         } else {
             Err(WebDAVError::HttpStatusError {
                 status: response.status().as_u16(),
-                message: format!("删除失败: {}", response.status()),
+                message: format!("Delete failed: {}", response.status()),
             })
         }
     }
     
-    /// 创建目录
+    /// Create directory
     pub async fn create_directory(&self, path: &str) -> WebDAVResult<()> {
-        log::debug!("创建目录: {}", path);
+        log::debug!("Creating directory: {}", path);
         
         let start_time = Instant::now();
         
@@ -310,21 +305,20 @@ impl WebDAVClient {
         self.update_stats(start_time, true).await;
         
         if response.status().is_success() {
-            log::info!("目录创建成功: {}", path);
+            log::info!("Directory created successfully: {}", path);
             Ok(())
         } else if response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED {
-            // 目录可能已存在
-            log::info!("目录可能已存在: {}", path);
+            log::info!("Directory may already exist: {}", path);
             Ok(())
         } else {
             Err(WebDAVError::HttpStatusError {
                 status: response.status().as_u16(),
-                message: format!("目录创建失败: {}", response.status()),
+                message: format!("Directory creation failed: {}", response.status()),
             })
         }
     }
     
-    /// 检查文件是否存在
+    /// Check if file exists
     pub async fn file_exists(&self, path: &str) -> WebDAVResult<bool> {
         match self.get_file_info(path).await {
             Ok(_) => Ok(true),
@@ -333,15 +327,18 @@ impl WebDAVClient {
         }
     }
     
-    /// 获取统计信息
+    /// Get statistics
     #[allow(dead_code)]
     pub async fn get_stats(&self) -> WebDAVStats {
         self.stats.read().await.clone()
     }
     
-    // === 私有辅助方法 ===
+    /// Get configuration
+    pub fn get_config(&self) -> &WebDAVConfig {
+        &self.config
+    }
     
-    /// 发送WebDAV请求
+    /// Send WebDAV request
     async fn send_request(
         &self,
         method: WebDAVMethod,
@@ -351,7 +348,6 @@ impl WebDAVClient {
     ) -> WebDAVResult<Response> {
         let url = self.config.build_full_url(path);
         
-        // 构建请求头
         let mut headers = HeaderMap::new();
         self.auth_manager.add_auth_headers(&mut headers)?;
         
@@ -359,7 +355,6 @@ impl WebDAVClient {
             headers.extend(additional);
         }
         
-        // 发送请求
         let request_builder = match method {
             WebDAVMethod::Get => self.http_client.get(&url),
             WebDAVMethod::Put => self.http_client.put(&url),
@@ -389,19 +384,18 @@ impl WebDAVClient {
             request = request.body(body_data);
         }
         
-        log::debug!("发送WebDAV请求: {} {}", method, url);
+        log::debug!("Sending WebDAV request: {} {}", method, url);
         
         let response = request.send().await?;
         
-        // 检查认证状态
         if response.status() == 401 {
-            return Err(WebDAVError::AuthenticationFailed("认证失败".to_string()));
+            return Err(WebDAVError::AuthenticationFailed("Authentication failed".to_string()));
         }
         
         Ok(response)
     }
     
-    /// 发送带请求体的WebDAV请求
+    /// Send WebDAV request with body
     #[allow(dead_code)]
     async fn send_request_with_body(
         &self,
@@ -427,18 +421,18 @@ impl WebDAVClient {
             .headers(headers)
             .body(body);
         
-        log::debug!("发送WebDAV请求(带体): {} {}", method, url);
+        log::debug!("Sending WebDAV request with body: {} {}", method, url);
         
         let response = request.send().await?;
         
         if response.status() == 401 {
-            return Err(WebDAVError::AuthenticationFailed("认证失败".to_string()));
+            return Err(WebDAVError::AuthenticationFailed("Authentication failed".to_string()));
         }
         
         Ok(response)
     }
     
-    /// 构建PROPFIND请求体
+    /// Build PROPFIND request body
     fn build_propfind_request(&self, properties: &[DavProperty]) -> String {
         let mut props = String::new();
         for prop in properties {
@@ -456,29 +450,26 @@ impl WebDAVClient {
         )
     }
     
-    /// 解析PROPFIND响应
+    /// Parse PROPFIND response
     fn parse_propfind_response(&self, response_xml: &str) -> WebDAVResult<Vec<WebDAVFileInfo>> {
         use crate::webdav::xml_parser::PropfindParser;
         
-        // 自动检测服务器类型
         let server_hints = PropfindParser::detect_server_type(response_xml);
-        log::debug!("检测到WebDAV服务器类型: {:?}", server_hints);
+        log::debug!("Detected WebDAV server type: {:?}", server_hints);
         
-        // 创建解析器并解析
         let parser = PropfindParser::new(server_hints);
         let files = parser.parse_multistatus(response_xml)?;
         
-        log::debug!("成功解析 {} 个文件/目录", files.len());
+        log::debug!("Successfully parsed {} files/directories", files.len());
         Ok(files)
     }
     
-    /// 确保父目录存在（迭代实现，避免栈溢出）
+    /// Ensure parent directories exist
     #[allow(dead_code)]
     async fn ensure_parent_directories(&self, path: &str) -> WebDAVResult<()> {
         let mut directories_to_create = Vec::new();
         let mut current_path = path;
         
-        // 收集所有需要创建的父目录
         loop {
             let parent_path = std::path::Path::new(current_path).parent()
                 .and_then(|p| p.to_str())
@@ -492,7 +483,6 @@ impl WebDAVClient {
             current_path = parent_path;
         }
         
-        // 从最顶层开始创建目录
         directories_to_create.reverse();
         for dir in directories_to_create {
             self.create_directory(&dir).await?;
@@ -501,7 +491,7 @@ impl WebDAVClient {
         Ok(())
     }
     
-    /// 更新操作统计
+    /// Update operation statistics
     async fn update_stats(&self, start_time: Instant, success: bool) {
         let mut stats = self.stats.write().await;
         
@@ -515,7 +505,6 @@ impl WebDAVClient {
         let duration = start_time.elapsed();
         let response_time = duration.as_millis() as f64;
         
-        // 简单的移动平均
         if stats.total_requests == 1 {
             stats.average_response_time_ms = response_time;
         } else {
@@ -526,10 +515,13 @@ impl WebDAVClient {
         stats.connection_status = if success {
             ConnectionStatus::Connected
         } else {
-            ConnectionStatus::Error("请求失败".to_string())
+            ConnectionStatus::Error("Request failed".to_string())
         };
     }
 }
 
-// 注释：旧版 WebDAVClientTrait 实现已删除
-// 现在使用 webdav::remote_adapter::WebDAVAdapter 来提供统一的远程源接口
+impl Drop for WebDAVClient {
+    fn drop(&mut self) {
+        log::debug!("WebDAV client dropped: {}", self.config.name);
+    }
+}
