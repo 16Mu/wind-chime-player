@@ -18,8 +18,6 @@ WindChime Player 是一款 Windows 与 macOS 桌面音乐播放器，延续 macO
   - 🎵 黑胶唱片模式 - 旋转专辑封面 + 垂直滚动歌词
   - 🌊 曲线流动模式 - 可调曲率的弧形歌词展示
   - 🎬 电影模式、卡片模式、极简模式等
-- **深浅色主题**：自适应系统主题，毛玻璃效果
-- **流畅动画**：60fps 丝滑过渡，Apple Music 级推挤动画
 
 ### 🎵 播放功能
 - **高性能引擎**：基于 Rust Symphonia + Rodio，启动迅速
@@ -56,9 +54,6 @@ pnpm tauri build
 
 - **更新日志**：`CHANGELOG.md` - 版本更新记录
 - **构建说明**：`BUILD.md` - 详细的构建步骤
-- **特性说明**：
-  - `FBM-WAVE-IMPLEMENTATION.md` - Apple Music 风格动态背景实现
-  - `CURVED-LYRICS-FEATURE.md` - 曲线歌词功能说明
 - **Issues & 计划**：<https://github.com/16Mu/wind-chime-player>
 
 ## Contributing

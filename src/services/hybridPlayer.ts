@@ -139,7 +139,7 @@ export class HybridPlayer {
         });
       
       const rustDone = performance.now();
-      const rustTotalTime = Math.round(rustDone - this.rustStartTime);
+      // const rustTotalTime = Math.round(rustDone - this.rustStartTime);
       const totalElapsed = Math.round(rustDone - this.playStartTime);
       
       console.log(`[HybridPlayer] T+${totalElapsed}ms - Playlist loaded, play command sent`);
